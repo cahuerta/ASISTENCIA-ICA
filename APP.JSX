@@ -21,7 +21,7 @@ function App() {
     setLoading(true);
     setPdfUrl(null);
 
-    const response = await fetch("https://backend-render-url.onrender.com/generar-pdf", {
+    const response = await fetch("https://asistencia-ica-backend1.onrender.com/generar-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(formData),
