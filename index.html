@@ -1,11 +1,45 @@
-<!DOCTYPE html>
-<html lang="en">
+<<!DOCTYPE html>
+<html>
   <head>
     <meta charset="UTF-8" />
-    <title>Instituto Cirugía Articular</title>
+    <title>Asistente de Paciente - ICA</title>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <h2>Generador de Orden de Resonancia</h2>
+    <form id="formulario">
+      <label>Nombre:</label><br />
+      <input type="text" name="nombre" required /><br />
+      <label>Edad:</label><br />
+      <input type="number" name="edad" required /><br />
+      <label>¿Dónde tiene dolor? (Rodilla o Cadera):</label><br />
+      <input type="text" name="dolor" required /><br /><br />
+      <button type="submit">Generar Orden</button>
+    </form>
+
+    <script>
+      const form = document.getElementById('formulario');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = {
+          nombre: form.nombre.value,
+          edad: form.edad.value,
+          dolor: form.dolor.value,
+        };
+
+        const response = await fetch('https://asistencia-ica-backend1.onrender.com/generar-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'orden.pdf';
+        a.click();
+        window.URL.revokeObjectURL(url);
+      });
+    </script>
   </body>
 </html>
