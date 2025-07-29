@@ -8,10 +8,10 @@
       background: #f0f4f8;
       font-family: Arial, sans-serif;
       display: flex;
-      height: 100vh;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
       margin: 0;
+      padding: 20px;
     }
     form {
       background: white;
@@ -56,6 +56,15 @@
     button:hover {
       background: #005bb5;
     }
+    #preview {
+      margin-top: 30px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 20px;
+      max-width: 600px;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
@@ -87,5 +96,64 @@
 
     <button type="submit">Generar Orden PDF</button>
   </form>
+
+  <!-- Vista previa del informe generado -->
+  <div id="preview" style="display:none;"></div>
+
+  <!-- Botón para descargar PDF -->
+  <button id="descargar" style="display:none; margin-top: 15px;">Descargar PDF</button>
+
+  <script>
+    const form = document.getElementById("formulario");
+    const preview = document.getElementById("preview");
+    const btnDescargar = document.getElementById("descargar");
+    let textoOrden = "";
+
+    form.addEventListener("submit", async function (e) {
+      e.preventDefault();
+
+      const nombre = form.nombre.value;
+      const rut = form.rut.value;
+      const edad = form.edad.value;
+      const dolor = form.dolor.value;
+      const lado = form.lado.value;
+
+      textoOrden = `Paciente: ${nombre}, RUT: ${rut}, ${edad} años.\n`;
+      textoOrden += `Consulta por dolor de ${dolor.toLowerCase()} ${lado.toLowerCase()}.\n\n`;
+
+      if (dolor === "Rodilla") {
+        textoOrden += `Orden: Resonancia magnética de rodilla ${lado.toLowerCase()}.\n`;
+        textoOrden += `Derivar con resultados al Dr. Jaime Espinoza.`;
+      } else if (dolor === "Cadera") {
+        textoOrden += `Orden: Resonancia magnética de cadera ${lado.toLowerCase()}.\n`;
+        textoOrden += `Derivar con resultados al Dr. Cristóbal Huerta.`;
+      }
+
+      preview.innerText = textoOrden;
+      preview.style.display = "block";
+      btnDescargar.style.display = "inline-block";
+    });
+
+    btnDescargar.addEventListener("click", async function () {
+      const res = await fetch("https://asistencia-ica-backend.onrender.com/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto: textoOrden }),
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "orden_resonancia.pdf";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        alert("No se pudo generar el PDF. Intente nuevamente.");
+      }
+    });
+  </script>
 </body>
 </html>
