@@ -1,36 +1,113 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>Asistente de Paciente - ICA</title>
-  </head>
-  <body>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Asistente de Paciente - ICA</title>
+  <style>
+    body {
+      background: #f5f7fa;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    .container {
+      background: white;
+      padding: 30px 40px;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      width: 320px;
+      text-align: center;
+      color: #333;
+    }
+
+    h2 {
+      margin-bottom: 20px;
+      color: #004080;
+    }
+
+    label {
+      display: block;
+      text-align: left;
+      margin: 12px 0 6px 0;
+      font-weight: bold;
+      color: #004080;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1.8px solid #004080;
+      border-radius: 4px;
+      font-size: 14px;
+      box-sizing: border-box;
+      transition: border-color 0.3s ease;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus {
+      border-color: #0074d9;
+      outline: none;
+    }
+
+    button {
+      margin-top: 25px;
+      background-color: #0074d9;
+      border: none;
+      color: white;
+      padding: 12px 0;
+      width: 100%;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background-color: #005fa3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
     <h2>Generador de Orden de Resonancia</h2>
     <form id="formulario">
-      <label>Nombre:</label><br />
-      <input type="text" name="nombre" required /><br />
-      <label>Edad:</label><br />
-      <input type="number" name="edad" required /><br />
-      <label>¿Dónde tiene dolor? (Rodilla o Cadera):</label><br />
-      <input type="text" name="dolor" required /><br /><br />
+      <label for="nombre">Nombre:</label>
+      <input type="text" id="nombre" name="nombre" required />
+
+      <label for="edad">Edad:</label>
+      <input type="number" id="edad" name="edad" required min="0" max="120" />
+
+      <label for="dolor">¿Dónde tiene dolor? (Rodilla o Cadera):</label>
+      <input type="text" id="dolor" name="dolor" required pattern="(?i)rodilla|cadera" title="Escriba 'Rodilla' o 'Cadera'" />
+
       <button type="submit">Generar Orden</button>
     </form>
+  </div>
 
-    <script>
-      const form = document.getElementById('formulario');
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const data = {
-          nombre: form.nombre.value,
-          edad: form.edad.value,
-          dolor: form.dolor.value,
-        };
+  <script>
+    const form = document.getElementById('formulario');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const data = {
+        nombre: form.nombre.value.trim(),
+        edad: form.edad.value.trim(),
+        dolor: form.dolor.value.trim(),
+      };
 
+      try {
         const response = await fetch('https://asistencia-ica-backend1.onrender.com/generar-pdf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
+
+        if (!response.ok) throw new Error('Error al generar el PDF');
 
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -39,7 +116,11 @@
         a.download = 'orden.pdf';
         a.click();
         window.URL.revokeObjectURL(url);
-      });
-    </script>
-  </body>
+      } catch (error) {
+        alert('No se pudo generar la orden. Intente más tarde.');
+        console.error(error);
+      }
+    });
+  </script>
+</body>
 </html>
