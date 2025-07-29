@@ -2,38 +2,107 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <title>Asistente Virtual para Pacientes - ICA</title>
+  <title>Asistente Virtual para Pacientes</title>
   <style>
     body {
-      background: #f5f7fa;
+      background: #f0f4f8;
       font-family: Arial, sans-serif;
       display: flex;
+      height: 100vh;
       justify-content: center;
       align-items: center;
-      height: 100vh;
       margin: 0;
     }
-    .container {
+    form {
       background: white;
       padding: 30px 40px;
-      border-radius: 8px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-      width: 320px;
+      border-radius: 10px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+      width: 350px;
       text-align: center;
-      color: #333;
     }
-    h2 {
+    h1 {
       margin-bottom: 20px;
-      color: #004080;
+      color: #0072CE;
     }
     label {
       display: block;
-      text-align: left;
-      margin: 12px 0 6px 0;
+      margin-top: 15px;
       font-weight: bold;
-      color: #004080;
+      color: #333;
+      text-align: left;
     }
-    input[type="text"],
-    input[type="number"],
-    select {
-      width
+    input, select {
+      width: 100%;
+      padding: 8px 10px;
+      margin-top: 5px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+    button {
+      margin-top: 25px;
+      background: #0072CE;
+      color: white;
+      border: none;
+      padding: 12px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background: #005bb5;
+    }
+  </style>
+</head>
+<body>
+  <form id="formulario">
+    <h1>Asistente Virtual para Pacientes</h1>
+
+    <label for="nombre">Nombre completo:</label>
+    <input type="text" id="nombre" name="nombre" required />
+
+    <label for="rut">RUT:</label>
+    <input type="text" id="rut" name="rut" placeholder="12.345.678-9" required />
+
+    <label for="edad">Edad:</label>
+    <input type="number" id="edad" name="edad" min="0" max="120" required />
+
+    <label for="dolor">Dolor (cadera o rodilla):</label>
+    <select id="dolor" name="dolor" required>
+      <option value="">Seleccione...</option>
+      <option value="Rodilla">Rodilla</option>
+      <option value="Cadera">Cadera</option>
+    </select>
+
+    <label for="lado">Lado:</label>
+    <select id="lado" name="lado" required>
+      <option value="">Seleccione...</option>
+      <option value="Derecha">Derecha</option>
+      <option value="Izquierda">Izquierda</option>
+    </select>
+
+    <button type="submit">Generar Orden PDF</button>
+  </form>
+
+  <script>
+    const form = document.getElementById('formulario');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const data = {
+        nombre: form.nombre.value.trim(),
+        rut: form.rut.value.trim(),
+        edad: parseInt(form.edad.value),
+        dolor: form.dolor.value,
+        lado: form.lado.value
+      };
+
+      try {
+        const response = await fetch('http://localhost:3000/generar-pdf', {
+          method: 'POST',
+          headers: {'Content-Type': 'applicati
