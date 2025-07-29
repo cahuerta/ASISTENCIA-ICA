@@ -22,7 +22,7 @@ function App() {
     e.preventDefault();
     setLoading(true);
     try {
-      const response = await fetch('https://asistencia-ica-backend1.onrender.com/api/ordenes', {
+      const response = await fetch('https://asistencia-ica-backend.onrender.com/api/ordenes', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
