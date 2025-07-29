@@ -64,6 +64,18 @@
       padding: 20px;
       max-width: 600px;
       white-space: pre-wrap;
+      display: none;
+    }
+    #descargar {
+      display: none;
+      margin-top: 15px;
+      background: #0072CE;
+      color: white;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -94,14 +106,14 @@
       <option value="Izquierda">Izquierda</option>
     </select>
 
-    <button type="submit">Generar Orden PDF</button>
+    <button type="submit">Generar Informe</button>
   </form>
 
-  <!-- Vista previa del informe generado -->
-  <div id="preview" style="display:none;"></div>
+  <!-- Vista previa -->
+  <div id="preview"></div>
 
   <!-- Botón para descargar PDF -->
-  <button id="descargar" style="display:none; margin-top: 15px;">Descargar PDF</button>
+  <button id="descargar">Descargar PDF</button>
 
   <script>
     const form = document.getElementById("formulario");
@@ -112,11 +124,11 @@
     form.addEventListener("submit", async function (e) {
       e.preventDefault();
 
-      const nombre = form.nombre.value;
-      const rut = form.rut.value;
-      const edad = form.edad.value;
-      const dolor = form.dolor.value;
-      const lado = form.lado.value;
+      const nombre = document.getElementById("nombre").value;
+      const rut = document.getElementById("rut").value;
+      const edad = document.getElementById("edad").value;
+      const dolor = document.getElementById("dolor").value;
+      const lado = document.getElementById("lado").value;
 
       textoOrden = `Paciente: ${nombre}, RUT: ${rut}, ${edad} años.\n`;
       textoOrden += `Consulta por dolor de ${dolor.toLowerCase()} ${lado.toLowerCase()}.\n\n`;
@@ -129,7 +141,7 @@
         textoOrden += `Derivar con resultados al Dr. Cristóbal Huerta.`;
       }
 
-      preview.innerText = textoOrden;
+      preview.textContent = textoOrden;
       preview.style.display = "block";
       btnDescargar.style.display = "inline-block";
     });
@@ -144,14 +156,12 @@
       if (res.ok) {
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "orden_resonancia.pdf";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "orden_resonancia.pdf";
+        a.click();
       } else {
-        alert("No se pudo generar el PDF. Intente nuevamente.");
+        alert("No se pudo generar el PDF.");
       }
     });
   </script>
