@@ -38,7 +38,8 @@
     }
 
     input[type="text"],
-    input[type="number"] {
+    input[type="number"],
+    select {
       width: 100%;
       padding: 8px 10px;
       border: 1.8px solid #004080;
@@ -49,7 +50,8 @@
     }
 
     input[type="text"]:focus,
-    input[type="number"]:focus {
+    input[type="number"]:focus,
+    select:focus {
       border-color: #0074d9;
       outline: none;
     }
@@ -75,7 +77,7 @@
 </head>
 <body>
   <div class="container">
-    <h2>Asistente virtual para pacientes</h2>
+    <h2>Generador de Orden de Resonancia</h2>
     <form id="formulario">
       <label for="nombre">Nombre:</label>
       <input type="text" id="nombre" name="nombre" required />
@@ -85,6 +87,13 @@
 
       <label for="dolor">¿Dónde tiene dolor? (Rodilla o Cadera):</label>
       <input type="text" id="dolor" name="dolor" required pattern="(?i)rodilla|cadera" title="Escriba 'Rodilla' o 'Cadera'" />
+
+      <label for="lado">¿Lado afectado?:</label>
+      <select id="lado" name="lado" required>
+        <option value="" disabled selected>Seleccione lado</option>
+        <option value="Derecha">Derecha</option>
+        <option value="Izquierda">Izquierda</option>
+      </select>
 
       <button type="submit">Generar Orden</button>
     </form>
@@ -98,6 +107,7 @@
         nombre: form.nombre.value.trim(),
         edad: form.edad.value.trim(),
         dolor: form.dolor.value.trim(),
+        lado: form.lado.value,
       };
 
       try {
