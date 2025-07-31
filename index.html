@@ -132,7 +132,12 @@
 
       textoOrden = `Paciente: ${nombre}, RUT: ${rut}, ${edad} años.\n`;
       textoOrden += `Consulta por dolor de ${dolor.toLowerCase()} ${lado.toLowerCase()}.\n\n`;
-  
+
+      preview.textContent = textoOrden;
+      preview.style.display = "block";
+      btnDescargar.style.display = "inline-block";
+    });
+
     btnDescargar.addEventListener("click", async function () {
       const res = await fetch("https://asistencia-ica-backend.onrender.com/generar-pdf", {
         method: "POST",
