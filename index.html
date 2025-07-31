@@ -132,37 +132,7 @@
 
       textoOrden = `Paciente: ${nombre}, RUT: ${rut}, ${edad} años.\n`;
       textoOrden += `Consulta por dolor de ${dolor.toLowerCase()} ${lado.toLowerCase()}.\n\n`;
-
-      if (motivo.includes('rodilla')) {
-    if (edadPaciente < 50) {
-      doc.text('→ Resonancia Magnética de Rodilla');
-      doc.text('Justificación: Evaluación de lesiones ligamentarias y meniscales en paciente joven.');
-    } else {
-      doc.text('→ Radiografía de Rodilla (proyección AP y lateral)');
-      doc.text('→ Considerar Resonancia según hallazgos clínicos');
-      doc.text('Justificación: Estudio de artrosis o lesiones degenerativas en paciente mayor.');
-    }
-    doc.text('→ Recomendación: Evaluación por Dr. Jaime Espinoza');
-  }
-  else if (motivo.includes('cadera') || motivo.includes('inguinal')) {
-    if (edadPaciente < 50) {
-      doc.text('→ Resonancia Magnética de Cadera');
-      doc.text('Justificación: Evaluación de lesiones intraarticulares y choque femoroacetabular en paciente joven.');
-    } else {
-      doc.text('→ Radiografía de Pelvis AP de pie');
-      doc.text('Justificación: Evaluación de artrosis u otras patologías degenerativas.');
-    }
-    doc.text('→ Recomendación: Evaluación por Dr. Cristóbal Huerta');
-  }
-  else {
-    doc.text('→ Evaluación imagenológica a definir según criterio clínico.');
-    doc.text('→ Recomendación: Derivación a especialidad según hallazgos.');
-  }
-      preview.textContent = textoOrden;
-      preview.style.display = "block";
-      btnDescargar.style.display = "inline-block";
-    });
-
+  
     btnDescargar.addEventListener("click", async function () {
       const res = await fetch("https://asistencia-ica-backend.onrender.com/pdf", {
         method: "POST",
