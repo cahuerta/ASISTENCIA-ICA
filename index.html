@@ -134,7 +134,7 @@
       textoOrden += `Consulta por dolor de ${dolor.toLowerCase()} ${lado.toLowerCase()}.\n\n`;
   
     btnDescargar.addEventListener("click", async function () {
-      const res = await fetch("https://asistencia-ica-backend.onrender.com/pdf", {
+      const res = await fetch("https://asistencia-ica-backend.onrender.com/generar-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ texto: textoOrden }),
