@@ -76,6 +76,7 @@
       border-radius: 8px;
       font-size: 16px;
       cursor: pointer;
+      width: 350px;
     }
   </style>
 </head>
@@ -119,43 +120,16 @@
     const form = document.getElementById("formulario");
     const preview = document.getElementById("preview");
     const btnDescargar = document.getElementById("descargar");
-    let textoOrden = "";
+    let datosPaciente = {};
 
-    form.addEventListener("submit", async function (e) {
+    form.addEventListener("submit", function (e) {
       e.preventDefault();
 
-      const nombre = document.getElementById("nombre").value;
-      const rut = document.getElementById("rut").value;
-      const edad = document.getElementById("edad").value;
+      const nombre = document.getElementById("nombre").value.trim();
+      const rut = document.getElementById("rut").value.trim();
+      const edad = document.getElementById("edad").value.trim();
       const dolor = document.getElementById("dolor").value;
       const lado = document.getElementById("lado").value;
 
-      textoOrden = `Paciente: ${nombre}, RUT: ${rut}, ${edad} años.\n`;
-      textoOrden += `Consulta por dolor de ${dolor.toLowerCase()} ${lado.toLowerCase()}.\n\n`;
-
-      preview.textContent = textoOrden;
-      preview.style.display = "block";
-      btnDescargar.style.display = "inline-block";
-    });
-
-    btnDescargar.addEventListener("click", async function () {
-      const res = await fetch("https://asistencia-ica-backend.onrender.com/generar-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texto: textoOrden }),
-      });
-
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "orden_resonancia.pdf";
-        a.click();
-      } else {
-        alert("No se pudo generar el PDF.");
-      }
-    });
-  </script>
-</body>
-</html>
+      // Construir texto para vista previa
+      let textoOrd
