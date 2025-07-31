@@ -15,7 +15,7 @@ export default function App() {
 
   const handleSubmit = async e => {
     e.preventDefault();
-    const response = await fetch("https://asistencia-ica-backend.onrender.com/generar-pdf", {
+    const response = await fetch("https://asistencia-ica-backend.onrender.com/pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(formData),
