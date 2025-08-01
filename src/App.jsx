@@ -1,34 +1,33 @@
 import React, { useState } from 'react';
+import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
+import FormularioPaciente from './FormularioPaciente.jsx';
 
 function App() {
-  const [nombre, setNombre] = useState('');
-  const [rut, setRut] = useState('');
-  const [edad, setEdad] = useState('');
-  const [dolor, setDolor] = useState('');
-  const [lado, setLado] = useState('');
+  const [datosPaciente, setDatosPaciente] = useState({
+    nombre: '',
+    rut: '',
+    edad: '',
+    dolor: '',
+    lado: '',
+  });
   const [textoVistaPrevia, setTextoVistaPrevia] = useState('');
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
-  const [datosPDF, setDatosPDF] = useState({});
+
+  const handleCambiarDato = (campo, valor) => {
+    setDatosPaciente((prev) => ({ ...prev, [campo]: valor }));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
     const texto = 
-      `Nombre: ${nombre}\n` +
-      `RUT: ${rut}\n` +
-      `Edad: ${edad} años\n` +
-      `Dolor en: ${dolor} ${lado}`;
+      `Nombre: ${datosPaciente.nombre}\n` +
+      `RUT: ${datosPaciente.rut}\n` +
+      `Edad: ${datosPaciente.edad} años\n` +
+      `Dolor en: ${datosPaciente.dolor} ${datosPaciente.lado}`;
 
     setTextoVistaPrevia(texto);
     setMostrarVistaPrevia(true);
-
-    // Aquí envío lado explícitamente junto a los otros datos
-    setDatosPDF({
-      nombre: nombre,
-      edad: edad,
-      motivo: `Dolor de ${dolor} ${lado}`,
-      lado: lado,  // <--- Agregado para que backend reciba el lado
-    });
   };
 
   const handleDescargarPDF = async () => {
@@ -36,7 +35,12 @@ function App() {
       const res = await fetch('https://asistencia-ica-backend.onrender.com/generar-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(datosPDF),
+        body: JSON.stringify({
+          nombre: datosPaciente.nombre,
+          edad: datosPaciente.edad,
+          motivo: `Dolor de ${datosPaciente.dolor} ${datosPaciente.lado}`,
+          lado: datosPaciente.lado,
+        }),
       });
 
       if (!res.ok) {
@@ -58,145 +62,68 @@ function App() {
 
   return (
     <div style={styles.container}>
-      <form style={styles.form} onSubmit={handleSubmit}>
-        <h1 style={styles.title}>Asistente Virtual para Pacientes</h1>
+      <div style={styles.esquemaContainer}>
+        <EsquemaHumanoSVG
+          dolor={datosPaciente.dolor}
+          lado={datosPaciente.lado}
+          onCambiarDato={handleCambiarDato}
+        />
+      </div>
 
-        <label style={styles.label}>Nombre completo:</label>
-        <input
-          style={styles.input}
-          type="text"
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-          required
+      <div style={styles.formularioContainer}>
+        <FormularioPaciente
+          datos={datosPaciente}
+          onCambiarDato={handleCambiarDato}
+          onSubmit={handleSubmit}
         />
 
-        <label style={styles.label}>RUT:</label>
-        <input
-          style={styles.input}
-          type="text"
-          value={rut}
-          onChange={(e) => setRut(e.target.value)}
-          placeholder="12.345.678-9"
-          required
-        />
-
-        <label style={styles.label}>Edad:</label>
-        <input
-          style={styles.input}
-          type="number"
-          min="18"
-          max="110"
-          value={edad}
-          onChange={(e) => setEdad(e.target.value)}
-          required
-        />
-
-        <label style={styles.label}>Dolor (Rodilla o Cadera):</label>
-        <select
-          style={styles.input}
-          value={dolor}
-          onChange={(e) => setDolor(e.target.value)}
-          required
-        >
-          <option value="">Seleccione...</option>
-          <option value="Rodilla">Rodilla</option>
-          <option value="Cadera">Cadera</option>
-        </select>
-
-        <label style={styles.label}>Lado:</label>
-        <select
-          style={styles.input}
-          value={lado}
-          onChange={(e) => setLado(e.target.value)}
-          required
-        >
-          <option value="">Seleccione...</option>
-          <option value="Derecha">Derecha</option>
-          <option value="Izquierda">Izquierda</option>
-        </select>
-
-        <button style={styles.button} type="submit">Generar Informe</button>
-      </form>
-
-      {mostrarVistaPrevia && (
-        <div style={styles.previewContainer}>
-          <pre style={styles.preview}>{textoVistaPrevia}</pre>
-          <button style={styles.downloadButton} onClick={handleDescargarPDF}>Descargar PDF</button>
-        </div>
-      )}
+        {mostrarVistaPrevia && (
+          <div style={styles.previewContainer}>
+            <pre style={styles.preview}>{textoVistaPrevia}</pre>
+            <button style={styles.downloadButton} onClick={handleDescargarPDF}>
+              Descargar PDF
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 const styles = {
   container: {
-    background: '#f0f4f8',
-    fontFamily: 'Arial, sans-serif',
     display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    minHeight: '100vh',
+    flexDirection: 'row',
+    gap: '40px',
     padding: '20px',
+    fontFamily: 'Arial, sans-serif',
+    backgroundColor: '#f0f4f8',
+    minHeight: '100vh',
   },
-  form: {
-    background: 'white',
-    padding: '30px 40px',
-    borderRadius: '10px',
-    boxShadow: '0 8px 16px rgba(0,0,0,0.2)',
-    width: '350px',
-    textAlign: 'center',
+  esquemaContainer: {
+    flex: '1',
+    maxWidth: '400px',
   },
-  title: {
-    marginBottom: '20px',
-    color: '#0072CE',
-  },
-  label: {
-    display: 'block',
-    marginTop: '15px',
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'left',
-  },
-  input: {
-    width: '100%',
-    padding: '8px 10px',
-    marginTop: '5px',
-    border: '1px solid #ccc',
-    borderRadius: '5px',
-    boxSizing: 'border-box',
-    fontSize: '14px',
-  },
-  button: {
-    marginTop: '25px',
-    background: '#0072CE',
-    color: 'white',
-    border: 'none',
-    padding: '12px',
-    fontSize: '16px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    width: '100%',
-    transition: 'background 0.3s ease',
+  formularioContainer: {
+    flex: '1',
+    maxWidth: '400px',
   },
   previewContainer: {
-    marginTop: '30px',
-    maxWidth: '600px',
-    textAlign: 'left',
+    marginTop: '20px',
   },
   preview: {
-    background: '#fff',
+    backgroundColor: '#fff',
     border: '1px solid #ccc',
-    borderRadius: '10px',
-    padding: '20px',
+    borderRadius: '8px',
+    padding: '15px',
     whiteSpace: 'pre-wrap',
   },
   downloadButton: {
-    display: 'block',
     marginTop: '15px',
-    background: '#0072CE',
+    backgroundColor: '#0072CE',
     color: 'white',
-    padding: '12px',
     border: 'none',
+    padding: '12px',
     borderRadius: '8px',
     fontSize: '16px',
     cursor: 'pointer',
