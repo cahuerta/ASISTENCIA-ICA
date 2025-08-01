@@ -22,10 +22,12 @@ function App() {
     setTextoVistaPrevia(texto);
     setMostrarVistaPrevia(true);
 
+    // Aquí envío lado explícitamente junto a los otros datos
     setDatosPDF({
       nombre: nombre,
       edad: edad,
-      motivo: `Dolor de ${dolor} ${lado}`
+      motivo: `Dolor de ${dolor} ${lado}`,
+      lado: lado,  // <--- Agregado para que backend reciba el lado
     });
   };
 
