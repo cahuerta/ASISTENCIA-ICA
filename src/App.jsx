@@ -1,97 +1,200 @@
+import React, { useState } from 'react';
 
- const express = require('express');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const PDFDocument = require('pdfkit');
-const fs = require('fs');
-const path = require('path');
-
-const app = express();
-const port = process.env.PORT || 3001;
-
-app.use(cors());
-app.use(bodyParser.json());
-
-app.post('/generar-pdf', (req, res) => {
-  const datos = req.body;
-
-  const doc = new PDFDocument({ margin: 50 });
-  const nombreArchivo = `orden-${Date.now()}.pdf`;
-  const stream = fs.createWriteStream(nombreArchivo);
-  doc.pipe(stream);
-
-  // Ruta del logo
-  const logoPath = path.join(__dirname, 'assets', 'ica.jpg');
-
-  // Logo
-  if (fs.existsSync(logoPath)) {
-    doc.image(logoPath, 50, 40, { width: 100 });
-  } else {
-    console.warn('No se encontró el logo en assets/ica.jpg');
-  }
-
-  // Encabezado
-  doc.fontSize(16).text('Instituto de Cirugía Articular', 160, 50, { align: 'left' });
-  doc.fontSize(12).text('ORDEN DE EXAMEN IMAGENOLÓGICO', { align: 'center' });
-  doc.moveDown(2);
-
-  // Datos del paciente
-  doc.fontSize(12);
-  doc.text(`Nombre del paciente: ${datos.nombre || "No especificado"}`);
-  doc.text(`Edad: ${datos.edad || "No especificada"}`);
-  doc.text(`Motivo de consulta: ${datos.motivo || "No especificado"}`);
-  doc.moveDown();
-
-  // Lógica para decidir el examen según motivo y edad
-  const edadPaciente = parseInt(datos.edad, 10);
-  const motivo = (datos.motivo || "").toLowerCase();
-
-  if (motivo.includes('rodilla')) {
-    if (edadPaciente < 50) {
-      doc.text('→ Resonancia Magnética de Rodilla');
-      doc.text('Justificación: Evaluación de lesiones ligamentarias y meniscales en paciente joven.');
-    } else {
-      doc.text('→ Radiografía de Rodilla (proyección AP y lateral)');
-      doc.text('→ Considerar Resonancia según hallazgos clínicos');
-      doc.text('Justificación: Estudio de artrosis o lesiones degenerativas en paciente mayor.');
-    }
-    doc.text('→ Recomendación: Evaluación por Dr. Jaime Espinoza');
-  } else if (motivo.includes('cadera') || motivo.includes('inguinal')) {
-    if (edadPaciente < 50) {
-      doc.text('→ Resonancia Magnética de Cadera');
-      doc.text('Justificación: Evaluación de lesiones intraarticulares y choque femoroacetabular en paciente joven.');
-    } else {
-      doc.text('→ Radiografía de Pelvis AP de pie');
-      doc.text('Justificación: Evaluación de artrosis u otras patologías degenerativas.');
-    }
-    doc.text('→ Recomendación: Evaluación por Dr. Cristóbal Huerta');
-  } else {
-    doc.text('→ Evaluación imagenológica a definir según criterio clínico.');
-    doc.text('→ Recomendación: Derivación a especialidad según hallazgos.');
-  }
-
-  doc.moveDown(3);
-
-  // Firma
-  doc.text('_____________________________', { align: 'left' });
-  doc.text('Firma del médico tratante', { align: 'left' });
-
-  doc.end();
-
-  stream.on('finish', () => {
-    res.download(nombreArchivo, (err) => {
-      if (err) {
-        console.error('Error enviando archivo:', err);
-        res.status(500).send('Error enviando PDF');
-      }
-      // Borrar archivo tras enviar
-      fs.unlink(nombreArchivo, (unlinkErr) => {
-        if (unlinkErr) console.error('Error borrando archivo:', unlinkErr);
-      });
-    });
+function App() {
+  const [formulario, setFormulario] = useState({
+    nombre: '',
+    rut: '',
+    edad: '',
+    dolor: '',
+    lado: '',
   });
-});
 
-app.listen(port, () => {
-  console.log(`Servidor corriendo en puerto ${port}`);
-});
+  const [textoOrden, setTextoOrden] = useState('');
+  const [mostrarPreview, setMostrarPreview] = useState(false);
+
+  const handleChange = (e) => {
+    setFormulario({
+      ...formulario,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+
+    const texto = 
+      `Nombre: ${formulario.nombre}\n` +
+      `RUT: ${formulario.rut}\n` +
+      `Edad: ${formulario.edad} años\n` +
+      `Dolor en: ${formulario.dolor} ${formulario.lado}`;
+
+    setTextoOrden(texto);
+    setMostrarPreview(true);
+  };
+
+  const handleDescargar = async () => {
+    const datos = {
+      nombre: formulario.nombre,
+      edad: formulario.edad,
+      motivo: `Dolor de ${formulario.dolor} ${formulario.lado}`,
+    };
+
+    try {
+      const res = await fetch("https://asistencia-ica-backend.onrender.com/generar-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(datos),
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "orden_resonancia.pdf";
+        a.click();
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert("No se pudo generar el PDF.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error al conectar con el servidor.");
+    }
+  };
+
+  return (
+    <div style={styles.container}>
+      <form onSubmit={handleSubmit} style={styles.form}>
+        <h1 style={styles.title}>Asistente Virtual para Pacientes</h1>
+
+        <label style={styles.label}>Nombre completo:</label>
+        <input
+          type="text"
+          name="nombre"
+          value={formulario.nombre}
+          onChange={handleChange}
+          required
+          style={styles.input}
+        />
+
+        <label style={styles.label}>RUT:</label>
+        <input
+          type="text"
+          name="rut"
+          value={formulario.rut}
+          onChange={handleChange}
+          placeholder="12.345.678-9"
+          required
+          style={styles.input}
+        />
+
+        <label style={styles.label}>Edad:</label>
+        <input
+          type="number"
+          name="edad"
+          value={formulario.edad}
+          onChange={handleChange}
+          min="18"
+          max="110"
+          required
+          style={styles.input}
+        />
+
+        <label style={styles.label}>Dolor (Rodilla o Cadera):</label>
+        <select
+          name="dolor"
+          value={formulario.dolor}
+          onChange={handleChange}
+          required
+          style={styles.input}
+        >
+          <option value="">Seleccione...</option>
+          <option value="Rodilla">Rodilla</option>
+          <option value="Cadera">Cadera</option>
+        </select>
+
+        <label style={styles.label}>Lado:</label>
+        <select
+          name="lado"
+          value={formulario.lado}
+          onChange={handleChange}
+          required
+          style={styles.input}
+        >
+          <option value="">Seleccione...</option>
+          <option value="Derecha">Derecha</option>
+          <option value="Izquierda">Izquierda</option>
+        </select>
+
+        <button type="submit" style={styles.button}>
+          Generar Informe
+        </button>
+      </form>
+
+      {mostrarPreview && (
+        <div style={styles.preview}>
+          <pre>{textoOrden}</pre>
+          <button onClick={handleDescargar} style={styles.button}>
+            Descargar PDF
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const styles = {
+  container: {
+    background: '#f0f4f8',
+    fontFamily: 'Arial, sans-serif',
+    padding: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    minHeight: '100vh',
+  },
+  form: {
+    background: 'white',
+    padding: '30px 40px',
+    borderRadius: '10px',
+    boxShadow: '0 8px 16px rgba(0,0,0,0.2)',
+    width: '350px',
+    textAlign: 'center',
+  },
+  title: {
+    marginBottom: '20px',
+    color: '#0072CE',
+  },
+  label: {
+    display: 'block',
+    marginTop: '15px',
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'left',
+  },
+  input: {
+    width: '100%',
+    padding: '8px 10px',
+    marginTop: '5px',
+    border: '1px solid #ccc',
+    borderRadius: '5px',
+    fontSize: '14px',
+    boxSizing: 'border-box',
+  },
+  button: {
+    marginTop: '25px',
+    background: '#0072CE',
+    color: 'white',
+    border: 'none',
+    padding: '12px',
+    fontSize: '16px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    width: '100%',
+  },
+  preview: {
+    marginTop: '30px',
+    background: 'white',
+    border: '1px solid #ccc',
+    borderR
