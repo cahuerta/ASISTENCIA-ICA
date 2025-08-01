@@ -1,113 +1,100 @@
 import React, { useState } from 'react';
 
 function App() {
-  const [formulario, setFormulario] = useState({
-    nombre: '',
-    rut: '',
-    edad: '',
-    dolor: '',
-    lado: '',
-  });
-
-  const [textoOrden, setTextoOrden] = useState('');
-  const [mostrarPreview, setMostrarPreview] = useState(false);
-
-  const handleChange = (e) => {
-    setFormulario({
-      ...formulario,
-      [e.target.name]: e.target.value,
-    });
-  };
+  const [nombre, setNombre] = useState('');
+  const [rut, setRut] = useState('');
+  const [edad, setEdad] = useState('');
+  const [dolor, setDolor] = useState('');
+  const [lado, setLado] = useState('');
+  const [textoVistaPrevia, setTextoVistaPrevia] = useState('');
+  const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
+  const [datosPDF, setDatosPDF] = useState({});
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
     const texto = 
-      `Nombre: ${formulario.nombre}\n` +
-      `RUT: ${formulario.rut}\n` +
-      `Edad: ${formulario.edad} años\n` +
-      `Dolor en: ${formulario.dolor} ${formulario.lado}`;
+      `Nombre: ${nombre}\n` +
+      `RUT: ${rut}\n` +
+      `Edad: ${edad} años\n` +
+      `Dolor en: ${dolor} ${lado}`;
 
-    setTextoOrden(texto);
-    setMostrarPreview(true);
+    setTextoVistaPrevia(texto);
+    setMostrarVistaPrevia(true);
+
+    setDatosPDF({
+      nombre: nombre,
+      edad: edad,
+      motivo: `Dolor de ${dolor} ${lado}`
+    });
   };
 
-  const handleDescargar = async () => {
-    const datos = {
-      nombre: formulario.nombre,
-      edad: formulario.edad,
-      motivo: `Dolor de ${formulario.dolor} ${formulario.lado}`,
-    };
-
+  const handleDescargarPDF = async () => {
     try {
-      const res = await fetch("https://asistencia-ica-backend.onrender.com/generar-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(datos),
+      const res = await fetch('https://asistencia-ica-backend.onrender.com/generar-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datosPDF),
       });
 
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "orden_resonancia.pdf";
-        a.click();
-        window.URL.revokeObjectURL(url);
-      } else {
-        alert("No se pudo generar el PDF.");
+      if (!res.ok) {
+        throw new Error('Error al generar el PDF');
       }
-    } catch (err) {
-      console.error(err);
-      alert("Error al conectar con el servidor.");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'orden_resonancia.pdf';
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert('No se pudo generar el PDF.');
+      console.error(error);
     }
   };
 
   return (
     <div style={styles.container}>
-      <form onSubmit={handleSubmit} style={styles.form}>
+      <form style={styles.form} onSubmit={handleSubmit}>
         <h1 style={styles.title}>Asistente Virtual para Pacientes</h1>
 
         <label style={styles.label}>Nombre completo:</label>
         <input
-          type="text"
-          name="nombre"
-          value={formulario.nombre}
-          onChange={handleChange}
-          required
           style={styles.input}
+          type="text"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          required
         />
 
         <label style={styles.label}>RUT:</label>
         <input
+          style={styles.input}
           type="text"
-          name="rut"
-          value={formulario.rut}
-          onChange={handleChange}
+          value={rut}
+          onChange={(e) => setRut(e.target.value)}
           placeholder="12.345.678-9"
           required
-          style={styles.input}
         />
 
         <label style={styles.label}>Edad:</label>
         <input
+          style={styles.input}
           type="number"
-          name="edad"
-          value={formulario.edad}
-          onChange={handleChange}
           min="18"
           max="110"
+          value={edad}
+          onChange={(e) => setEdad(e.target.value)}
           required
-          style={styles.input}
         />
 
         <label style={styles.label}>Dolor (Rodilla o Cadera):</label>
         <select
-          name="dolor"
-          value={formulario.dolor}
-          onChange={handleChange}
-          required
           style={styles.input}
+          value={dolor}
+          onChange={(e) => setDolor(e.target.value)}
+          required
         >
           <option value="">Seleccione...</option>
           <option value="Rodilla">Rodilla</option>
@@ -116,28 +103,23 @@ function App() {
 
         <label style={styles.label}>Lado:</label>
         <select
-          name="lado"
-          value={formulario.lado}
-          onChange={handleChange}
-          required
           style={styles.input}
+          value={lado}
+          onChange={(e) => setLado(e.target.value)}
+          required
         >
           <option value="">Seleccione...</option>
           <option value="Derecha">Derecha</option>
           <option value="Izquierda">Izquierda</option>
         </select>
 
-        <button type="submit" style={styles.button}>
-          Generar Informe
-        </button>
+        <button style={styles.button} type="submit">Generar Informe</button>
       </form>
 
-      {mostrarPreview && (
-        <div style={styles.preview}>
-          <pre>{textoOrden}</pre>
-          <button onClick={handleDescargar} style={styles.button}>
-            Descargar PDF
-          </button>
+      {mostrarVistaPrevia && (
+        <div style={styles.previewContainer}>
+          <pre style={styles.preview}>{textoVistaPrevia}</pre>
+          <button style={styles.downloadButton} onClick={handleDescargarPDF}>Descargar PDF</button>
         </div>
       )}
     </div>
@@ -148,11 +130,11 @@ const styles = {
   container: {
     background: '#f0f4f8',
     fontFamily: 'Arial, sans-serif',
-    padding: '20px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     minHeight: '100vh',
+    padding: '20px',
   },
   form: {
     background: 'white',
@@ -179,8 +161,8 @@ const styles = {
     marginTop: '5px',
     border: '1px solid #ccc',
     borderRadius: '5px',
-    fontSize: '14px',
     boxSizing: 'border-box',
+    fontSize: '14px',
   },
   button: {
     marginTop: '25px',
@@ -192,9 +174,32 @@ const styles = {
     borderRadius: '8px',
     cursor: 'pointer',
     width: '100%',
+    transition: 'background 0.3s ease',
+  },
+  previewContainer: {
+    marginTop: '30px',
+    maxWidth: '600px',
+    textAlign: 'left',
   },
   preview: {
-    marginTop: '30px',
-    background: 'white',
+    background: '#fff',
     border: '1px solid #ccc',
-    borderR
+    borderRadius: '10px',
+    padding: '20px',
+    whiteSpace: 'pre-wrap',
+  },
+  downloadButton: {
+    display: 'block',
+    marginTop: '15px',
+    background: '#0072CE',
+    color: 'white',
+    padding: '12px',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '16px',
+    cursor: 'pointer',
+    width: '100%',
+  },
+};
+
+export default App;
