@@ -1,71 +1,97 @@
-import React, { useState } from "react";
+import React from 'react';
 
-const puntosDolor = [
-  { id: "cadera_derecha", cx: 140, cy: 220, label: "Cadera Derecha", dolor: "Cadera", lado: "Derecha" },
-  { id: "cadera_izquierda", cx: 60, cy: 220, label: "Cadera Izquierda", dolor: "Cadera", lado: "Izquierda" },
-  { id: "rodilla_derecha", cx: 140, cy: 320, label: "Rodilla Derecha", dolor: "Rodilla", lado: "Derecha" },
-  { id: "rodilla_izquierda", cx: 60, cy: 320, label: "Rodilla Izquierda", dolor: "Rodilla", lado: "Izquierda" },
-  // Puedes agregar más puntos aquí
-];
+function EsquemaHumanoSVG({ dolor, lado, onCambiarDato }) {
+  // Colores para destacar zona de dolor
+  const colorActivo = '#0072CE';
+  const colorInactivo = '#ccc';
 
-function EsquemaHumanoSVG({ onSeleccionar }) {
-  const [seleccionado, setSeleccionado] = useState(null);
+  // Función para manejar click en zona dolorosa
+  const manejarClickZona = (zona) => {
+    if (zona === dolor) {
+      onCambiarDato('dolor', ''); // Desactivar si es la misma zona
+    } else {
+      onCambiarDato('dolor', zona);
+    }
+  };
 
-  const manejarClick = (punto) => {
-    setSeleccionado(punto.id);
-    if (onSeleccionar) {
-      onSeleccionar({ dolor: punto.dolor, lado: punto.lado });
+  // Función para cambiar lado (derecha / izquierda)
+  const manejarClickLado = (seleccion) => {
+    if (seleccion === lado) {
+      onCambiarDato('lado', '');
+    } else {
+      onCambiarDato('lado', seleccion);
     }
   };
 
   return (
-    <div style={{ textAlign: "center", userSelect: "none" }}>
-      <h2>Seleccione el lugar del dolor</h2>
+    <div>
       <svg
-        width="200"
-        height="400"
-        viewBox="0 0 200 400"
-        style={{ border: "1px solid #ccc", background: "#f9f9f9", borderRadius: 8 }}
+        width="300"
+        height="600"
+        viewBox="0 0 300 600"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ border: '1px solid #ccc', borderRadius: '10px' }}
       >
-        {/* Dibujo básico simplificado */}
-        <rect x="80" y="40" width="40" height="100" fill="#ccc" /> {/* torso */}
-        <circle cx="100" cy="20" r="20" fill="#ccc" /> {/* cabeza */}
-        <rect x="40" y="40" width="30" height="100" fill="#bbb" /> {/* brazo izquierdo */}
-        <rect x="130" y="40" width="30" height="100" fill="#bbb" /> {/* brazo derecho */}
-        <rect x="80" y="140" width="20" height="100" fill="#999" /> {/* pierna izquierda */}
-        <rect x="100" y="140" width="20" height="100" fill="#999" /> {/* pierna derecha */}
+        {/* Cuerpo básico (simplificado) */}
+        <rect x="120" y="100" width="60" height="200" fill="#eee" stroke="#999" />
+        
+        {/* Rodilla derecha */}
+        <circle
+          cx="180"
+          cy="320"
+          r="30"
+          fill={dolor === 'Rodilla' && lado === 'Derecha' ? colorActivo : colorInactivo}
+          stroke="#999"
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            manejarClickZona('Rodilla');
+            manejarClickLado('Derecha');
+          }}
+        />
+        <text x="180" y="320" textAnchor="middle" dy="5" fill="#000" style={{ pointerEvents: 'none', fontWeight: 'bold' }}>
+          Rodilla D
+        </text>
 
-        {/* Puntos dolorosos */}
-        {puntosDolor.map(({ id, cx, cy, label }) => (
-          <circle
-            key={id}
-            cx={cx}
-            cy={cy}
-            r={15}
-            fill={seleccionado === id ? "red" : "lightgray"}
-            stroke="black"
-            strokeWidth={1}
-            cursor="pointer"
-            onClick={() => manejarClick({ id, label, dolor: puntosDolor.find(p => p.id === id).dolor, lado: puntosDolor.find(p => p.id === id).lado })}
-          />
-        ))}
+        {/* Rodilla izquierda */}
+        <circle
+          cx="120"
+          cy="320"
+          r="30"
+          fill={dolor === 'Rodilla' && lado === 'Izquierda' ? colorActivo : colorInactivo}
+          stroke="#999"
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            manejarClickZona('Rodilla');
+            manejarClickLado('Izquierda');
+          }}
+        />
+        <text x="120" y="320" textAnchor="middle" dy="5" fill="#000" style={{ pointerEvents: 'none', fontWeight: 'bold' }}>
+          Rodilla I
+        </text>
 
-        {/* Etiqueta del punto seleccionado */}
-        {seleccionado && (
-          <text
-            x="100"
-            y="380"
-            textAnchor="middle"
-            fontSize="14"
-            fill="black"
-            fontWeight="bold"
-          >
-            {puntosDolor.find((p) => p.id === seleccionado)?.label}
-          </text>
-        )}
-      </svg>
-    </div>
-  );
-}
+        {/* Cadera derecha */}
+        <ellipse
+          cx="190"
+          cy="180"
+          rx="40"
+          ry="30"
+          fill={dolor === 'Cadera' && lado === 'Derecha' ? colorActivo : colorInactivo}
+          stroke="#999"
+          style={{ cursor: 'pointer' }}
+          onClick={() => {
+            manejarClickZona('Cadera');
+            manejarClickLado('Derecha');
+          }}
+        />
+        <text x="190" y="180" textAnchor="middle" dy="5" fill="#000" style={{ pointerEvents: 'none', fontWeight: 'bold' }}>
+          Cadera D
+        </text>
 
-export default EsquemaHumanoSVG;
+        {/* Cadera izquierda */}
+        <ellipse
+          cx="110"
+          cy="180"
+          rx="40"
+          ry="30"
+          fill={dolor === 'Cadera' && lado === 'Izquierda' ? colorActivo : colorInactivo}
+          stroke="#999"
