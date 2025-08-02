@@ -19,8 +19,6 @@ function App() {
   };
 
   const onSeleccionZona = (zona) => {
-    // zona tiene valores como 'Columna lumbar', 'Cadera izquierda', etc.
-    // Para el select de dolor, adaptamos zona:
     let dolor = '';
     let lado = '';
 
@@ -45,7 +43,6 @@ function App() {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // Validar campos necesarios
     if (!datosPaciente.nombre || !datosPaciente.rut || !datosPaciente.edad || !datosPaciente.dolor) {
       alert('Por favor complete todos los campos obligatorios.');
       return;
@@ -70,8 +67,10 @@ function App() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'orden_resonancia.pdf';
+      a.download = `orden_${datosPaciente.nombre.replace(/ /g, '_')}.pdf`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (error) {
       alert('No se pudo generar el PDF.');
@@ -103,32 +102,3 @@ function App() {
 const styles = {
   container: {
     display: 'flex',
-    flexDirection: 'row',
-    gap: '40px',
-    padding: '20px',
-    fontFamily: 'Arial, sans-serif',
-    backgroundColor: '#f0f4f8',
-    minHeight: '100vh',
-  },
-  esquemaContainer: {
-    flex: '1',
-    maxWidth: '320px',
-  },
-  formularioContainer: {
-    flex: '1',
-    maxWidth: '400px',
-  },
-  downloadButton: {
-    marginTop: '15px',
-    backgroundColor: '#0072CE',
-    color: 'white',
-    border: 'none',
-    padding: '12px',
-    borderRadius: '8px',
-    fontSize: '16px',
-    cursor: 'pointer',
-    width: '100%',
-  },
-};
-
-export default App;
