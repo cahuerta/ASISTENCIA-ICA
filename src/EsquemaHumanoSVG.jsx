@@ -17,7 +17,7 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
       <rect x="120" y="50" width="60" height="150" fill="#cce5ff" rx="20" ry="20" />
       {/* Cabeza */}
       <circle cx="150" cy="30" r="25" fill="#99ccff" />
-      
+
       {/* Columna lumbar */}
       <rect
         x="140"
@@ -28,9 +28,17 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
         stroke="#004080"
         strokeWidth="2"
         style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('columna lumbar')}
+        onClick={() => handleClick('Columna lumbar')}
       />
-      <text x="150" y="190" fill="#003366" fontSize="14" fontWeight="600" textAnchor="middle">
+      <text
+        x="150"
+        y="190"
+        fill="#003366"
+        fontSize="14"
+        fontWeight="600"
+        textAnchor="middle"
+        pointerEvents="none"
+      >
         Columna lumbar
       </text>
 
@@ -44,9 +52,17 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
         stroke="#003366"
         strokeWidth="2"
         style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('cadera')}
+        onClick={() => handleClick('Cadera izquierda')}
       />
-      <text x="110" y="305" fill="#e0eefe" fontSize="14" fontWeight="600" textAnchor="middle">
+      <text
+        x="110"
+        y="305"
+        fill="#e0eefe"
+        fontSize="14"
+        fontWeight="600"
+        textAnchor="middle"
+        pointerEvents="none"
+      >
         Cadera Izquierda
       </text>
 
@@ -60,9 +76,17 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
         stroke="#003366"
         strokeWidth="2"
         style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('cadera')}
+        onClick={() => handleClick('Cadera derecha')}
       />
-      <text x="190" y="305" fill="#e0eefe" fontSize="14" fontWeight="600" textAnchor="middle">
+      <text
+        x="190"
+        y="305"
+        fill="#e0eefe"
+        fontSize="14"
+        fontWeight="600"
+        textAnchor="middle"
+        pointerEvents="none"
+      >
         Cadera Derecha
       </text>
 
@@ -75,9 +99,17 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
         stroke="#001f4d"
         strokeWidth="2"
         style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('rodilla')}
+        onClick={() => handleClick('Rodilla izquierda')}
       />
-      <text x="110" y="405" fill="#cbdcff" fontSize="14" fontWeight="600" textAnchor="middle">
+      <text
+        x="110"
+        y="405"
+        fill="#cbdcff"
+        fontSize="14"
+        fontWeight="600"
+        textAnchor="middle"
+        pointerEvents="none"
+      >
         Rodilla Izquierda
       </text>
 
@@ -90,9 +122,17 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
         stroke="#001f4d"
         strokeWidth="2"
         style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('rodilla')}
+        onClick={() => handleClick('Rodilla derecha')}
       />
-      <text x="190" y="405" fill="#cbdcff" fontSize="14" fontWeight="600" textAnchor="middle">
+      <text
+        x="190"
+        y="405"
+        fill="#cbdcff"
+        fontSize="14"
+        fontWeight="600"
+        textAnchor="middle"
+        pointerEvents="none"
+      >
         Rodilla Derecha
       </text>
     </svg>
@@ -100,3 +140,4 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
 }
 
 export default EsquemaHumanoSVG;
+
