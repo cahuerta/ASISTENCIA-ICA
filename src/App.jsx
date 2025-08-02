@@ -92,7 +92,7 @@ function App() {
 
         {mostrarVistaPrevia && (
           <button style={styles.downloadButton} onClick={handleDescargarPDF}>
-            Descargar PDF
+            FIRMAR DOCUMENTO
           </button>
         )}
       </div>
