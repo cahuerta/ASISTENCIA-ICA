@@ -1,45 +1,53 @@
 import React from 'react';
 
 function PreviewOrden({ datos }) {
-  if (!datos || !datos.nombre || !datos.dolor) return null;
+  if (!datos.nombre) {
+    return null;
+  }
 
+  const { nombre, rut, edad, dolor, lado } = datos;
+
+  // Determinar orden médica según dolor, lado y edad
   let orden = '';
-
-  if (datos.dolor === 'Rodilla') {
+  if (dolor === 'Rodilla') {
     orden =
-      parseInt(datos.edad) < 50
-        ? `Resonancia magnética de rodilla ${datos.lado.toLowerCase()}`
-        : `Radiografía de rodilla ${datos.lado.toLowerCase()} AP y lateral de pie`;
-  } else if (datos.dolor === 'Cadera') {
+      edad < 50
+        ? `Resonancia magnética de rodilla ${lado.toLowerCase()}`
+        : `Radiografía de rodilla ${lado.toLowerCase()} AP y lateral de pie`;
+  } else if (dolor === 'Cadera') {
     orden =
-      parseInt(datos.edad) < 50
-        ? `Resonancia magnética de cadera ${datos.lado.toLowerCase()}`
+      edad < 50
+        ? `Resonancia magnética de cadera ${lado.toLowerCase()}`
         : `Radiografía de pelvis AP de pie`;
-  } else if (datos.dolor === 'Columna lumbar') {
+  } else if (dolor === 'Columna lumbar') {
     orden = 'Resonancia magnética de columna lumbar';
+  } else {
+    orden = 'Examen imagenológico no especificado';
   }
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>
-        <h2 style={styles.title}>Instituto de Cirugía Articular</h2>
-        <p style={styles.sub}>Orden médica</p>
-      </div>
-
+      <h2 style={styles.title}>Vista Previa de la Orden Médica</h2>
       <div style={styles.section}>
-        <p><strong>Nombre:</strong> {datos.nombre}</p>
-        <p><strong>RUT:</strong> {datos.rut}</p>
-        <p><strong>Edad:</strong> {datos.edad}</p>
+        <strong>Nombre:</strong> {nombre}
       </div>
-
       <div style={styles.section}>
-        <p><strong>Se solicita:</strong></p>
+        <strong>RUT:</strong> {rut}
+      </div>
+      <div style={styles.section}>
+        <strong>Edad:</strong> {edad} años
+      </div>
+      <div style={styles.section}>
+        <strong>Motivo / Diagnóstico:</strong> Dolor de {dolor} {lado}
+      </div>
+      <div style={{ ...styles.section, marginTop: '20px' }}>
+        <strong>Orden médica solicitada:</strong>
         <p style={styles.orden}>{orden}</p>
       </div>
-
-      <div style={styles.firma}>
-        <p>_____________________________</p>
-        <p>Médico tratante</p>
+      <div style={{ marginTop: '60px', textAlign: 'center' }}>
+        _____________________________
+        <br />
+        Firma médico tratante
       </div>
     </div>
   );
@@ -47,40 +55,28 @@ function PreviewOrden({ datos }) {
 
 const styles = {
   container: {
-    backgroundColor: '#fff',
-    border: '1px solid #ccc',
+    backgroundColor: 'white',
+    padding: '20px',
     borderRadius: '10px',
-    padding: '30px',
-    maxWidth: '600px',
-    margin: '20px auto',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
     fontFamily: 'Arial, sans-serif',
-    color: '#333',
-  },
-  header: {
-    textAlign: 'center',
-    marginBottom: '20px',
+    maxWidth: '400px',
+    marginTop: '20px',
   },
   title: {
-    margin: 0,
-    fontSize: '20px',
+    textAlign: 'center',
     color: '#0072CE',
-  },
-  sub: {
-    margin: 0,
-    fontSize: '16px',
+    marginBottom: '15px',
   },
   section: {
-    marginBottom: '20px',
+    marginBottom: '10px',
+    fontSize: '14px',
+    color: '#333',
   },
   orden: {
-    fontSize: '16px',
-    fontWeight: 'bold',
     marginTop: '5px',
-  },
-  firma: {
-    textAlign: 'center',
-    marginTop: '40px',
-    fontSize: '14px',
+    fontWeight: 'bold',
+    color: '#0072CE',
   },
 };
 
