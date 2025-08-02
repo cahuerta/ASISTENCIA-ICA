@@ -42,10 +42,12 @@ function App() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    console.log('Datos para generar PDF:', datosPaciente); // Log para ver datos en consola
     setMostrarVistaPrevia(true);
   };
 
   const handleDescargarPDF = async () => {
+    console.log('Enviando datos al backend:', datosPaciente); // Log para confirmar datos enviados
     try {
       const res = await fetch('https://asistencia-ica-backend.onrender.com/generar-pdf', {
         method: 'POST',
