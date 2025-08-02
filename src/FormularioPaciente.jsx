@@ -48,7 +48,6 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         <option value="Columna lumbar">Columna lumbar</option>
       </select>
 
-      {/* Si el dolor es columna lumbar, lado no aplica, pero para simplicidad dejamos igual */}
       <label style={styles.label}>Lado:</label>
       <select
         style={styles.input}
