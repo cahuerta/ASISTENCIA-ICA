@@ -51,23 +51,3 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
         y="400"
         width="60"
         height="60"
-        fill="#0072CE"
-        opacity="0.6"
-        style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('rodillaIzquierda')}
-      />
-      <text x="120" y="440" textAnchor="middle" fill="#fff" fontSize="14" pointerEvents="none">
-        Rodilla Izq
-      </text>
-
-      {/* Rodilla derecha */}
-      <rect
-        x="150"
-        y="400"
-        width="60"
-        height="60"
-        fill="#0072CE"
-        opacity="0.6"
-        style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('rodillaDerecha')}
-      />
