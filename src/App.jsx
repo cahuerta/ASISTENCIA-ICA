@@ -1,8 +1,3 @@
-esquemaContainer: {
-  flex: '1',
-  maxWidth: '250px',
-  minWidth: '220px',
-},
 import React, { useState } from 'react';
 import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
