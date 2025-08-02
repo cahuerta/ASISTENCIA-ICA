@@ -11,28 +11,31 @@ function App() {
     dolor: '',
     lado: '',
   });
+
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
 
   const onSeleccionZona = (zona) => {
-    switch (zona) {
-      case 'rodillaIzquierda':
-        setDatosPaciente((prev) => ({ ...prev, dolor: 'Rodilla', lado: 'Izquierda' }));
-        break;
-      case 'rodillaDerecha':
-        setDatosPaciente((prev) => ({ ...prev, dolor: 'Rodilla', lado: 'Derecha' }));
-        break;
-      case 'caderaIzquierda':
-        setDatosPaciente((prev) => ({ ...prev, dolor: 'Cadera', lado: 'Izquierda' }));
-        break;
-      case 'caderaDerecha':
-        setDatosPaciente((prev) => ({ ...prev, dolor: 'Cadera', lado: 'Derecha' }));
-        break;
-      case 'columnaLumbar':
-        setDatosPaciente((prev) => ({ ...prev, dolor: 'Columna lumbar', lado: '' }));
-        break;
-      default:
-        break;
+    // Mapear zona a dolor y lado
+    let dolor = '';
+    let lado = '';
+
+    if (zona.includes('Rodilla')) {
+      dolor = 'Rodilla';
+      lado = zona.includes('izquierda') || zona.includes('Izquierda') ? 'Izquierda' : 'Derecha';
+    } else if (zona.includes('Cadera')) {
+      dolor = 'Cadera';
+      lado = zona.includes('izquierda') || zona.includes('Izquierda') ? 'Izquierda' : 'Derecha';
+    } else if (zona === 'Columna lumbar') {
+      dolor = 'Columna lumbar';
+      lado = '';
     }
+
+    setDatosPaciente((prev) => ({
+      ...prev,
+      dolor,
+      lado,
+    }));
+
     setMostrarVistaPrevia(false);
   };
 
@@ -42,12 +45,10 @@ function App() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log('Datos para generar PDF:', datosPaciente); // Log para ver datos en consola
     setMostrarVistaPrevia(true);
   };
 
   const handleDescargarPDF = async () => {
-    console.log('Enviando datos al backend:', datosPaciente); // Log para confirmar datos enviados
     try {
       const res = await fetch('https://asistencia-ica-backend.onrender.com/generar-pdf', {
         method: 'POST',
