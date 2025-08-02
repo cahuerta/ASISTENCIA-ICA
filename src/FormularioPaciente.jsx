@@ -35,7 +35,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         required
       />
 
-      <label style={styles.label}>Dolor (Rodilla o Cadera):</label>
+      <label style={styles.label}>Dolor (Rodilla, Cadera o Columna lumbar):</label>
       <select
         style={styles.input}
         value={datos.dolor}
@@ -45,6 +45,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         <option value="">Seleccione...</option>
         <option value="Rodilla">Rodilla</option>
         <option value="Cadera">Cadera</option>
+        <option value="Columna lumbar">Columna lumbar</option>
       </select>
 
       <label style={styles.label}>Lado:</label>
@@ -52,7 +53,8 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         style={styles.input}
         value={datos.lado}
         onChange={(e) => onCambiarDato('lado', e.target.value)}
-        required
+        required={datos.dolor !== 'Columna lumbar'}
+        disabled={datos.dolor === 'Columna lumbar'}
       >
         <option value="">Seleccione...</option>
         <option value="Derecha">Derecha</option>
@@ -91,21 +93,4 @@ const styles = {
     marginTop: '5px',
     border: '1px solid #ccc',
     borderRadius: '5px',
-    boxSizing: 'border-box',
-    fontSize: '14px',
-  },
-  button: {
-    marginTop: '25px',
-    backgroundColor: '#0072CE',
-    color: 'white',
-    border: 'none',
-    padding: '12px',
-    fontSize: '16px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    width: '100%',
-    transition: 'background 0.3s ease',
-  },
-};
-
-export default FormularioPaciente;
+    boxSizing: 'bor
