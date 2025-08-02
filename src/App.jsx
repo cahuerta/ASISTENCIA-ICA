@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
-import PreviewOrden from './PreviewOrden.jsx';
 
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
@@ -13,19 +12,20 @@ function App() {
   });
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
+  const [textoVistaPrevia, setTextoVistaPrevia] = useState('');
 
   const onSeleccionZona = (zona) => {
-    // Mapear zona a dolor y lado
+    // Interpretar zona para dolor y lado
     let dolor = '';
     let lado = '';
 
-    if (zona.includes('Rodilla')) {
+    if (zona.toLowerCase().includes('rodilla')) {
       dolor = 'Rodilla';
-      lado = zona.includes('izquierda') || zona.includes('Izquierda') ? 'Izquierda' : 'Derecha';
-    } else if (zona.includes('Cadera')) {
+      lado = zona.toLowerCase().includes('izquierda') ? 'Izquierda' : 'Derecha';
+    } else if (zona.toLowerCase().includes('cadera')) {
       dolor = 'Cadera';
-      lado = zona.includes('izquierda') || zona.includes('Izquierda') ? 'Izquierda' : 'Derecha';
-    } else if (zona === 'Columna lumbar') {
+      lado = zona.toLowerCase().includes('izquierda') ? 'Izquierda' : 'Derecha';
+    } else if (zona.toLowerCase().includes('columna')) {
       dolor = 'Columna lumbar';
       lado = '';
     }
@@ -45,6 +45,14 @@ function App() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    const texto =
+      `Nombre: ${datosPaciente.nombre}\n` +
+      `RUT: ${datosPaciente.rut}\n` +
+      `Edad: ${datosPaciente.edad} años\n` +
+      `Dolor en: ${datosPaciente.dolor} ${datosPaciente.lado}`;
+
+    setTextoVistaPrevia(texto);
     setMostrarVistaPrevia(true);
   };
 
@@ -82,12 +90,13 @@ function App() {
       <div style={styles.formularioContainer}>
         <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
 
-        {mostrarVistaPrevia && <PreviewOrden datos={datosPaciente} />}
-
         {mostrarVistaPrevia && (
-          <button style={styles.downloadButton} onClick={handleDescargarPDF}>
-            Descargar PDF
-          </button>
+          <div style={styles.previewContainer}>
+            <pre style={styles.preview}>{textoVistaPrevia}</pre>
+            <button style={styles.downloadButton} onClick={handleDescargarPDF}>
+              Descargar PDF
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -111,6 +120,16 @@ const styles = {
   formularioContainer: {
     flex: '1',
     maxWidth: '400px',
+  },
+  previewContainer: {
+    marginTop: '20px',
+  },
+  preview: {
+    backgroundColor: '#fff',
+    border: '1px solid #ccc',
+    borderRadius: '8px',
+    padding: '15px',
+    whiteSpace: 'pre-wrap',
   },
   downloadButton: {
     marginTop: '15px',
