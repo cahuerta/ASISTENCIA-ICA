@@ -140,4 +140,3 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
 }
 
 export default EsquemaHumanoSVG;
-
