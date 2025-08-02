@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
+import PreviewOrden from './PreviewOrden.jsx';
 
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
@@ -12,22 +13,26 @@ function App() {
   });
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
-  const [textoVistaPrevia, setTextoVistaPrevia] = useState('');
+
+  const handleCambiarDato = (campo, valor) => {
+    setDatosPaciente((prev) => ({ ...prev, [campo]: valor }));
+  };
 
   const onSeleccionZona = (zona) => {
-    // Interpretar zona para dolor y lado
+    // zona tiene valores como 'Columna lumbar', 'Cadera izquierda', etc.
+    // Para el select de dolor, adaptamos zona:
     let dolor = '';
     let lado = '';
 
-    if (zona.toLowerCase().includes('rodilla')) {
-      dolor = 'Rodilla';
-      lado = zona.toLowerCase().includes('izquierda') ? 'Izquierda' : 'Derecha';
-    } else if (zona.toLowerCase().includes('cadera')) {
-      dolor = 'Cadera';
-      lado = zona.toLowerCase().includes('izquierda') ? 'Izquierda' : 'Derecha';
-    } else if (zona.toLowerCase().includes('columna')) {
+    if (zona.includes('Columna')) {
       dolor = 'Columna lumbar';
       lado = '';
+    } else if (zona.includes('Cadera')) {
+      dolor = 'Cadera';
+      lado = zona.includes('izquierda') ? 'Izquierda' : 'Derecha';
+    } else if (zona.includes('Rodilla')) {
+      dolor = 'Rodilla';
+      lado = zona.includes('izquierda') ? 'Izquierda' : 'Derecha';
     }
 
     setDatosPaciente((prev) => ({
@@ -35,24 +40,17 @@ function App() {
       dolor,
       lado,
     }));
-
-    setMostrarVistaPrevia(false);
-  };
-
-  const handleCambiarDato = (campo, valor) => {
-    setDatosPaciente((prev) => ({ ...prev, [campo]: valor }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    const texto =
-      `Nombre: ${datosPaciente.nombre}\n` +
-      `RUT: ${datosPaciente.rut}\n` +
-      `Edad: ${datosPaciente.edad} años\n` +
-      `Dolor en: ${datosPaciente.dolor} ${datosPaciente.lado}`;
+    // Validar campos necesarios
+    if (!datosPaciente.nombre || !datosPaciente.rut || !datosPaciente.edad || !datosPaciente.dolor) {
+      alert('Por favor complete todos los campos obligatorios.');
+      return;
+    }
 
-    setTextoVistaPrevia(texto);
     setMostrarVistaPrevia(true);
   };
 
@@ -90,13 +88,12 @@ function App() {
       <div style={styles.formularioContainer}>
         <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
 
+        {mostrarVistaPrevia && <PreviewOrden datos={datosPaciente} />}
+
         {mostrarVistaPrevia && (
-          <div style={styles.previewContainer}>
-            <pre style={styles.preview}>{textoVistaPrevia}</pre>
-            <button style={styles.downloadButton} onClick={handleDescargarPDF}>
-              Descargar PDF
-            </button>
-          </div>
+          <button style={styles.downloadButton} onClick={handleDescargarPDF}>
+            Descargar PDF
+          </button>
         )}
       </div>
     </div>
@@ -115,21 +112,11 @@ const styles = {
   },
   esquemaContainer: {
     flex: '1',
-    maxWidth: '400px',
+    maxWidth: '320px',
   },
   formularioContainer: {
     flex: '1',
     maxWidth: '400px',
-  },
-  previewContainer: {
-    marginTop: '20px',
-  },
-  preview: {
-    backgroundColor: '#fff',
-    border: '1px solid #ccc',
-    borderRadius: '8px',
-    padding: '15px',
-    whiteSpace: 'pre-wrap',
   },
   downloadButton: {
     marginTop: '15px',
