@@ -71,26 +71,4 @@ const styles = {
     backgroundColor: 'white',
     padding: '30px 40px',
     borderRadius: '10px',
-    boxShadow: '0 8px 16px rgba(0,0,0,0.2)',
-    width: '100%',
-    boxSizing: 'border-box',
-  },
-  title: {
-    marginBottom: '20px',
-    color: '#0072CE',
-    textAlign: 'center',
-  },
-  label: {
-    display: 'block',
-    marginTop: '15px',
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'left',
-  },
-  input: {
-    width: '100%',
-    padding: '8px 10px',
-    marginTop: '5px',
-    border: '1px solid #ccc',
-    borderRadius: '5px',
-    boxSizing: 'bor
+    boxShadow: '0 8p
