@@ -1,139 +1,165 @@
 import React from 'react';
 
 function EsquemaHumanoSVG({ onSeleccionZona }) {
-  const handleClick = (zona) => {
-    onSeleccionZona(zona);
+  const zonas = [
+    { id: 'columna_lumbar', label: 'Columna lumbar', x: 140, y: 170, width: 20, height: 100 },
+    { id: 'cadera_izquierda', label: 'Cadera Izquierda', cx: 110, cy: 300, rx: 40, ry: 30 },
+    { id: 'cadera_derecha', label: 'Cadera Derecha', cx: 190, cy: 300, rx: 40, ry: 30 },
+    { id: 'rodilla_izquierda', label: 'Rodilla Izquierda', cx: 110, cy: 400, r: 30 },
+    { id: 'rodilla_derecha', label: 'Rodilla Derecha', cx: 190, cy: 400, r: 30 },
+  ];
+
+  const handleClick = (id) => {
+    switch (id) {
+      case 'columna_lumbar':
+        onSeleccionZona('Columna lumbar');
+        break;
+      case 'cadera_izquierda':
+        onSeleccionZona('Cadera izquierda');
+        break;
+      case 'cadera_derecha':
+        onSeleccionZona('Cadera derecha');
+        break;
+      case 'rodilla_izquierda':
+        onSeleccionZona('Rodilla izquierda');
+        break;
+      case 'rodilla_derecha':
+        onSeleccionZona('Rodilla derecha');
+        break;
+      default:
+        break;
+    }
   };
 
   return (
     <svg
-      width="300"
-      height="600"
-      viewBox="0 0 300 600"
+      width="320"
+      height="620"
+      viewBox="0 0 320 620"
       xmlns="http://www.w3.org/2000/svg"
-      style={{ background: '#f9f9f9', borderRadius: 8 }}
+      style={{ backgroundColor: '#e6f0ff', borderRadius: 12, boxShadow: '0 0 12px rgba(0,0,0,0.15)' }}
     >
-      {/* Cuerpo */}
-      <rect x="120" y="50" width="60" height="150" fill="#cce5ff" rx="20" ry="20" />
       {/* Cabeza */}
-      <circle cx="150" cy="30" r="25" fill="#99ccff" />
+      <circle cx="160" cy="40" r="30" fill="#5490ff" stroke="#2a4d9f" strokeWidth="3" />
+      <text x="160" y="45" textAnchor="middle" fill="#e0eaff" fontSize="14" fontWeight="700" pointerEvents="none">
+        Cabeza
+      </text>
 
-      {/* Columna lumbar */}
+      {/* Torso */}
+      <rect x="130" y="70" width="60" height="150" fill="#9cc3ff" stroke="#2a4d9f" strokeWidth="3" rx="20" ry="20" />
+
+      {/* Zonas clickeables */}
       <rect
-        x="140"
-        y="170"
-        width="20"
-        height="100"
-        fill="#80b3ff"
-        stroke="#004080"
+        x={zonas[0].x}
+        y={zonas[0].y}
+        width={zonas[0].width}
+        height={zonas[0].height}
+        fill="#3166cc"
+        stroke="#1f3a75"
         strokeWidth="2"
-        style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('Columna lumbar')}
+        cursor="pointer"
+        onClick={() => handleClick(zonas[0].id)}
       />
       <text
-        x="150"
-        y="190"
-        fill="#003366"
-        fontSize="14"
-        fontWeight="600"
-        textAnchor="middle"
-        pointerEvents="none"
-      >
-        Columna lumbar
-      </text>
-
-      {/* Cadera izquierda */}
-      <ellipse
-        cx="110"
-        cy="300"
-        rx="40"
-        ry="30"
-        fill="#4a90e2"
-        stroke="#003366"
-        strokeWidth="2"
-        style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('Cadera izquierda')}
-      />
-      <text
-        x="110"
-        y="305"
-        fill="#e0eefe"
-        fontSize="14"
-        fontWeight="600"
-        textAnchor="middle"
-        pointerEvents="none"
-      >
-        Cadera Izquierda
-      </text>
-
-      {/* Cadera derecha */}
-      <ellipse
-        cx="190"
-        cy="300"
-        rx="40"
-        ry="30"
-        fill="#4a90e2"
-        stroke="#003366"
-        strokeWidth="2"
-        style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('Cadera derecha')}
-      />
-      <text
-        x="190"
-        y="305"
-        fill="#e0eefe"
-        fontSize="14"
-        fontWeight="600"
-        textAnchor="middle"
-        pointerEvents="none"
-      >
-        Cadera Derecha
-      </text>
-
-      {/* Rodilla izquierda */}
-      <circle
-        cx="110"
-        cy="400"
-        r="30"
-        fill="#2a5cad"
-        stroke="#001f4d"
-        strokeWidth="2"
-        style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('Rodilla izquierda')}
-      />
-      <text
-        x="110"
-        y="405"
+        x={zonas[0].x + zonas[0].width / 2}
+        y={zonas[0].y + 20}
         fill="#cbdcff"
         fontSize="14"
-        fontWeight="600"
+        fontWeight="700"
         textAnchor="middle"
         pointerEvents="none"
       >
-        Rodilla Izquierda
+        {zonas[0].label}
       </text>
 
-      {/* Rodilla derecha */}
-      <circle
-        cx="190"
-        cy="400"
-        r="30"
-        fill="#2a5cad"
-        stroke="#001f4d"
+      <ellipse
+        cx={zonas[1].cx}
+        cy={zonas[1].cy}
+        rx={zonas[1].rx}
+        ry={zonas[1].ry}
+        fill="#4571d9"
+        stroke="#2b488f"
         strokeWidth="2"
-        style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('Rodilla derecha')}
+        cursor="pointer"
+        onClick={() => handleClick(zonas[1].id)}
       />
       <text
-        x="190"
-        y="405"
-        fill="#cbdcff"
+        x={zonas[1].cx}
+        y={zonas[1].cy + 5}
+        fill="#e0eaff"
         fontSize="14"
-        fontWeight="600"
+        fontWeight="700"
         textAnchor="middle"
         pointerEvents="none"
       >
-        Rodilla Derecha
+        {zonas[1].label}
+      </text>
+
+      <ellipse
+        cx={zonas[2].cx}
+        cy={zonas[2].cy}
+        rx={zonas[2].rx}
+        ry={zonas[2].ry}
+        fill="#4571d9"
+        stroke="#2b488f"
+        strokeWidth="2"
+        cursor="pointer"
+        onClick={() => handleClick(zonas[2].id)}
+      />
+      <text
+        x={zonas[2].cx}
+        y={zonas[2].cy + 5}
+        fill="#e0eaff"
+        fontSize="14"
+        fontWeight="700"
+        textAnchor="middle"
+        pointerEvents="none"
+      >
+        {zonas[2].label}
+      </text>
+
+      <circle
+        cx={zonas[3].cx}
+        cy={zonas[3].cy}
+        r={zonas[3].r}
+        fill="#2e4aa5"
+        stroke="#1c2f62"
+        strokeWidth="2"
+        cursor="pointer"
+        onClick={() => handleClick(zonas[3].id)}
+      />
+      <text
+        x={zonas[3].cx}
+        y={zonas[3].cy + 5}
+        fill="#c9d7ff"
+        fontSize="14"
+        fontWeight="700"
+        textAnchor="middle"
+        pointerEvents="none"
+      >
+        {zonas[3].label}
+      </text>
+
+      <circle
+        cx={zonas[4].cx}
+        cy={zonas[4].cy}
+        r={zonas[4].r}
+        fill="#2e4aa5"
+        stroke="#1c2f62"
+        strokeWidth="2"
+        cursor="pointer"
+        onClick={() => handleClick(zonas[4].id)}
+      />
+      <text
+        x={zonas[4].cx}
+        y={zonas[4].cy + 5}
+        fill="#c9d7ff"
+        fontSize="14"
+        fontWeight="700"
+        textAnchor="middle"
+        pointerEvents="none"
+      >
+        {zonas[4].label}
       </text>
     </svg>
   );
