@@ -1,13 +1,11 @@
 import React from 'react';
 
 function PreviewOrden({ datos }) {
-  if (!datos.nombre) {
-    return null;
-  }
+  if (!datos.nombre) return null;
 
   const { nombre, rut, edad, dolor, lado } = datos;
 
-  // Determinar orden médica según dolor, lado y edad
+  // Determina la orden médica según dolor, lado y edad
   let orden = '';
   if (dolor === 'Rodilla') {
     orden =
@@ -40,11 +38,11 @@ function PreviewOrden({ datos }) {
       <div style={styles.section}>
         <strong>Motivo / Diagnóstico:</strong> Dolor de {dolor} {lado}
       </div>
-      <div style={{ ...styles.section, marginTop: '20px' }}>
+      <div style={{ ...styles.section, marginTop: 20 }}>
         <strong>Orden médica solicitada:</strong>
         <p style={styles.orden}>{orden}</p>
       </div>
-      <div style={{ marginTop: '60px', textAlign: 'center' }}>
+      <div style={{ marginTop: 60, textAlign: 'center' }}>
         _____________________________
         <br />
         Firma médico tratante
@@ -56,25 +54,25 @@ function PreviewOrden({ datos }) {
 const styles = {
   container: {
     backgroundColor: 'white',
-    padding: '20px',
-    borderRadius: '10px',
+    padding: 20,
+    borderRadius: 10,
     boxShadow: '0 4px 8px rgba(0,0,0,0.15)',
     fontFamily: 'Arial, sans-serif',
-    maxWidth: '400px',
-    marginTop: '20px',
+    maxWidth: 400,
+    marginTop: 20,
   },
   title: {
     textAlign: 'center',
     color: '#0072CE',
-    marginBottom: '15px',
+    marginBottom: 15,
   },
   section: {
-    marginBottom: '10px',
-    fontSize: '14px',
+    marginBottom: 10,
+    fontSize: 14,
     color: '#333',
   },
   orden: {
-    marginTop: '5px',
+    marginTop: 5,
     fontWeight: 'bold',
     color: '#0072CE',
   },
