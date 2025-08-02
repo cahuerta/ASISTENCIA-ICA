@@ -50,9 +50,9 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
       {/* Cadera izquierda */}
       <ellipse
         cx="100"
-        cy="200"
-        rx="12"
-        ry="12"
+        cy="210"
+        rx="15"
+        ry="15"
         fill="rgba(85, 106, 191, 0.3)"
         stroke="#556abf"
         onClick={() => handleClick('Cadera izquierda')}
@@ -63,15 +63,15 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
       {/* Cadera derecha */}
       <ellipse
         cx="140"
-        cy="200"
-        rx="14"
-        ry="14"
+        cy="210"
+        rx="15"
+        ry="15"
         fill="rgba(85, 106, 191, 0.3)"
         stroke="#556abf"
         onClick={() => handleClick('Cadera derecha')}
         cursor="pointer"
       />
-      <text x="160" y="245" fontSize="10" fill="#333">Cadera der.</text>
+      <text x="160" y="200" fontSize="10" fill="#333">Cadera der.</text>
 
       {/* Rodilla izquierda */}
       <circle
@@ -83,7 +83,7 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
         onClick={() => handleClick('Rodilla izquierda')}
         cursor="pointer"
       />
-      <text x="40" y="430" fontSize="10" fill="#333">Rodilla izq.</text>
+      <text x="40" y="300" fontSize="10" fill="#333">Rodilla izq.</text>
 
       {/* Rodilla derecha */}
       <circle
