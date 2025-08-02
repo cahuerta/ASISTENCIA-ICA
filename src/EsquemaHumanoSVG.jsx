@@ -29,9 +29,9 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
       {/* Columna lumbar (centrada) */}
       <rect
         x="115"
-        y="150"
+        y="50"
         width="10"
-        height="40"
+        height="100"
         fill="rgba(85, 106, 191, 0.3)"
         stroke="#556abf"
         onClick={() => handleClick('Columna lumbar')}
@@ -50,8 +50,8 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
       {/* Cadera izquierda */}
       <ellipse
         cx="100"
-        cy="230"
-        rx="20"
+        cy="200"
+        rx="12"
         ry="12"
         fill="rgba(85, 106, 191, 0.3)"
         stroke="#556abf"
@@ -63,8 +63,8 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
       {/* Cadera derecha */}
       <ellipse
         cx="140"
-        cy="230"
-        rx="20"
+        cy="200"
+        rx="12"
         ry="12"
         fill="rgba(85, 106, 191, 0.3)"
         stroke="#556abf"
@@ -76,7 +76,7 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
       {/* Rodilla izquierda */}
       <circle
         cx="100"
-        cy="420"
+        cy="220"
         r="14"
         fill="rgba(85, 106, 191, 0.3)"
         stroke="#556abf"
@@ -88,7 +88,7 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
       {/* Rodilla derecha */}
       <circle
         cx="140"
-        cy="420"
+        cy="220"
         r="14"
         fill="rgba(85, 106, 191, 0.3)"
         stroke="#556abf"
