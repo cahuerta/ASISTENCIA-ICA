@@ -85,7 +85,11 @@ function App() {
       </div>
 
       <div style={styles.formularioContainer}>
-        <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
+        <FormularioPaciente
+          datos={datosPaciente}
+          onCambiarDato={handleCambiarDato}
+          onSubmit={handleSubmit}
+        />
 
         {mostrarVistaPrevia && <PreviewOrden datos={datosPaciente} />}
 
@@ -102,3 +106,32 @@ function App() {
 const styles = {
   container: {
     display: 'flex',
+    flexDirection: 'row',
+    gap: '40px',
+    padding: '20px',
+    fontFamily: 'Arial, sans-serif',
+    backgroundColor: '#f0f4f8',
+    minHeight: '100vh',
+  },
+  esquemaContainer: {
+    flex: '1',
+    maxWidth: '320px',
+  },
+  formularioContainer: {
+    flex: '1',
+    maxWidth: '400px',
+  },
+  downloadButton: {
+    marginTop: '15px',
+    backgroundColor: '#0072CE',
+    color: 'white',
+    border: 'none',
+    padding: '12px',
+    borderRadius: '8px',
+    fontSize: '16px',
+    cursor: 'pointer',
+    width: '100%',
+  },
+};
+
+export default App;
