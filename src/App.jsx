@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
-import PreviewOrden from './PreviewOrden.jsx'; // Preview con formato receta
+import PreviewOrden from './PreviewOrden.jsx';
 
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
@@ -12,6 +12,29 @@ function App() {
     lado: '',
   });
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
+
+  const onSeleccionZona = (zona) => {
+    switch (zona) {
+      case 'rodillaIzquierda':
+        setDatosPaciente((prev) => ({ ...prev, dolor: 'Rodilla', lado: 'Izquierda' }));
+        break;
+      case 'rodillaDerecha':
+        setDatosPaciente((prev) => ({ ...prev, dolor: 'Rodilla', lado: 'Derecha' }));
+        break;
+      case 'caderaIzquierda':
+        setDatosPaciente((prev) => ({ ...prev, dolor: 'Cadera', lado: 'Izquierda' }));
+        break;
+      case 'caderaDerecha':
+        setDatosPaciente((prev) => ({ ...prev, dolor: 'Cadera', lado: 'Derecha' }));
+        break;
+      case 'columnaLumbar':
+        setDatosPaciente((prev) => ({ ...prev, dolor: 'Columna lumbar', lado: '' }));
+        break;
+      default:
+        break;
+    }
+    setMostrarVistaPrevia(false);
+  };
 
   const handleCambiarDato = (campo, valor) => {
     setDatosPaciente((prev) => ({ ...prev, [campo]: valor }));
@@ -27,13 +50,7 @@ function App() {
       const res = await fetch('https://asistencia-ica-backend.onrender.com/generar-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nombre: datosPaciente.nombre,
-          rut: datosPaciente.rut,
-          edad: datosPaciente.edad,
-          dolor: datosPaciente.dolor,
-          lado: datosPaciente.lado,
-        }),
+        body: JSON.stringify(datosPaciente),
       });
 
       if (!res.ok) {
@@ -53,14 +70,56 @@ function App() {
     }
   };
 
-  const onSeleccionZona = (zona) => {
-    if (zona === 'rodillaIzquierda') {
-      setDatosPaciente({ ...datosPaciente, dolor: 'Rodilla', lado: 'Izquierda' });
-    } else if (zona === 'rodillaDerecha') {
-      setDatosPaciente({ ...datosPaciente, dolor: 'Rodilla', lado: 'Derecha' });
-    } else if (zona === 'caderaIzquierda') {
-      setDatosPaciente({ ...datosPaciente, dolor: 'Cadera', lado: 'Izquierda' });
-    } else if (zona === 'caderaDerecha') {
-      setDatosPaciente({ ...datosPaciente, dolor: 'Cadera', lado: 'Derecha' });
-    } else if (zona === 'columnaLumbar') {
-      setDatosPaciente({ ...dat
+  return (
+    <div style={styles.container}>
+      <div style={styles.esquemaContainer}>
+        <EsquemaHumanoSVG onSeleccionZona={onSeleccionZona} />
+      </div>
+
+      <div style={styles.formularioContainer}>
+        <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
+
+        {mostrarVistaPrevia && <PreviewOrden datos={datosPaciente} />}
+
+        {mostrarVistaPrevia && (
+          <button style={styles.downloadButton} onClick={handleDescargarPDF}>
+            Descargar PDF
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'row',
+    gap: '40px',
+    padding: '20px',
+    fontFamily: 'Arial, sans-serif',
+    backgroundColor: '#f0f4f8',
+    minHeight: '100vh',
+  },
+  esquemaContainer: {
+    flex: '1',
+    maxWidth: '400px',
+  },
+  formularioContainer: {
+    flex: '1',
+    maxWidth: '400px',
+  },
+  downloadButton: {
+    marginTop: '15px',
+    backgroundColor: '#0072CE',
+    color: 'white',
+    border: 'none',
+    padding: '12px',
+    borderRadius: '8px',
+    fontSize: '16px',
+    cursor: 'pointer',
+    width: '100%',
+  },
+};
+
+export default App;
