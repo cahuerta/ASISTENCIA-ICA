@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
+import PreviewOrden from './PreviewOrden.jsx'; // Preview con formato receta
 
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
@@ -10,7 +11,6 @@ function App() {
     dolor: '',
     lado: '',
   });
-  const [textoVistaPrevia, setTextoVistaPrevia] = useState('');
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
 
   const handleCambiarDato = (campo, valor) => {
@@ -19,14 +19,6 @@ function App() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
-    const texto = 
-      `Nombre: ${datosPaciente.nombre}\n` +
-      `RUT: ${datosPaciente.rut}\n` +
-      `Edad: ${datosPaciente.edad} años\n` +
-      `Dolor en: ${datosPaciente.dolor} ${datosPaciente.lado}`;
-
-    setTextoVistaPrevia(texto);
     setMostrarVistaPrevia(true);
   };
 
@@ -37,8 +29,9 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombre: datosPaciente.nombre,
+          rut: datosPaciente.rut,
           edad: datosPaciente.edad,
-          motivo: `Dolor de ${datosPaciente.dolor} ${datosPaciente.lado}`,
+          dolor: datosPaciente.dolor,
           lado: datosPaciente.lado,
         }),
       });
@@ -60,75 +53,14 @@ function App() {
     }
   };
 
-  return (
-    <div style={styles.container}>
-      <div style={styles.esquemaContainer}>
-        <EsquemaHumanoSVG
-          dolor={datosPaciente.dolor}
-          lado={datosPaciente.lado}
-          onCambiarDato={handleCambiarDato}
-        />
-      </div>
-
-      <div style={styles.formularioContainer}>
-        <FormularioPaciente
-          datos={datosPaciente}
-          onCambiarDato={handleCambiarDato}
-          onSubmit={handleSubmit}
-        />
-
-        {mostrarVistaPrevia && (
-          <div style={styles.previewContainer}>
-            <pre style={styles.preview}>{textoVistaPrevia}</pre>
-            <button style={styles.downloadButton} onClick={handleDescargarPDF}>
-              Descargar PDF
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-const styles = {
-  container: {
-    display: 'flex',
-    flexDirection: 'row',
-    gap: '40px',
-    padding: '20px',
-    fontFamily: 'Arial, sans-serif',
-    backgroundColor: '#f0f4f8',
-    minHeight: '100vh',
-  },
-  esquemaContainer: {
-    flex: '1',
-    maxWidth: '400px',
-  },
-  formularioContainer: {
-    flex: '1',
-    maxWidth: '400px',
-  },
-  previewContainer: {
-    marginTop: '20px',
-  },
-  preview: {
-    backgroundColor: '#fff',
-    border: '1px solid #ccc',
-    borderRadius: '8px',
-    padding: '15px',
-    whiteSpace: 'pre-wrap',
-  },
-  downloadButton: {
-    marginTop: '15px',
-    backgroundColor: '#0072CE',
-    color: 'white',
-    border: 'none',
-    padding: '12px',
-    borderRadius: '8px',
-    fontSize: '16px',
-    cursor: 'pointer',
-    width: '100%',
-  },
-};
-
-export default App;
+  const onSeleccionZona = (zona) => {
+    if (zona === 'rodillaIzquierda') {
+      setDatosPaciente({ ...datosPaciente, dolor: 'Rodilla', lado: 'Izquierda' });
+    } else if (zona === 'rodillaDerecha') {
+      setDatosPaciente({ ...datosPaciente, dolor: 'Rodilla', lado: 'Derecha' });
+    } else if (zona === 'caderaIzquierda') {
+      setDatosPaciente({ ...datosPaciente, dolor: 'Cadera', lado: 'Izquierda' });
+    } else if (zona === 'caderaDerecha') {
+      setDatosPaciente({ ...datosPaciente, dolor: 'Cadera', lado: 'Derecha' });
+    } else if (zona === 'columnaLumbar') {
+      setDatosPaciente({ ...dat
