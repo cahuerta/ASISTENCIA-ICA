@@ -2,9 +2,7 @@ import React from 'react';
 
 function EsquemaHumanoSVG({ onSeleccionZona }) {
   const handleClick = (zona) => {
-    if (onSeleccionZona) {
-      onSeleccionZona(zona);
-    }
+    onSeleccionZona(zona);
   };
 
   return (
@@ -13,41 +11,92 @@ function EsquemaHumanoSVG({ onSeleccionZona }) {
       height="600"
       viewBox="0 0 300 600"
       xmlns="http://www.w3.org/2000/svg"
-      style={{ border: '1px solid #ccc', borderRadius: '8px' }}
+      style={{ background: '#f9f9f9', borderRadius: 8 }}
     >
-      {/* Cadera izquierda */}
+      {/* Cuerpo */}
+      <rect x="120" y="50" width="60" height="150" fill="#cce5ff" rx="20" ry="20" />
+      {/* Cabeza */}
+      <circle cx="150" cy="30" r="25" fill="#99ccff" />
+      
+      {/* Columna lumbar */}
       <rect
-        x="90"
-        y="300"
-        width="60"
-        height="60"
-        fill="#0072CE"
-        opacity="0.6"
+        x="140"
+        y="170"
+        width="20"
+        height="100"
+        fill="#80b3ff"
+        stroke="#004080"
+        strokeWidth="2"
         style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('caderaIzquierda')}
+        onClick={() => handleClick('columna lumbar')}
       />
-      <text x="120" y="340" textAnchor="middle" fill="#fff" fontSize="14" pointerEvents="none">
-        Cadera Izq
+      <text x="150" y="190" fill="#003366" fontSize="14" fontWeight="600" textAnchor="middle">
+        Columna lumbar
+      </text>
+
+      {/* Cadera izquierda */}
+      <ellipse
+        cx="110"
+        cy="300"
+        rx="40"
+        ry="30"
+        fill="#4a90e2"
+        stroke="#003366"
+        strokeWidth="2"
+        style={{ cursor: 'pointer' }}
+        onClick={() => handleClick('cadera')}
+      />
+      <text x="110" y="305" fill="#e0eefe" fontSize="14" fontWeight="600" textAnchor="middle">
+        Cadera Izquierda
       </text>
 
       {/* Cadera derecha */}
-      <rect
-        x="150"
-        y="300"
-        width="60"
-        height="60"
-        fill="#0072CE"
-        opacity="0.6"
+      <ellipse
+        cx="190"
+        cy="300"
+        rx="40"
+        ry="30"
+        fill="#4a90e2"
+        stroke="#003366"
+        strokeWidth="2"
         style={{ cursor: 'pointer' }}
-        onClick={() => handleClick('caderaDerecha')}
+        onClick={() => handleClick('cadera')}
       />
-      <text x="180" y="340" textAnchor="middle" fill="#fff" fontSize="14" pointerEvents="none">
-        Cadera Der
+      <text x="190" y="305" fill="#e0eefe" fontSize="14" fontWeight="600" textAnchor="middle">
+        Cadera Derecha
       </text>
 
       {/* Rodilla izquierda */}
-      <rect
-        x="90"
-        y="400"
-        width="60"
-        height="60"
+      <circle
+        cx="110"
+        cy="400"
+        r="30"
+        fill="#2a5cad"
+        stroke="#001f4d"
+        strokeWidth="2"
+        style={{ cursor: 'pointer' }}
+        onClick={() => handleClick('rodilla')}
+      />
+      <text x="110" y="405" fill="#cbdcff" fontSize="14" fontWeight="600" textAnchor="middle">
+        Rodilla Izquierda
+      </text>
+
+      {/* Rodilla derecha */}
+      <circle
+        cx="190"
+        cy="400"
+        r="30"
+        fill="#2a5cad"
+        stroke="#001f4d"
+        strokeWidth="2"
+        style={{ cursor: 'pointer' }}
+        onClick={() => handleClick('rodilla')}
+      />
+      <text x="190" y="405" fill="#cbdcff" fontSize="14" fontWeight="600" textAnchor="middle">
+        Rodilla Derecha
+      </text>
+    </svg>
+  );
+}
+
+export default EsquemaHumanoSVG;
