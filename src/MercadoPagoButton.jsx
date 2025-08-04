@@ -4,12 +4,12 @@ function MercadoPagoButton({ preferenceId }) {
   const mpRef = useRef(null);
 
   useEffect(() => {
-    // Limpia contenido previo (por si se renderiza varias veces)
+    // Limpiar contenido anterior
     if (mpRef.current) {
       mpRef.current.innerHTML = '';
     }
 
-    // Crear script oficial MercadoPago
+    // Crear script MercadoPago
     const script = document.createElement('script');
     script.src = 'https://www.mercadopago.cl/integrations/v1/web-payment-checkout.js';
     script.setAttribute('data-preference-id', preferenceId);
@@ -22,7 +22,7 @@ function MercadoPagoButton({ preferenceId }) {
 
     return () => {
       if (mpRef.current) {
-        mpRef.current.innerHTML = ''; // limpiar al desmontar
+        mpRef.current.innerHTML = '';
       }
     };
   }, [preferenceId]);
