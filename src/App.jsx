@@ -20,6 +20,9 @@ function App() {
   // Estado para controlar si pago confirmado
   const [pagoRealizado, setPagoRealizado] = useState(false);
 
+  // Estado para mostrar botón oficial MercadoPago
+  const [mostrarPago, setMostrarPago] = useState(false);
+
   const handleCambiarDato = (campo, valor) => {
     setDatosPaciente((prev) => ({ ...prev, [campo]: valor }));
   };
@@ -56,6 +59,7 @@ function App() {
 
     setMostrarVistaPrevia(true);
     setPagoRealizado(false); // Reiniciar pago si se genera otro informe
+    setMostrarPago(false);   // Ocultar botón oficial MercadoPago al iniciar
   };
 
   const handleDescargarPDF = async () => {
@@ -100,25 +104,25 @@ function App() {
 
         {mostrarVistaPrevia && <PreviewOrden datos={datosPaciente} />}
 
-        {/* Si se muestra preview y no se ha pagado, mostrar botón MercadoPago + confirmar pago */}
-        {mostrarVistaPrevia && !pagoRealizado && (
-          <>
-            <MercadoPagoButton preferenceId="310942987-2e0cf851-eb60-4f5e-a894-04a57ed0273c" />
-
-            <button
-              style={{ 
-                ...styles.downloadButton, 
-                backgroundColor: '#004B94', 
-                marginTop: '10px' 
-              }}
-              onClick={() => setPagoRealizado(true)}
-            >
-              Confirmar pago
-            </button>
-          </>
+        {/* Al generar preview, solo mostrar botón Pagar ahora si no se ha pagado */}
+        {mostrarVistaPrevia && !pagoRealizado && !mostrarPago && (
+          <button
+            style={{ ...styles.downloadButton, backgroundColor: '#004B94', marginTop: '10px' }}
+            onClick={() => setMostrarPago(true)}
+          >
+            Pagar ahora
+          </button>
         )}
 
-        {/* Si pago confirmado, mostrar botón para descargar PDF */}
+        {/* Mostrar botón oficial MercadoPago solo cuando se haga click en “Pagar ahora” */}
+        {mostrarVistaPrevia && !pagoRealizado && mostrarPago && (
+          <MercadoPagoButton
+            preferenceId="310942987-2e0cf851-eb60-4f5e-a894-04a57ed0273c"
+            onPagoExitoso={() => setPagoRealizado(true)}
+          />
+        )}
+
+        {/* Mostrar botón para descargar PDF solo después de pago confirmado */}
         {mostrarVistaPrevia && pagoRealizado && (
           <button style={styles.downloadButton} onClick={handleDescargarPDF}>
             Descargar Documento
