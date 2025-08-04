@@ -3,6 +3,9 @@ import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
 
+// Importar el componente botón MercadoPago que crearás
+import MercadoPagoButton from './MercadoPagoButton';
+
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
     nombre: '',
@@ -13,6 +16,9 @@ function App() {
   });
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
+
+  // Estado para controlar si pago confirmado
+  const [pagoRealizado, setPagoRealizado] = useState(false);
 
   const handleCambiarDato = (campo, valor) => {
     setDatosPaciente((prev) => ({ ...prev, [campo]: valor }));
@@ -49,6 +55,7 @@ function App() {
     }
 
     setMostrarVistaPrevia(true);
+    setPagoRealizado(false); // Reiniciar pago si se genera otro informe
   };
 
   const handleDescargarPDF = async () => {
@@ -93,9 +100,28 @@ function App() {
 
         {mostrarVistaPrevia && <PreviewOrden datos={datosPaciente} />}
 
-        {mostrarVistaPrevia && (
+        {/* Si se muestra preview y no se ha pagado, mostrar botón MercadoPago + confirmar pago */}
+        {mostrarVistaPrevia && !pagoRealizado && (
+          <>
+            <MercadoPagoButton preferenceId="310942987-2e0cf851-eb60-4f5e-a894-04a57ed0273c" />
+
+            <button
+              style={{ 
+                ...styles.downloadButton, 
+                backgroundColor: '#004B94', 
+                marginTop: '10px' 
+              }}
+              onClick={() => setPagoRealizado(true)}
+            >
+              Confirmar pago
+            </button>
+          </>
+        )}
+
+        {/* Si pago confirmado, mostrar botón para descargar PDF */}
+        {mostrarVistaPrevia && pagoRealizado && (
           <button style={styles.downloadButton} onClick={handleDescargarPDF}>
-            FIRMAR DOCUMENTO
+            Descargar Documento
           </button>
         )}
       </div>
