@@ -3,9 +3,6 @@ import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
 
-// Importar el componente botón MercadoPago que crearás
-import MercadoPagoButton from './MercadoPagoButton';
-
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
     nombre: '',
@@ -16,17 +13,13 @@ function App() {
   });
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
-
-  // Estado para controlar si pago confirmado
   const [pagoRealizado, setPagoRealizado] = useState(false);
-
-  // Estado para mostrar botón oficial MercadoPago
   const [mostrarPago, setMostrarPago] = useState(false);
 
-  // Detectar parámetro en URL para pago confirmado
+  // Detectar parámetro en URL para pago confirmado (Khipu)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('pago') === 'confirmado') {
+    if (params.get('pago') === 'ok') {
       setPagoRealizado(true);
       setMostrarPago(false);
       setMostrarVistaPrevia(true);
@@ -68,8 +61,8 @@ function App() {
     }
 
     setMostrarVistaPrevia(true);
-    setPagoRealizado(false); // Reiniciar pago si se genera otro informe
-    setMostrarPago(false);   // Ocultar botón oficial MercadoPago al iniciar
+    setPagoRealizado(false);
+    setMostrarPago(false);
   };
 
   const handleDescargarPDF = async () => {
@@ -99,6 +92,10 @@ function App() {
     }
   };
 
+  const handleIrAPagoKhipu = () => {
+    window.location.href = 'https://khipu.com/payment/process/ZGqF6';
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.esquemaContainer}>
@@ -114,7 +111,6 @@ function App() {
 
         {mostrarVistaPrevia && <PreviewOrden datos={datosPaciente} />}
 
-        {/* Al generar preview, solo mostrar botón Pagar ahora si no se ha pagado */}
         {mostrarVistaPrevia && !pagoRealizado && !mostrarPago && (
           <button
             style={{ ...styles.downloadButton, backgroundColor: '#004B94', marginTop: '10px' }}
@@ -124,15 +120,16 @@ function App() {
           </button>
         )}
 
-        {/* Mostrar botón oficial MercadoPago solo cuando se haga click en “Pagar ahora” */}
+        {/* Mostrar botón de Khipu al hacer clic en “Pagar ahora” */}
         {mostrarVistaPrevia && !pagoRealizado && mostrarPago && (
-          <MercadoPagoButton
-            preferenceId="310942987-2e0cf851-eb60-4f5e-a894-04a57ed0273c"
-            onPagoExitoso={() => setPagoRealizado(true)}
-          />
+          <button
+            style={{ ...styles.downloadButton, backgroundColor: '#28a745', marginTop: '10px' }}
+            onClick={handleIrAPagoKhipu}
+          >
+            Ir a pagar con Khipu
+          </button>
         )}
 
-        {/* Mostrar botón para descargar PDF solo después de pago confirmado */}
         {mostrarVistaPrevia && pagoRealizado && (
           <button style={styles.downloadButton} onClick={handleDescargarPDF}>
             Descargar Documento
