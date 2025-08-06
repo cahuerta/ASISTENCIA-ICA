@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
@@ -22,6 +22,16 @@ function App() {
 
   // Estado para mostrar botón oficial MercadoPago
   const [mostrarPago, setMostrarPago] = useState(false);
+
+  // Detectar parámetro en URL para pago confirmado
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('pago') === 'confirmado') {
+      setPagoRealizado(true);
+      setMostrarPago(false);
+      setMostrarVistaPrevia(true);
+    }
+  }, []);
 
   const handleCambiarDato = (campo, valor) => {
     setDatosPaciente((prev) => ({ ...prev, [campo]: valor }));
