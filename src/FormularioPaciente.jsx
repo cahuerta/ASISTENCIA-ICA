@@ -28,7 +28,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
       <input
         style={styles.input}
         type="number"
-        min="18"
+        min="10"
         max="110"
         value={datos.edad}
         onChange={(e) => onCambiarDato('edad', e.target.value)}
