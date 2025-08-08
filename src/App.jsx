@@ -93,7 +93,7 @@ function App() {
   };
 
   const handleIrAPagoKhipu = () => {
-    window.location.href = 'https://khipu.com/payment/process/3eRXU';
+    window.location.href = 'https://khipu.com/payment/process/zZMWd';
   };
 
   return (
