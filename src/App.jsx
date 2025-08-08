@@ -19,6 +19,7 @@ function App() {
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false);
+  const [modoGuest, setModoGuest] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -113,7 +114,6 @@ function App() {
     const idPago = generarIdPago();
 
     try {
-      // 1. Guardar los datos antes del pago
       const guardarRes = await fetch('https://asistencia-ica-backend.onrender.com/guardar-datos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -126,7 +126,6 @@ function App() {
         return;
       }
 
-      // 2. Obtener el link de Khipu con redirección dinámica
       const khipuRes = await fetch('https://asistencia-ica-backend.onrender.com/crear-pago-khipu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -148,6 +147,35 @@ function App() {
     }
   };
 
+  const handleSimularGuest = async () => {
+    const idPago = 'guest_test_pago';
+
+    const datosGuest = {
+      nombre: 'Guest',
+      rut: '99999999-9',
+      edad: 30,
+      dolor: 'Rodilla',
+      lado: 'Izquierda',
+    };
+
+    setDatosPaciente(datosGuest);
+    sessionStorage.setItem('idPago', idPago);
+
+    try {
+      await fetch('https://asistencia-ica-backend.onrender.com/guardar-datos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idPago, datosPaciente: datosGuest }),
+      });
+
+      setPagoRealizado(true);
+      setMostrarVistaPrevia(true);
+    } catch (error) {
+      console.error('Error en modo guest:', error);
+      alert('Error al simular pago en modo guest.');
+    }
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.esquemaContainer}>
@@ -160,12 +188,20 @@ function App() {
         {mostrarVistaPrevia && <PreviewOrden datos={datosPaciente} />}
 
         {mostrarVistaPrevia && !pagoRealizado && !mostrarPago && (
-          <button
-            style={{ ...styles.downloadButton, backgroundColor: '#004B94', marginTop: '10px' }}
-            onClick={() => setMostrarPago(true)}
-          >
-            Pagar ahora
-          </button>
+          <>
+            <button
+              style={{ ...styles.downloadButton, backgroundColor: '#004B94', marginTop: '10px' }}
+              onClick={() => setMostrarPago(true)}
+            >
+              Pagar ahora
+            </button>
+            <button
+              style={{ ...styles.downloadButton, backgroundColor: '#777', marginTop: '10px' }}
+              onClick={handleSimularGuest}
+            >
+              Simular Pago como Guest
+            </button>
+          </>
         )}
 
         {mostrarVistaPrevia && !pagoRealizado && mostrarPago && (
