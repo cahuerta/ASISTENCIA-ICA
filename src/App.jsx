@@ -22,16 +22,15 @@ function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('pago') === 'ok') {
-      const idPago = sessionStorage.getItem('idPago');
-      if (idPago) {
-        setPagoRealizado(true);
-        setMostrarPago(false);
-        setMostrarVistaPrevia(true);
-      } else {
-        alert('No se encontró el ID del pago. No podrá descargar el PDF.');
-      }
-    } else if (params.get('pago') === 'cancelado') {
+    const pago = params.get('pago');
+    const idPagoURL = params.get('idPago');
+
+    if (pago === 'ok' && idPagoURL) {
+      sessionStorage.setItem('idPago', idPagoURL);
+      setPagoRealizado(true);
+      setMostrarPago(false);
+      setMostrarVistaPrevia(true);
+    } else if (pago === 'cancelado') {
       alert('Pago cancelado.');
       setMostrarPago(false);
       setMostrarVistaPrevia(false);
@@ -114,26 +113,38 @@ function App() {
     const idPago = generarIdPago();
 
     try {
-      const res = await fetch('https://asistencia-ica-backend.onrender.com/guardar-datos', {
+      // 1. Guardar los datos antes del pago
+      const guardarRes = await fetch('https://asistencia-ica-backend.onrender.com/guardar-datos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idPago, datosPaciente }),
       });
 
-      const json = await res.json();
-      if (!json.ok) {
+      const guardarJson = await guardarRes.json();
+      if (!guardarJson.ok) {
         alert('Error guardando datos antes del pago.');
         return;
       }
 
-      sessionStorage.setItem('idPago', idPago);
+      // 2. Obtener el link de Khipu con redirección dinámica
+      const khipuRes = await fetch('https://asistencia-ica-backend.onrender.com/crear-pago-khipu', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idPago }),
+      });
 
-      // Redirigir a la plataforma de pago sin modificar la URL
-      window.location.href = 'https://khipu.com/payment/process/zZMWd';
+      const khipuJson = await khipuRes.json();
+      if (!khipuJson.ok || !khipuJson.url) {
+        alert('No se pudo generar el link de pago de Khipu');
+        return;
+      }
+
+      sessionStorage.setItem('idPago', idPago);
+      window.location.href = khipuJson.url;
 
     } catch (error) {
-      alert('Error al iniciar el pago');
       console.error(error);
+      alert('Error al preparar el pago con Khipu.');
     }
   };
 
