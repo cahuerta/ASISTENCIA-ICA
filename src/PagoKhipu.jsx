@@ -29,7 +29,11 @@ export async function crearPagoKhipu({ idPago, datosPaciente, modoGuest = false 
     body: JSON.stringify({ idPago, modoGuest, datosPaciente }),
   });
   const j = await r.json();
-  if (!j?.ok || !j?.url) throw new Error(j?.error || 'No se pudo crear el pago');
+  if (!j?.ok || !j?.url) {
+    // ⬇️ Propagamos detalle del backend para depurar rápido
+    const msg = `${j?.error || 'No se pudo crear el pago'}${j?.detail ? `\n${j.detail}` : ''}`;
+    throw new Error(msg);
+  }
   return j.url; // URL para redirigir (guest -> returnUrl; real -> payment_url de Khipu)
 }
 
@@ -45,14 +49,19 @@ export async function irAPagoKhipu(datosPaciente) {
   // Guarda el idPago localmente (se usa luego para descargar PDF)
   sessionStorage.setItem('idPago', idPago);
 
-  // 1) Guardar datos
-  await guardarDatos(idPago, datosPaciente);
+  try {
+    // 1) Guardar datos
+    await guardarDatos(idPago, datosPaciente);
 
-  // 2) Crear pago (real, sin guest)
-  const urlPago = await crearPagoKhipu({ idPago, datosPaciente, modoGuest: false });
+    // 2) Crear pago (real, sin guest)
+    const urlPago = await crearPagoKhipu({ idPago, datosPaciente, modoGuest: false });
 
-  // 3) Redirigir a Khipu
-  window.location.href = urlPago;
+    // 3) Redirigir a Khipu
+    window.location.href = urlPago;
+  } catch (err) {
+    // ⬇️ Mostramos el error exacto (incluye detail del backend si viene)
+    alert(`No se pudo generar el link de pago.\n${err.message || err}`);
+  }
 }
 
 // Simular pago guest (usa el mismo endpoint pero con modoGuest: true)
