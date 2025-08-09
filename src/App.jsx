@@ -2,10 +2,7 @@ import React, { useState, useEffect } from 'react';
 import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
-
-function generarIdPago() {
-  return 'pago_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
-}
+import PagoKhipu from './PagoKhipu.jsx';
 
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
@@ -19,7 +16,6 @@ function App() {
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false);
-  const [modoGuest, setModoGuest] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -105,48 +101,6 @@ function App() {
     }
   };
 
-  const handleIrAPagoKhipu = async () => {
-    if (!datosPaciente.nombre || !datosPaciente.rut || !datosPaciente.edad || !datosPaciente.dolor) {
-      alert('Complete todos los campos antes de pagar');
-      return;
-    }
-
-    const idPago = generarIdPago();
-
-    try {
-      const guardarRes = await fetch('https://asistencia-ica-backend.onrender.com/guardar-datos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idPago, datosPaciente }),
-      });
-
-      const guardarJson = await guardarRes.json();
-      if (!guardarJson.ok) {
-        alert('Error guardando datos antes del pago.');
-        return;
-      }
-
-      const khipuRes = await fetch('https://asistencia-ica-backend.onrender.com/crear-pago-khipu', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idPago }),
-      });
-
-      const khipuJson = await khipuRes.json();
-      if (!khipuJson.ok || !khipuJson.url) {
-        alert('No se pudo generar el link de pago de Khipu');
-        return;
-      }
-
-      sessionStorage.setItem('idPago', idPago);
-      window.location.href = khipuJson.url;
-
-    } catch (error) {
-      console.error(error);
-      alert('Error al preparar el pago con Khipu.');
-    }
-  };
-
   const handleSimularGuest = async () => {
     const idPago = 'guest_test_pago';
 
@@ -205,12 +159,11 @@ function App() {
         )}
 
         {mostrarVistaPrevia && !pagoRealizado && mostrarPago && (
-          <button
-            style={{ ...styles.downloadButton, backgroundColor: '#28a745', marginTop: '10px' }}
-            onClick={handleIrAPagoKhipu}
-          >
-            Ir a pagar con Khipu
-          </button>
+          <PagoKhipu
+            datosPaciente={datosPaciente}
+            setPagoRealizado={setPagoRealizado}
+            setMostrarVistaPrevia={setMostrarVistaPrevia}
+          />
         )}
 
         {mostrarVistaPrevia && pagoRealizado && (
