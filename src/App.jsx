@@ -1,8 +1,11 @@
+"use client";
 import React, { useState, useEffect } from 'react';
 import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
-import PagoKhipu from './PagoKhipu.jsx';
+// ❌ Antes: import PagoKhipu from './PagoKhipu.jsx';
+// ✅ Ahora: importamos la función que realmente inicia el pago
+import { irAPagoKhipu } from './PagoKhipu.jsx';
 
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
@@ -15,7 +18,7 @@ function App() {
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
-  const [mostrarPago, setMostrarPago] = useState(false);
+  const [mostrarPago, setMostrarPago] = useState(false); // lo dejamos para no romper lógica, pero ya no se usa para renderizar un componente
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -130,6 +133,27 @@ function App() {
     }
   };
 
+  // 🔹 Nuevo: handler mínimo para iniciar el flujo real de Khipu
+  const handlePagarAhora = async () => {
+    const edadNum = Number(datosPaciente.edad);
+    if (
+      !datosPaciente.nombre?.trim() ||
+      !datosPaciente.rut?.trim() ||
+      !Number.isFinite(edadNum) || edadNum <= 0 ||
+      !datosPaciente.dolor?.trim()
+    ) {
+      alert('Complete nombre, RUT, edad (>0) y dolor antes de pagar.');
+      return;
+    }
+
+    try {
+      await irAPagoKhipu({ ...datosPaciente, edad: edadNum }); // esto redirige a Khipu
+    } catch (err) {
+      console.error('No se pudo generar el link de pago:', err);
+      alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
+    }
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.esquemaContainer}>
@@ -143,9 +167,11 @@ function App() {
 
         {mostrarVistaPrevia && !pagoRealizado && !mostrarPago && (
           <>
+            {/* 🔹 Antes abría un “modal” de PagoKhipu que no existe */}
+            {/* 🔹 Ahora dispara el pago real directamente */}
             <button
               style={{ ...styles.downloadButton, backgroundColor: '#004B94', marginTop: '10px' }}
-              onClick={() => setMostrarPago(true)}
+              onClick={handlePagarAhora}
             >
               Pagar ahora
             </button>
@@ -158,13 +184,14 @@ function App() {
           </>
         )}
 
-        {mostrarVistaPrevia && !pagoRealizado && mostrarPago && (
+        {/* ❌ Quitamos este bloque porque <PagoKhipu /> no existe */}
+        {/* {mostrarVistaPrevia && !pagoRealizado && mostrarPago && (
           <PagoKhipu
             datosPaciente={datosPaciente}
             setPagoRealizado={setPagoRealizado}
             setMostrarVistaPrevia={setMostrarVistaPrevia}
           />
-        )}
+        )} */}
 
         {mostrarVistaPrevia && pagoRealizado && (
           <button style={styles.downloadButton} onClick={handleDescargarPDF}>
