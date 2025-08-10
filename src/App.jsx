@@ -1,11 +1,12 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
-// ❌ Antes: import PagoKhipu from './PagoKhipu.jsx';
-// ✅ Ahora: importamos la función que realmente inicia el pago
+// ✅ usamos la función que inicia el pago real
 import { irAPagoKhipu } from './PagoKhipu.jsx';
+
+const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
 
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
@@ -18,23 +19,68 @@ function App() {
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
-  const [mostrarPago, setMostrarPago] = useState(false); // lo dejamos para no romper lógica, pero ya no se usa para renderizar un componente
+  const [procesandoPago, setProcesandoPago] = useState(false); // 👈 para mostrar “Procesando…”
+  const [mostrarPago, setMostrarPago] = useState(false); // mantenido por compatibilidad
+  const pollerRef = useRef(null);
 
+  // Al volver desde Khipu: ?pago=ok&idPago=...
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const pago = params.get('pago');
     const idPagoURL = params.get('idPago');
 
+    // Limpia cualquier poller anterior
+    if (pollerRef.current) {
+      clearInterval(pollerRef.current);
+      pollerRef.current = null;
+    }
+
     if (pago === 'ok' && idPagoURL) {
       sessionStorage.setItem('idPago', idPagoURL);
-      setPagoRealizado(true);
       setMostrarPago(false);
       setMostrarVistaPrevia(true);
+      setPagoRealizado(false);
+      setProcesandoPago(true);
+
+      // 🔁 Polling corto al backend hasta que el webhook marque pagado:true
+      let intentos = 0;
+      pollerRef.current = setInterval(async () => {
+        intentos++;
+        try {
+          const r = await fetch(`${BACKEND_BASE}/obtener-datos/${idPagoURL}`);
+          const j = await r.json();
+          if (j?.ok && j?.pagado) {
+            clearInterval(pollerRef.current);
+            pollerRef.current = null;
+            setProcesandoPago(false);
+            setPagoRealizado(true);
+          }
+        } catch (_e) {
+          // silencioso
+        }
+        // corta a los ~60s (30 * 2s)
+        if (intentos >= 30) {
+          clearInterval(pollerRef.current);
+          pollerRef.current = null;
+          setProcesandoPago(false);
+          // Si no llegó el webhook aún, igual dejamos visible la vista previa.
+          // El botón de descarga no se muestra hasta que pagado sea true.
+        }
+      }, 2000);
     } else if (pago === 'cancelado') {
       alert('Pago cancelado.');
       setMostrarPago(false);
       setMostrarVistaPrevia(false);
+      setPagoRealizado(false);
+      setProcesandoPago(false);
     }
+
+    return () => {
+      if (pollerRef.current) {
+        clearInterval(pollerRef.current);
+        pollerRef.current = null;
+      }
+    };
   }, []);
 
   const handleCambiarDato = (campo, valor) => {
@@ -56,21 +102,15 @@ function App() {
       lado = zona.includes('izquierda') ? 'Izquierda' : 'Derecha';
     }
 
-    setDatosPaciente((prev) => ({
-      ...prev,
-      dolor,
-      lado,
-    }));
+    setDatosPaciente((prev) => ({ ...prev, dolor, lado }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
     if (!datosPaciente.nombre || !datosPaciente.rut || !datosPaciente.edad || !datosPaciente.dolor) {
       alert('Por favor complete todos los campos obligatorios.');
       return;
     }
-
     setMostrarVistaPrevia(true);
     setPagoRealizado(false);
     setMostrarPago(false);
@@ -84,16 +124,14 @@ function App() {
     }
 
     try {
-      const res = await fetch(`https://asistencia-ica-backend.onrender.com/pdf/${idPago}`);
-      if (!res.ok) {
-        throw new Error('Error al obtener el PDF');
-      }
+      const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`);
+      if (!res.ok) throw new Error('Error al obtener el PDF');
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `orden_${datosPaciente.nombre.replace(/ /g, '_')}.pdf`;
+      a.download = `orden_${(datosPaciente.nombre || 'paciente').replace(/ /g, '_')}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -106,7 +144,6 @@ function App() {
 
   const handleSimularGuest = async () => {
     const idPago = 'guest_test_pago';
-
     const datosGuest = {
       nombre: 'Guest',
       rut: '99999999-9',
@@ -119,21 +156,21 @@ function App() {
     sessionStorage.setItem('idPago', idPago);
 
     try {
-      await fetch('https://asistencia-ica-backend.onrender.com/guardar-datos', {
+      await fetch(`${BACKEND_BASE}/guardar-datos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idPago, datosPaciente: datosGuest }),
       });
-
-      setPagoRealizado(true);
+      // En modo guest no hay webhook; puedes forzar el flag en backend si quieres.
       setMostrarVistaPrevia(true);
+      setPagoRealizado(true); // permite probar descarga manual
     } catch (error) {
       console.error('Error en modo guest:', error);
       alert('Error al simular pago en modo guest.');
     }
   };
 
-  // 🔹 Nuevo: handler mínimo para iniciar el flujo real de Khipu
+  // Inicia pago real de Khipu
   const handlePagarAhora = async () => {
     const edadNum = Number(datosPaciente.edad);
     if (
@@ -147,7 +184,7 @@ function App() {
     }
 
     try {
-      await irAPagoKhipu({ ...datosPaciente, edad: edadNum }); // esto redirige a Khipu
+      await irAPagoKhipu({ ...datosPaciente, edad: edadNum }); // redirige a Khipu
     } catch (err) {
       console.error('No se pudo generar el link de pago:', err);
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
@@ -167,31 +204,22 @@ function App() {
 
         {mostrarVistaPrevia && !pagoRealizado && !mostrarPago && (
           <>
-            {/* 🔹 Antes abría un “modal” de PagoKhipu que no existe */}
-            {/* 🔹 Ahora dispara el pago real directamente */}
             <button
               style={{ ...styles.downloadButton, backgroundColor: '#004B94', marginTop: '10px' }}
               onClick={handlePagarAhora}
+              disabled={procesandoPago}
             >
-              Pagar ahora
+              {procesandoPago ? 'Procesando confirmación de pago…' : 'Pagar ahora'}
             </button>
             <button
               style={{ ...styles.downloadButton, backgroundColor: '#777', marginTop: '10px' }}
               onClick={handleSimularGuest}
+              disabled={procesandoPago}
             >
               Simular Pago como Guest
             </button>
           </>
         )}
-
-        {/* ❌ Quitamos este bloque porque <PagoKhipu /> no existe */}
-        {/* {mostrarVistaPrevia && !pagoRealizado && mostrarPago && (
-          <PagoKhipu
-            datosPaciente={datosPaciente}
-            setPagoRealizado={setPagoRealizado}
-            setMostrarVistaPrevia={setMostrarVistaPrevia}
-          />
-        )} */}
 
         {mostrarVistaPrevia && pagoRealizado && (
           <button style={styles.downloadButton} onClick={handleDescargarPDF}>
