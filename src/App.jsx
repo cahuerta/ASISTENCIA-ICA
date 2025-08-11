@@ -18,11 +18,10 @@ function App() {
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
-  const [procesandoPago, setProcesandoPago] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false); // compat
   const pollerRef = useRef(null);
 
-  // Al montar: restaurar datos y manejar retorno ?pago=ok&idPago=...
+  // Al montar: restaurar datos y manejar retorno ?pago=ok|cancelado&idPago=...
   useEffect(() => {
     // Restaurar formulario si existe respaldo
     const saved = sessionStorage.getItem('datosPacienteJSON');
@@ -42,33 +41,28 @@ function App() {
       pollerRef.current = null;
     }
 
+    // ✅ Mostrar botón de descarga inmediatamente al volver de Khipu
     if (pago === 'ok' && idFinal) {
       sessionStorage.setItem('idPago', idFinal);
       setMostrarPago(false);
       setMostrarVistaPrevia(true);
-      setPagoRealizado(false);
-      setProcesandoPago(true);
+      setPagoRealizado(true); // 👈 ya muestra el botón
 
-      // 🔁 Polling al backend hasta que el webhook marque pagado:true
+      // (Opcional) Polling en segundo plano (no bloquea la UI)
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
-        try {
-          const r = await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`);
-          const j = await r.json();
-          if (j?.ok && j?.pagado) {
-            clearInterval(pollerRef.current);
-            pollerRef.current = null;
-            setProcesandoPago(false);
-            setPagoRealizado(true);
-          }
-        } catch {}
-        if (intentos >= 30) { // ~60s
+        try { await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`); } catch {}
+        if (intentos >= 30) {
           clearInterval(pollerRef.current);
           pollerRef.current = null;
-          setProcesandoPago(false);
         }
       }, 2000);
+    } else if (!pago && idFinal) {
+      // ✅ Si se recargó la página sin query params pero ya hay idPago en sessionStorage
+      setMostrarPago(false);
+      setMostrarVistaPrevia(true);
+      setPagoRealizado(true);
     } else if (pago === 'ok' && !idFinal) {
       // Volvió sin idPago y tampoco hay respaldo
       alert('No recibimos idPago en el retorno. Intenta nuevamente.');
@@ -77,7 +71,6 @@ function App() {
       setMostrarPago(false);
       setMostrarVistaPrevia(false);
       setPagoRealizado(false);
-      setProcesandoPago(false);
     }
 
     return () => {
@@ -119,7 +112,7 @@ function App() {
     setMostrarPago(false);
   };
 
-  // Descarga con fallback si el backend perdió memoria (Render reinicio)
+  // Descarga con fallback si el backend perdió memoria (Render reinicio) y bloqueo 402 “no pagado”
   const handleDescargarPDF = async () => {
     const idPago = sessionStorage.getItem('idPago');
     if (!idPago) {
@@ -128,8 +121,9 @@ function App() {
     }
 
     const intentaDescarga = async () => {
-      const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`);
+      const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: 'no-store' });
       if (res.status === 404) return { ok: false, status: 404 };
+      if (res.status === 402) return { ok: false, status: 402 }; // pago no confirmado
       if (!res.ok) throw new Error('Error al obtener el PDF');
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -147,11 +141,17 @@ function App() {
       const r1 = await intentaDescarga();
       if (r1.ok) return;
 
+      // ⛔️ No pagado: avisa y no reintenta hasta que se confirme
+      if (r1.status === 402) {
+        alert('Tu pago aún no está confirmado. Si finalizaste en el banco, espera unos segundos y vuelve a intentar.');
+        return;
+      }
+
+      // 🔁 Backend reiniciado: reinyecta datos y vuelve a intentar
       if (r1.status === 404) {
         const respaldo = sessionStorage.getItem('datosPacienteJSON');
         const datosReinyectar = respaldo ? JSON.parse(respaldo) : datosPaciente;
 
-        // Reinyecta datos y reintenta (para cuando el pod se reinició)
         await fetch(`${BACKEND_BASE}/guardar-datos`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -221,14 +221,13 @@ function App() {
             <button
               style={{ ...styles.downloadButton, backgroundColor: '#004B94', marginTop: '10px' }}
               onClick={handlePagarAhora}
-              disabled={procesandoPago}
             >
-              {procesandoPago ? 'Procesando confirmación de pago…' : 'Pagar ahora'}
+              Pagar ahora
             </button>
             <button
               style={{ ...styles.downloadButton, backgroundColor: '#777', marginTop: '10px' }}
               onClick={async () => {
-                // Modo prueba local
+                // Modo guest: guarda y redirige simulando retorno pagado
                 const idPago = 'guest_test_pago';
                 const datosGuest = {
                   nombre: 'Guest',
@@ -237,18 +236,22 @@ function App() {
                   dolor: 'Rodilla',
                   lado: 'Izquierda',
                 };
-                setDatosPaciente(datosGuest);
                 sessionStorage.setItem('idPago', idPago);
                 sessionStorage.setItem('datosPacienteJSON', JSON.stringify(datosGuest));
-                await fetch(`${BACKEND_BASE}/guardar-datos`, {
+
+                // Marcamos guest como pagado en backend vía crear-pago-khipu modoGuest
+                const resp = await fetch(`${BACKEND_BASE}/crear-pago-khipu`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ idPago, datosPaciente: datosGuest }),
+                  body: JSON.stringify({ idPago, modoGuest: true, datosPaciente: datosGuest }),
                 });
-                setMostrarVistaPrevia(true);
-                setPagoRealizado(true);
+                const j = await resp.json();
+                if (j?.ok && j?.url) {
+                  window.location.href = j.url; // ?pago=ok&idPago=guest_test_pago
+                } else {
+                  alert('Guest no disponible. Ver backend.');
+                }
               }}
-              disabled={procesandoPago}
             >
               Simular Pago como Guest
             </button>
