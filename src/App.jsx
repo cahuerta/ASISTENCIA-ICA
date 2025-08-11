@@ -19,6 +19,8 @@ function App() {
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false); // compat
+  const [descargando, setDescargando] = useState(false); // 👈 nuevo
+  const [mensajeDescarga, setMensajeDescarga] = useState(''); // 👈 nuevo
   const pollerRef = useRef(null);
 
   // Al montar: restaurar datos y manejar retorno ?pago=ok|cancelado&idPago=...
@@ -112,7 +114,9 @@ function App() {
     setMostrarPago(false);
   };
 
-  // Descarga con fallback si el backend perdió memoria (Render reinicio) y bloqueo 402 “no pagado”
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms)); // 👈 util
+
+  // Descarga con auto-verificación (402) y fallback si el backend perdió memoria (404)
   const handleDescargarPDF = async () => {
     const idPago = sessionStorage.getItem('idPago');
     if (!idPago) {
@@ -137,35 +141,60 @@ function App() {
       return { ok: true };
     };
 
+    setDescargando(true);
+    setMensajeDescarga('Verificando pago…');
+
+    let reinyectado = false;
     try {
-      const r1 = await intentaDescarga();
-      if (r1.ok) return;
+      // Reintenta auto hasta 45s (30 intentos * 1.5s)
+      const maxIntentos = 30;
+      for (let i = 1; i <= maxIntentos; i++) {
+        const r = await intentaDescarga();
+        if (r.ok) break;
 
-      // ⛔️ No pagado: avisa y no reintenta hasta que se confirme
-      if (r1.status === 402) {
-        alert('Tu pago aún no está confirmado. Si finalizaste en el banco, espera unos segundos y vuelve a intentar.');
-        return;
-      }
+        if (r.status === 402) {
+          // pago aún no confirmado → seguir verificando
+          setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
+          await sleep(1500);
+          if (i === maxIntentos) {
+            alert('El pago aún no se confirma. Intenta nuevamente en unos segundos.');
+          }
+          continue;
+        }
 
-      // 🔁 Backend reiniciado: reinyecta datos y vuelve a intentar
-      if (r1.status === 404) {
-        const respaldo = sessionStorage.getItem('datosPacienteJSON');
-        const datosReinyectar = respaldo ? JSON.parse(respaldo) : datosPaciente;
+        if (r.status === 404) {
+          // Backend reiniciado → reinyecta una sola vez y reintenta
+          if (!reinyectado) {
+            setMensajeDescarga('Restaurando datos…');
+            const respaldo = sessionStorage.getItem('datosPacienteJSON');
+            const datosReinyectar = respaldo ? JSON.parse(respaldo) : datosPaciente;
 
-        await fetch(`${BACKEND_BASE}/guardar-datos`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idPago, datosPaciente: datosReinyectar }),
-        });
+            await fetch(`${BACKEND_BASE}/guardar-datos`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idPago, datosPaciente: datosReinyectar }),
+            });
 
-        const r2 = await intentaDescarga();
-        if (r2.ok) return;
+            reinyectado = true;
+            // breve espera y reintento inmediato
+            await sleep(500);
+            continue;
+          } else {
+            alert('No se pudo descargar el PDF después de reintentar.');
+            break;
+          }
+        }
 
-        alert('No se pudo descargar el PDF después de reintentar.');
+        // Otro error inesperado
+        alert('No se pudo descargar el PDF.');
+        break;
       }
     } catch (error) {
       console.error(error);
       alert('No se pudo descargar el PDF.');
+    } finally {
+      setDescargando(false);
+      setMensajeDescarga('');
     }
   };
 
@@ -259,8 +288,13 @@ function App() {
         )}
 
         {mostrarVistaPrevia && pagoRealizado && (
-          <button style={styles.downloadButton} onClick={handleDescargarPDF}>
-            Descargar Documento
+          <button
+            style={styles.downloadButton}
+            onClick={handleDescargarPDF}
+            disabled={descargando}
+            title={mensajeDescarga || 'Verificar y descargar'}
+          >
+            {descargando ? (mensajeDescarga || 'Verificando…') : 'Descargar Documento'}
           </button>
         )}
       </div>
