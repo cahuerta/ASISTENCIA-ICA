@@ -4,6 +4,7 @@ import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
 import { irAPagoKhipu } from './PagoKhipu.jsx';
+import PreopModulo from './modules/PreopModulo.jsx'; // 👈 NUEVO: módulo preoperatorio
 
 const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
 
@@ -22,6 +23,9 @@ function App() {
   const [descargando, setDescargando] = useState(false); // 👈 nuevo
   const [mensajeDescarga, setMensajeDescarga] = useState(''); // 👈 nuevo
   const pollerRef = useRef(null);
+
+  // 👇 NUEVO: selector de módulo (trauma por defecto)
+  const [modulo, setModulo] = useState('trauma'); // 'trauma' | 'preop'
 
   // Al montar: restaurar datos y manejar retorno ?pago=ok|cancelado&idPago=...
   useEffect(() => {
@@ -245,57 +249,86 @@ function App() {
 
         {mostrarVistaPrevia && <PreviewOrden datos={datosPaciente} />}
 
-        {mostrarVistaPrevia && !pagoRealizado && !mostrarPago && (
-          <>
-            <button
-              style={{ ...styles.downloadButton, backgroundColor: '#004B94', marginTop: '10px' }}
-              onClick={handlePagarAhora}
-            >
-              Pagar ahora
-            </button>
-            <button
-              style={{ ...styles.downloadButton, backgroundColor: '#777', marginTop: '10px' }}
-              onClick={async () => {
-                // Modo guest: guarda y redirige simulando retorno pagado
-                const idPago = 'guest_test_pago';
-                const datosGuest = {
-                  nombre: 'Guest',
-                  rut: '99999999-9',
-                  edad: 30,
-                  dolor: 'Rodilla',
-                  lado: 'Izquierda',
-                };
-                sessionStorage.setItem('idPago', idPago);
-                sessionStorage.setItem('datosPacienteJSON', JSON.stringify(datosGuest));
+        {/* 👇 NUEVO: Selector de módulo (aparece después de ingresar datos) */}
+        {mostrarVistaPrevia && (
+          <div style={{ marginTop: '10px' }}>
+            <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '1fr 1fr' }}>
+              <button
+                style={{ ...styles.downloadButton, backgroundColor: modulo === 'trauma' ? '#004B94' : '#0072CE' }}
+                onClick={() => setModulo('trauma')}
+              >
+                Asistencia médica traumatológica
+              </button>
+              <button
+                style={{ ...styles.downloadButton, backgroundColor: modulo === 'preop' ? '#004B94' : '#0072CE' }}
+                onClick={() => setModulo('preop')}
+              >
+                Exámenes preoperatorios
+              </button>
+            </div>
+          </div>
+        )}
 
-                // Marcamos guest como pagado en backend vía crear-pago-khipu modoGuest
-                const resp = await fetch(`${BACKEND_BASE}/crear-pago-khipu`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ idPago, modoGuest: true, datosPaciente: datosGuest }),
-                });
-                const j = await resp.json();
-                if (j?.ok && j?.url) {
-                  window.location.href = j.url; // ?pago=ok&idPago=guest_test_pago
-                } else {
-                  alert('Guest no disponible. Ver backend.');
-                }
-              }}
-            >
-              Simular Pago como Guest
-            </button>
+        {/* 👇 CONTENIDO por módulo */}
+        {mostrarVistaPrevia && modulo === 'trauma' && (
+          <>
+            {!pagoRealizado && !mostrarPago && (
+              <>
+                <button
+                  style={{ ...styles.downloadButton, backgroundColor: '#004B94', marginTop: '10px' }}
+                  onClick={handlePagarAhora}
+                >
+                  Pagar ahora
+                </button>
+                <button
+                  style={{ ...styles.downloadButton, backgroundColor: '#777', marginTop: '10px' }}
+                  onClick={async () => {
+                    // Modo guest: guarda y redirige simulando retorno pagado
+                    const idPago = 'guest_test_pago';
+                    const datosGuest = {
+                      nombre: 'Guest',
+                      rut: '99999999-9',
+                      edad: 30,
+                      dolor: 'Rodilla',
+                      lado: 'Izquierda',
+                    };
+                    sessionStorage.setItem('idPago', idPago);
+                    sessionStorage.setItem('datosPacienteJSON', JSON.stringify(datosGuest));
+
+                    // Marcamos guest como pagado en backend vía crear-pago-khipu modoGuest
+                    const resp = await fetch(`${BACKEND_BASE}/crear-pago-khipu`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ idPago, modoGuest: true, datosPaciente: datosGuest }),
+                    });
+                    const j = await resp.json();
+                    if (j?.ok && j?.url) {
+                      window.location.href = j.url; // ?pago=ok&idPago=guest_test_pago
+                    } else {
+                      alert('Guest no disponible. Ver backend.');
+                    }
+                  }}
+                >
+                  Simular Pago como Guest
+                </button>
+              </>
+            )}
+
+            {mostrarVistaPrevia && pagoRealizado && (
+              <button
+                style={styles.downloadButton}
+                onClick={handleDescargarPDF}
+                disabled={descargando}
+                title={mensajeDescarga || 'Verificar y descargar'}
+              >
+                {descargando ? (mensajeDescarga || 'Verificando…') : 'Descargar Documento'}
+              </button>
+            )}
           </>
         )}
 
-        {mostrarVistaPrevia && pagoRealizado && (
-          <button
-            style={styles.downloadButton}
-            onClick={handleDescargarPDF}
-            disabled={descargando}
-            title={mensajeDescarga || 'Verificar y descargar'}
-          >
-            {descargando ? (mensajeDescarga || 'Verificando…') : 'Descargar Documento'}
-          </button>
+        {mostrarVistaPrevia && modulo === 'preop' && (
+          <PreopModulo initialDatos={datosPaciente} />
         )}
       </div>
     </div>
