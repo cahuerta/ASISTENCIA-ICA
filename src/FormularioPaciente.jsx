@@ -35,6 +35,18 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         required
       />
 
+      {/* 👇 NUEVO: Género (no requerido para no bloquear otros módulos) */}
+      <label style={styles.label}>Género:</label>
+      <select
+        style={styles.input}
+        value={datos.genero || ''}
+        onChange={(e) => onCambiarDato('genero', e.target.value)}
+      >
+        <option value="">Seleccione…</option>
+        <option value="Hombre">Hombre</option>
+        <option value="Mujer">Mujer</option>
+      </select>
+
       <label style={styles.label}>Dolor:</label>
       <select
         style={styles.input}
