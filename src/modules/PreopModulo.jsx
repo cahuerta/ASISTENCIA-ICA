@@ -1,250 +1,286 @@
-// src/modules/PreopModulo.jsx
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 
-const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
+const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
+
+// Lista EXACTA indicada por ti (en ese orden, sin Rx de tórax, sin extras)
+const EXAMENES_FIJOS = [
+  "HEMOGRAMA",
+  "VHS",
+  "PCR",
+  "ELECTROLITOS PLASMATICOS",
+  "PERFIL BIOQUIMICO",
+  "PERFIL LIPIDICO",
+  "CREATININA",
+  "TTPK",
+  "HEMOGLOBINA GLICOSILADA",
+  "VITAMINA D",
+  "ORINA",
+  "UROCULTIVO",
+  "ECG DE REPOSO",
+];
 
 export default function PreopModulo({ initialDatos }) {
-  const [datos, setDatos] = useState(() => ({
-    nombre: initialDatos?.nombre || "",
-    rut: initialDatos?.rut || "",
-    edad: initialDatos?.edad || "",
-    lado: initialDatos?.lado || "",
-    // Campos preop
-    tipoCirugia: "Prótesis de Rodilla",
-    fechaCirugia: "",
-    comorbilidades: "",
-  }));
-
+  const [datos, setDatos] = useState(initialDatos || {});
   const [pagoRealizado, setPagoRealizado] = useState(false);
-  const [pagando, setPagando] = useState(false);
   const [descargando, setDescargando] = useState(false);
-  const [msg, setMsg] = useState("");
-  const warmRef = useRef(null);
+  const [mensajeDescarga, setMensajeDescarga] = useState("");
+  const pollerRef = useRef(null);
 
-  // Al montar: restaurar y manejar retorno ?pago=ok&idPago=...
+  // al montar: sincroniza datos, detecta retorno de pago
   useEffect(() => {
-    // Rellena con session si existe
-    const saved = sessionStorage.getItem("preopDatosJSON");
-    if (saved) {
-      try {
-        const j = JSON.parse(saved);
-        setDatos((p) => ({ ...p, ...j }));
-      } catch {}
-    }
-    // Retorno Khipu
+    try {
+      const saved = sessionStorage.getItem("datosPacienteJSON");
+      if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
+    } catch {}
+
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
-    const idPago = params.get("idPago") || sessionStorage.getItem("preopIdPago");
+    const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
+
     if (pago === "ok" && idPago) {
-      sessionStorage.setItem("preopIdPago", idPago);
       setPagoRealizado(true);
-      // “calentar” backend
-      let i = 0;
-      warmRef.current = setInterval(async () => {
-        i++;
-        try {
-          await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`, { cache: "no-store" });
-        } catch {}
-        if (i >= 10) {
-          clearInterval(warmRef.current);
-          warmRef.current = null;
+      // warm-up al backend de preop
+      if (pollerRef.current) clearInterval(pollerRef.current);
+      let intentos = 0;
+      pollerRef.current = setInterval(async () => {
+        intentos++;
+        try { await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`); } catch {}
+        if (intentos >= 30) {
+          clearInterval(pollerRef.current);
+          pollerRef.current = null;
         }
       }, 2000);
-      // limpiar query
-      const url = new URL(window.location.href);
-      url.search = "";
-      window.history.replaceState({}, "", url.toString());
     }
+
     return () => {
-      if (warmRef.current) clearInterval(warmRef.current);
+      if (pollerRef.current) {
+        clearInterval(pollerRef.current);
+        pollerRef.current = null;
+      }
     };
   }, []);
 
-  const guardarPreop = async (idPago, body) => {
-    await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idPago, datosPaciente: body }),
-    });
-  };
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  const pagar = async ({ guest = false } = {}) => {
-    if (pagando) return;
-    if (!datos.nombre || !datos.rut || !datos.edad) {
-      alert("Complete nombre, RUT y edad.");
+  // Pagar ahora (PREOP)
+  const handlePagarPreop = async () => {
+    const edadNum = Number(datos.edad);
+    if (
+      !datos.nombre?.trim() ||
+      !datos.rut?.trim() ||
+      !Number.isFinite(edadNum) || edadNum <= 0 ||
+      !datos.dolor?.trim()
+    ) {
+      alert("Complete nombre, RUT, edad (>0) y dolor antes de pagar.");
       return;
     }
-    setPagando(true);
+
     try {
-      const idPago =
-        sessionStorage.getItem("preopIdPago") ||
-        `preop_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-      sessionStorage.setItem("preopIdPago", idPago);
-      sessionStorage.setItem("preopDatosJSON", JSON.stringify(datos));
+      const idPago = sessionStorage.getItem("idPago") ||
+        ("preop_" + Date.now() + "_" + Math.floor(Math.random() * 10000));
 
-      // Persistir en backend
-      await guardarPreop(idPago, datos);
+      sessionStorage.setItem("idPago", idPago);
+      sessionStorage.setItem("modulo", "preop");
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
 
-      // Redirigir a pago (usa tu backend Khipu real; aquí asumimos que PagoKhipu crea el link)
-      // Si prefieres usar tu endpoint /crear-pago-khipu, también sirve.
-      await irAPagoKhipu({ ...datos, idPago, modoGuest: guest });
-    } catch (e) {
-      console.error(e);
-      alert("No se pudo iniciar el pago.");
-    } finally {
-      setPagando(false);
+      // guarda en backend PREOP
+      await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idPago, datosPaciente: { ...datos, edad: edadNum } }),
+      });
+
+      // redirige a Khipu
+      await irAPagoKhipu({ ...datos, edad: edadNum, idPago });
+    } catch (err) {
+      console.error("No se pudo generar el link de pago (preop):", err);
+      alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
     }
   };
 
-  const descargar = async (tipo) => {
-    const idPago = sessionStorage.getItem("preopIdPago");
-    if (!idPago) return alert("ID de pago no encontrado.");
+  // Descargar PDF PREOP (1 archivo, 2 páginas)
+  const handleDescargarPreop = async () => {
+    const idPago = sessionStorage.getItem("idPago");
+    if (!idPago) {
+      alert("ID de pago no encontrado");
+      return;
+    }
+
+    const intentaDescarga = async () => {
+      const res = await fetch(`${BACKEND_BASE}/pdf-preop/${idPago}`, { cache: "no-store" });
+      if (res.status === 404) return { ok: false, status: 404 };
+      if (res.status === 402) return { ok: false, status: 402 };
+      if (!res.ok) throw new Error("Error al obtener el PDF");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const baseName = (datos?.nombre || "paciente").replace(/ /g, "_");
+      a.download = `preop_${baseName}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      return { ok: true };
+    };
+
     setDescargando(true);
-    setMsg("Verificando pago…");
+    setMensajeDescarga("Verificando pago…");
+
+    let reinyectado = false;
     try {
-      for (let i = 1; i <= 12; i++) {
-        const res = await fetch(
-          `${BACKEND_BASE}/pdf-preop/${idPago}?tipo=${tipo}&ts=${Date.now()}`,
-          { cache: "no-store" }
-        );
-        if (res.status === 402) {
-          setMsg(`Verificando pago… (${i}/12)`);
-          await new Promise((r) => setTimeout(r, 1200));
+      const maxIntentos = 30;
+      for (let i = 1; i <= maxIntentos; i++) {
+        const r = await intentaDescarga();
+        if (r.ok) break;
+
+        if (r.status === 402) {
+          setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
+          await sleep(1500);
+          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
           continue;
         }
-        if (res.status === 404) {
-          // reinyecta si el backend reinició
-          const respaldo = sessionStorage.getItem("preopDatosJSON");
-          if (respaldo) await guardarPreop(idPago, JSON.parse(respaldo));
-          await new Promise((r) => setTimeout(r, 500));
-          continue;
+
+        if (r.status === 404) {
+          // backend reiniciado → reinyecta una sola vez y reintenta
+          if (!reinyectado) {
+            setMensajeDescarga("Restaurando datos…");
+            const respaldo = sessionStorage.getItem("datosPacienteJSON");
+            const datosReinyectar = respaldo ? JSON.parse(respaldo) : datos;
+
+            await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ idPago, datosPaciente: datosReinyectar }),
+            });
+
+            reinyectado = true;
+            await sleep(500);
+            continue;
+          } else {
+            alert("No se pudo descargar el PDF después de reintentar.");
+            break;
+          }
         }
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        const nombre = (datos.nombre || "paciente").replace(/[^a-zA-Z0-9_-]+/g, "_");
-        a.href = url;
-        a.download = tipo === "imagen" ? `preop_imagen_${nombre}.pdf` : `preop_lab_${nombre}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+
+        alert("No se pudo descargar el PDF.");
         break;
       }
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
       alert("No se pudo descargar el PDF.");
     } finally {
       setDescargando(false);
-      setMsg("");
+      setMensajeDescarga("");
     }
   };
 
+  // Simular pago (guest) para pruebas
+  const handleSimularPagoGuest = async () => {
+    const idPago = "preop_guest_" + Date.now();
+    const datosGuest = {
+      nombre: "Guest",
+      rut: "99999999-9",
+      edad: 30,
+      dolor: "Rodilla",
+      lado: "Izquierda",
+    };
+
+    sessionStorage.setItem("idPago", idPago);
+    sessionStorage.setItem("modulo", "preop");
+    sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
+
+    await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idPago, datosPaciente: datosGuest }),
+    });
+
+    // redirige simulando retorno pagado
+    const url = new URL(window.location.href);
+    url.searchParams.set("pago", "ok");
+    url.searchParams.set("idPago", idPago);
+    window.location.href = url.toString();
+  };
+
   return (
-    <div style={{ marginTop: 12 }}>
-      <div style={box}>
-        <h3 style={{ marginTop: 0 }}>Resumen del paciente (Preoperatorio)</h3>
-        <p><b>{datos.nombre}</b> — RUT: {datos.rut} — Edad: {datos.edad}</p>
-        <div style={{ display: "grid", gap: 8 }}>
-          <label>
-            Tipo de cirugía
-            <select
-              style={input}
-              value={datos.tipoCirugia}
-              onChange={(e) => setDatos((p) => ({ ...p, tipoCirugia: e.target.value }))}
-            >
-              <option>Prótesis de Rodilla</option>
-              <option>Prótesis de Cadera</option>
-              <option>Artroscopia de Rodilla</option>
-              <option>Artroscopia de Cadera</option>
-            </select>
-          </label>
-          <label>
-            Lado (opcional)
-            <input
-              style={input}
-              placeholder="Izquierda / Derecha"
-              value={datos.lado}
-              onChange={(e) => setDatos((p) => ({ ...p, lado: e.target.value }))}
-            />
-          </label>
-          <label>
-            Fecha estimada de cirugía (opcional)
-            <input
-              style={input}
-              type="date"
-              value={datos.fechaCirugia}
-              onChange={(e) => setDatos((p) => ({ ...p, fechaCirugia: e.target.value }))}
-            />
-          </label>
-          <label>
-            Comorbilidades
-            <textarea
-              style={{ ...input, minHeight: 80 }}
-              placeholder="HTA, DM2, EPOC, anticoagulantes…"
-              value={datos.comorbilidades}
-              onChange={(e) => setDatos((p) => ({ ...p, comorbilidades: e.target.value }))}
-            />
-          </label>
+    <div style={styles.card}>
+      <h3 style={{ marginTop: 0 }}>Vista previa — Exámenes preoperatorios</h3>
+
+      <div style={{ marginBottom: 10 }}>
+        <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
+        <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
+        <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
+        <div>
+          <strong>Clínica:</strong>{" "}
+          {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
         </div>
       </div>
 
-      <div style={box}>
-        <h4>Preview – Laboratorio y ECG</h4>
-        <p>
-          Hemograma, PCR/VSG, Glicemia, Creatinina, Electrolitos, Hepático, Grupo/Rh, ECG.
-          + Ajustes por comorbilidades (coagulograma, HbA1c, orina, perfil lipídico…)
-        </p>
+      <div>
+        <strong>Solicitados (LAB/ECG):</strong>
+        <ul style={{ marginTop: 6 }}>
+          {EXAMENES_FIJOS.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+        </ul>
       </div>
 
-      <div style={box}>
-        <h4>Preview – Imagenología Preoperatoria</h4>
-        <p>
-          Rx Tórax (si corresponde). Proyecciones estándar/preoperatorias de Rodilla/Cadera según cirugía y lado.
-        </p>
+      <div style={{ marginTop: 12, fontStyle: "italic" }}>
+        * La descarga final es <strong>un solo PDF</strong> con <strong>2 páginas</strong>:
+        (1) Orden LAB/ECG y (2) Evaluación Odontológica.
       </div>
 
-      {!pagoRealizado ? (
-        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
+      {/* Controles */}
+      {!pagoRealizado && (
+        <>
           <button
-            style={btnPrimary}
-            onClick={() => pagar({ guest: false })}
-            disabled={pagando}
+            style={{ ...styles.btn, backgroundColor: "#004B94", marginTop: 12 }}
+            onClick={handlePagarPreop}
           >
-            {pagando ? "Preparando pago…" : "Pagar ahora"}
-          </button>
-          <button style={btn} onClick={() => pagar({ guest: true })}>
-            Simular pago (Guest)
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr" }}>
-          <button
-            style={btn}
-            onClick={() => descargar("lab")}
-            disabled={descargando}
-            title={msg || "Descargar"}
-          >
-            {descargando ? msg || "Descargando…" : "Descargar PDF – Lab/ECG"}
+            Pagar ahora (Pre Op)
           </button>
           <button
-            style={btn}
-            onClick={() => descargar("imagen")}
-            disabled={descargando}
-            title={msg || "Descargar"}
+            style={{ ...styles.btn, backgroundColor: "#777", marginTop: 8 }}
+            onClick={handleSimularPagoGuest}
+            title="Simular retorno pagado (solo pruebas)"
           >
-            {descargando ? msg || "Descargando…" : "Descargar PDF – Imagenología"}
+            Simular Pago (Guest)
           </button>
-        </div>
+        </>
+      )}
+
+      {pagoRealizado && (
+        <button
+          style={{ ...styles.btn, marginTop: 12 }}
+          onClick={handleDescargarPreop}
+          disabled={descargando}
+          title={mensajeDescarga || "Verificar y descargar"}
+        >
+          {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
+        </button>
       )}
     </div>
   );
 }
 
-const box = { background: "#fff", border: "1px solid #e5e5e5", borderRadius: 10, padding: 12, marginTop: 10 };
-const input = { width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ccc", marginTop: 6 };
-const btn = { width: "100%", padding: 12, border: "none", borderRadius: 8, background: "#0072CE", color: "#fff", cursor: "pointer" };
-const btnPrimary = { ...btn, background: "#004B94" };
+const styles = {
+  card: {
+    background: "#fff",
+    borderRadius: 8,
+    padding: 16,
+    boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+  },
+  btn: {
+    backgroundColor: "#0072CE",
+    color: "white",
+    border: "none",
+    padding: "12px",
+    borderRadius: "8px",
+    fontSize: "16px",
+    cursor: "pointer",
+    width: "100%",
+  },
+};
