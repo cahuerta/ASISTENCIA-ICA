@@ -1,84 +1,36 @@
 // src/PagoKhipu.jsx
-// Frontend: crea el cobro DIRECTO en Khipu usando variables de entorno públicas (NEXT_PUBLIC_*)
-// Mantiene modo invitado (guest) y flujo modular ('trauma' | 'preop' | 'generales').
-// Guarda datos en backend ANTES de ir a Khipu para que luego puedas descargar el PDF por idPago.
+// Frontend → orquesta pago pidiendo URL al backend (no toca Khipu directo)
 
-const ENV = (typeof process !== 'undefined' && process.env) || {};
-const WINENV = (typeof window !== 'undefined' && window.__ENV__) || {};
-
-// === Config de Backend (para guardar datos y descargar PDFs)
+// Lee BACKEND_BASE de env o usa tu Render
 const BACKEND_BASE =
-  ENV.NEXT_PUBLIC_BACKEND_BASE ||
-  WINENV.BACKEND_BASE ||
+  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_BACKEND_BASE) ||
+  (typeof window !== 'undefined' && (window.__ENV__?.backend_base || window.__ENV__?.BACKEND_BASE)) ||
   'https://asistencia-ica-backend.onrender.com';
 
-// === Config de Khipu (cliente → expone SECRET: ojo con seguridad; lo pides así)
-const KHIPU_ENDPOINT =
-  (ENV.NEXT_PUBLIC_KHIPU_ENDPOINT || WINENV.KHIPU_ENDPOINT || 'https://khipu.com/api/2.0').replace(/\/+$/, '');
-
-const KHIPU_RECEIVER_ID =
-  ENV.NEXT_PUBLIC_KHIPU_RECEIVER_ID || WINENV.KHIPU_RECEIVER_ID;
-
-const KHIPU_SECRET =
-  ENV.NEXT_PUBLIC_KHIPU_SECRET || WINENV.KHIPU_SECRET;
-
-// URLs de retorno
-const RETURN_BASE =
-  ENV.NEXT_PUBLIC_RETURN_BASE || WINENV.RETURN_BASE || 'https://asistencia-ica.vercel.app';
-
-const NOTIFY_URL =
-  ENV.NEXT_PUBLIC_KHIPU_NOTIFY_URL || WINENV.KHIPU_NOTIFY_URL || undefined;
-
-// Monto por módulo
-const AMOUNTS = {
-  trauma: Number(ENV.NEXT_PUBLIC_KHIPU_AMOUNT_TRAUMA || WINENV.KHIPU_AMOUNT_TRAUMA || 0),
-  preop: Number(ENV.NEXT_PUBLIC_KHIPU_AMOUNT_PREOP || WINENV.KHIPU_AMOUNT_PREOP || 0),
-  generales: Number(ENV.NEXT_PUBLIC_KHIPU_AMOUNT_GENERALES || WINENV.KHIPU_AMOUNT_GENERALES || 0),
-};
-const DEFAULT_AMOUNT = Number(ENV.NEXT_PUBLIC_KHIPU_AMOUNT_DEFAULT || WINENV.KHIPU_AMOUNT_DEFAULT || 1) || 1;
-
-// Permite forzar modo invitado por env
-const GUEST_DEFAULT =
-  (ENV.NEXT_PUBLIC_KHIPU_GUEST === '1') ||
-  (WINENV.KHIPU_GUEST === '1');
-
-// Utilidad: fetch con timeout
+// --- util: fetch con timeout y manejo seguro ---
 async function fetchJSON(url, options = {}, { timeoutMs = 30000 } = {}) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const r = await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
     const text = await r.text();
-    let data = null;
-    try { data = JSON.parse(text); } catch {}
-    return { ok: r.ok, status: r.status, data, raw: text };
-  } finally {
-    clearTimeout(t);
-  }
-}
-
-// Base64 para header Basic
-function basicAuthHeader(id, secret) {
-  try {
-    if (typeof window !== 'undefined' && window.btoa) {
-      return 'Basic ' + window.btoa(`${id}:${secret}`);
+    let data; try { data = JSON.parse(text); } catch { data = null; }
+    const looksHtml = typeof text === 'string' && text.trim().startsWith('<');
+    return { ok: r.ok, status: r.status, data, raw: text, looksHtml };
+  } catch (e) {
+    if (e?.name === 'AbortError') {
+      return { ok: false, status: 0, data: null, raw: 'Timeout', looksHtml: false, timeout: true };
     }
-    // fallback (SSR / Node)
-    // eslint-disable-next-line no-undef
-    return 'Basic ' + Buffer.from(`${id}:${secret}`).toString('base64');
-  } catch {
-    // último intento
-    // eslint-disable-next-line no-undef
-    return 'Basic ' + (typeof btoa === 'function' ? btoa(`${id}:${secret}`) : '');
-  }
+    throw e;
+  } finally { clearTimeout(t); }
 }
 
-// Genera un id único de pago (prefijo por módulo)
+// Genera un id único (prefijo según módulo)
 export function generarIdPago(prefix = 'pago') {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
 }
 
-// Guarda datos previos al pago en el backend (por módulo) — NECESARIO para luego descargar PDF
+// Guarda datos previos al pago en el backend (por módulo)
 export async function guardarDatos(idPago, datosPaciente, modulo = 'trauma') {
   const route =
     modulo === 'preop' ? '/guardar-datos-preop' :
@@ -89,80 +41,49 @@ export async function guardarDatos(idPago, datosPaciente, modulo = 'trauma') {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ idPago, datosPaciente }),
   });
-  if (!ok || !data?.ok) {
-    throw new Error(data?.error || 'No se pudieron guardar los datos antes del pago');
-  }
+  if (!ok || !data?.ok) throw new Error(data?.error || 'No se pudieron guardar los datos antes del pago');
   return true;
 }
 
-// Crea el pago REAL directamente en Khipu
-async function khipuCreatePayment({ idPago, modulo = 'trauma' }) {
-  if (!KHIPU_RECEIVER_ID || !KHIPU_SECRET) {
-    throw new Error('Faltan NEXT_PUBLIC_KHIPU_RECEIVER_ID o NEXT_PUBLIC_KHIPU_SECRET');
-  }
-  const subjectMap = {
-    trauma: 'Pago Orden Médica Imagenológica',
-    preop: 'Pago Exámenes Preoperatorios',
-    generales: 'Pago Exámenes Generales',
-  };
-  const subject = subjectMap[modulo] || 'Pago Servicios Médicos';
-  const amount = AMOUNTS[modulo] > 0 ? AMOUNTS[modulo] : DEFAULT_AMOUNT;
-
-  const return_url = `${RETURN_BASE}?pago=ok&idPago=${encodeURIComponent(idPago)}`;
-  const cancel_url = `${RETURN_BASE}?pago=cancelado&idPago=${encodeURIComponent(idPago)}`;
-
-  const r = await fetch(`${KHIPU_ENDPOINT}/payments`, {
+// Pide al backend la URL real de Khipu (o guest si se indica)
+export async function crearPagoKhipu({ idPago, datosPaciente, modulo = 'trauma', modoGuest = false }) {
+  const { ok, status, data, raw, looksHtml, timeout } = await fetchJSON(`${BACKEND_BASE}/crear-pago-khipu`, {
     method: 'POST',
-    headers: {
-      'Authorization': basicAuthHeader(KHIPU_RECEIVER_ID, KHIPU_SECRET),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      subject,
-      amount,
-      currency: 'CLP',
-      transaction_id: idPago,
-      custom: modulo,
-      return_url,
-      cancel_url,
-      ...(NOTIFY_URL ? { notify_url: NOTIFY_URL } : {}),
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idPago, modoGuest, datosPaciente, modulo }),
   });
 
-  if (!r.ok) {
-    const errorText = await r.text().catch(() => '');
-    throw new Error(`Khipu HTTP ${r.status} ${errorText || ''}`);
+  if (!ok || !data?.ok || !data?.url) {
+    const base = data?.error || (timeout ? 'Timeout al contactar backend' : `Fallo HTTP ${status || 0}`);
+    const detail = data?.detail || (looksHtml ? 'Respuesta HTML del backend.' : (raw || ''));
+    throw new Error(`${base}${detail ? `\n${detail}` : ''}`);
   }
-  const data = await r.json();
-  const url = data.payment_url || data.app_url || data.paymentURL || null;
-  if (!url) throw new Error('Khipu no devolvió payment_url');
-  return url;
+  return data.url; // URL de Khipu (real) o retorno guest
 }
 
 /**
  * Flujo completo:
- *  - valida datos
- *  - decide módulo ('trauma' | 'preop' | 'generales')
- *  - genera idPago con prefijo
- *  - guarda en sessionStorage
- *  - guarda datos en backend
- *  - si guest: simula retorno
- *  - si real: crea pago en Khipu y redirige
+ *  - valida campos
+ *  - determina módulo ('trauma' | 'preop' | 'generales')
+ *  - genera idPago (con prefijo según módulo)
+ *  - guarda respaldo en sessionStorage
+ *  - POST guardar-datos (módulo)
+ *  - POST crear-pago-khipu (módulo) → redirige a Khipu
  */
 export async function irAPagoKhipu(datosPaciente, opts = {}) {
   const edadNum = Number(datosPaciente?.edad);
   if (
     !datosPaciente?.nombre?.trim() ||
     !datosPaciente?.rut?.trim() ||
-    !Number.isFinite(edadNum) || edadNum <= 0 ||
+    !Number.isFinite(edadNum) ||
+    edadNum <= 0 ||
     !datosPaciente?.dolor?.trim()
   ) {
     alert('Complete todos los campos antes de pagar');
     return;
   }
 
-  const moduloSS = (typeof window !== 'undefined' && sessionStorage.getItem('modulo')) || null;
-  const moduloOpt = (opts?.modulo || moduloSS || '').toLowerCase();
+  const moduloOpt = (opts?.modulo || (typeof window !== 'undefined' ? sessionStorage.getItem('modulo') : '') || '').toLowerCase();
   const modulo = ['trauma', 'preop', 'generales'].includes(moduloOpt) ? moduloOpt : 'trauma';
 
   const idPago = opts?.idPago || generarIdPago(
@@ -175,44 +96,37 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
     sessionStorage.setItem('datosPacienteJSON', JSON.stringify({ ...datosPaciente, edad: edadNum }));
   }
 
-  // Guarda los datos en backend (para luego descargar PDF por idPago)
-  await guardarDatos(idPago, { ...datosPaciente, edad: edadNum }, modulo);
-
-  // Guest?
-  const modoGuest = (opts?.modoGuest === true) || GUEST_DEFAULT === true;
-  if (modoGuest) {
-    const urlGuest = `${RETURN_BASE}?pago=ok&idPago=${encodeURIComponent(idPago)}&guest=1`;
-    window.location.href = urlGuest;
-    return;
-  }
-
-  // Real Khipu directo desde el front
   try {
-    const urlPago = await khipuCreatePayment({ idPago, modulo });
+    await guardarDatos(idPago, { ...datosPaciente, edad: edadNum }, modulo);
+    const urlPago = await crearPagoKhipu({
+      idPago,
+      datosPaciente: { ...datosPaciente, edad: edadNum },
+      modulo,
+      modoGuest: opts?.modoGuest === true ? true : false, // respeta tu elección
+    });
     window.location.href = urlPago;
   } catch (err) {
     alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
   }
 }
 
-// Simular pago guest explícito
+// (Opcional) Simular pago guest
 export async function simularPagoGuest(datosPaciente, modulo = 'trauma') {
-  const idPago = generarIdPago(
-    modulo === 'preop' ? 'preop' : modulo === 'generales' ? 'generales' : 'pago'
-  );
+  const idPago = generarIdPago(modulo === 'preop' ? 'preop' : modulo === 'generales' ? 'generales' : 'pago');
+  const d = datosPaciente || { nombre: 'Guest', rut: '99999999-9', edad: 30, dolor: 'Rodilla', lado: 'Izquierda' };
 
   if (typeof window !== 'undefined') {
     sessionStorage.setItem('idPago', idPago);
     sessionStorage.setItem('modulo', modulo);
-    sessionStorage.setItem('datosPacienteJSON', JSON.stringify(datosPaciente));
+    sessionStorage.setItem('datosPacienteJSON', JSON.stringify(d));
   }
 
-  await guardarDatos(idPago, datosPaciente, modulo);
-  const urlGuest = `${RETURN_BASE}?pago=ok&idPago=${encodeURIComponent(idPago)}&guest=1`;
-  window.location.href = urlGuest;
+  await guardarDatos(idPago, d, modulo);
+  const url = await crearPagoKhipu({ idPago, datosPaciente: d, modulo, modoGuest: true });
+  window.location.href = url;
 }
 
-// Leer retorno
+// Lee retorno ?pago=ok|cancelado&idPago=...
 export function leerRetornoPago() {
   const params = new URLSearchParams(window.location.search);
   const estado = params.get('pago');
@@ -228,7 +142,7 @@ export function leerRetornoPago() {
   return { pagoRealizado: false, idPago: idFinal, cancelado: false };
 }
 
-// Descarga según módulo (después del retorno ok)
+// Descarga por módulo (útil si tienes un solo botón de descarga)
 export async function descargarPDFPorModulo(modulo = 'trauma', nombreBase = 'documento') {
   const idPago = typeof window !== 'undefined' ? sessionStorage.getItem('idPago') : null;
   if (!idPago) {
@@ -253,7 +167,7 @@ export async function descargarPDFPorModulo(modulo = 'trauma', nombreBase = 'doc
   window.URL.revokeObjectURL(url);
 }
 
-// Compat: descarga trauma por nombre fijo
+// Compat: descarga trauma "clásica"
 export async function descargarPDF(nombreArchivo = 'orden.pdf', idPagoParam) {
   const idPago = idPagoParam || (typeof window !== 'undefined' ? sessionStorage.getItem('idPago') : null);
   if (!idPago) {
