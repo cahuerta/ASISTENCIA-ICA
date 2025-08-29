@@ -4,7 +4,7 @@ import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
 import { irAPagoKhipu } from './PagoKhipu.jsx';
-import PreopModulo from './modules/PreopModulo.jsx'; // 👈 NUEVO: módulo preoperatorio
+import PreopModulo from './modules/PreopModulo.jsx'; // 👈 módulo preoperatorio
 
 const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
 
@@ -20,11 +20,11 @@ function App() {
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false); // compat
-  const [descargando, setDescargando] = useState(false); // 👈 nuevo
-  const [mensajeDescarga, setMensajeDescarga] = useState(''); // 👈 nuevo
+  const [descargando, setDescargando] = useState(false);
+  const [mensajeDescarga, setMensajeDescarga] = useState('');
   const pollerRef = useRef(null);
 
-  // 👇 NUEVO: selector de módulo (trauma por defecto)
+  // 👇 Selector de módulo (trauma por defecto)
   const [modulo, setModulo] = useState('trauma'); // 'trauma' | 'preop'
 
   // Al montar: restaurar datos y manejar retorno ?pago=ok|cancelado&idPago=...
@@ -52,7 +52,7 @@ function App() {
       sessionStorage.setItem('idPago', idFinal);
       setMostrarPago(false);
       setMostrarVistaPrevia(true);
-      setPagoRealizado(true); // 👈 ya muestra el botón
+      setPagoRealizado(true);
 
       // (Opcional) Polling en segundo plano (no bloquea la UI)
       let intentos = 0;
@@ -113,12 +113,12 @@ function App() {
       alert('Por favor complete todos los campos obligatorios.');
       return;
     }
-    setMostrarVistaPrevia(true);
+    setMostrarVistaPrevia(true);   // ahora la preview aparecerá al lado
     setPagoRealizado(false);
     setMostrarPago(false);
   };
 
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms)); // 👈 util
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   // Descarga con auto-verificación (402) y fallback si el backend perdió memoria (404)
   const handleDescargarPDF = async () => {
@@ -202,7 +202,7 @@ function App() {
     }
   };
 
-  // Inicia pago real de Khipu
+  // Inicia pago real de Khipu (módulo traumatología en este App)
   const handlePagarAhora = async () => {
     const edadNum = Number(datosPaciente.edad);
     if (
@@ -247,9 +247,7 @@ function App() {
       <div style={styles.formularioContainer}>
         <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
 
-        {mostrarVistaPrevia && <PreviewOrden datos={datosPaciente} />}
-
-        {/* 👇 NUEVO: Selector de módulo (aparece después de ingresar datos) */}
+        {/* Selector de módulo (aparece después de ingresar datos) */}
         {mostrarVistaPrevia && (
           <div style={{ marginTop: '10px' }}>
             <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '1fr 1fr' }}>
@@ -269,7 +267,7 @@ function App() {
           </div>
         )}
 
-        {/* 👇 CONTENIDO por módulo */}
+        {/* Controles de pago/descarga para TRAUMA (Preop maneja su propio flujo en su módulo) */}
         {mostrarVistaPrevia && modulo === 'trauma' && (
           <>
             {!pagoRealizado && !mostrarPago && (
@@ -326,6 +324,13 @@ function App() {
             )}
           </>
         )}
+      </div>
+
+      {/* ➜ PREVIEW a la DERECHA (según módulo seleccionado) */}
+      <div style={styles.previewContainer}>
+        {mostrarVistaPrevia && modulo === 'trauma' && (
+          <PreviewOrden datos={datosPaciente} />
+        )}
 
         {mostrarVistaPrevia && modulo === 'preop' && (
           <PreopModulo initialDatos={datosPaciente} />
@@ -346,12 +351,16 @@ const styles = {
     minHeight: '100vh',
   },
   esquemaContainer: {
-    flex: '1',
+    flex: '0 0 320px',
     maxWidth: '320px',
   },
   formularioContainer: {
-    flex: '1',
+    flex: '0 0 400px',
     maxWidth: '400px',
+  },
+  previewContainer: {
+    flex: 1,
+    minWidth: '360px',
   },
   downloadButton: {
     marginTop: '15px',
