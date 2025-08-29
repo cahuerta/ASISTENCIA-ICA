@@ -1,8 +1,6 @@
 // src/PagoKhipu.jsx
 // Frontend para iniciar pago Khipu contra backend en Render
 
-// 1) Permite configurar por env en Vercel: Settings → Environment Variables
-//    y opcionalmente inyección runtime vía window.__ENV__ en el HTML.
 const BACKEND_BASE =
   (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_BACKEND_BASE) ||
   (typeof window !== 'undefined' && window.__ENV__?.BACKEND_BASE) ||
@@ -34,7 +32,7 @@ export function generarIdPago(prefix = 'pago') {
   return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
 }
 
-// === NUEVO: guardar datos por MÓDULO ===
+// Guarda datos previos al pago en el backend (por módulo)
 export async function guardarDatos(idPago, datosPaciente, modulo = 'trauma') {
   const route =
     modulo === 'preop' ? '/guardar-datos-preop' :
@@ -51,18 +49,13 @@ export async function guardarDatos(idPago, datosPaciente, modulo = 'trauma') {
   return true;
 }
 
-// Permite forzar modo invitado vía env sin tocar llamadas existentes
-const GUEST_DEFAULT =
-  (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_KHIPU_GUEST === '1') ||
-  (typeof window !== 'undefined' && window.__ENV__?.KHIPU_GUEST === '1') ||
-  false;
-
-// === NUEVO: enviar `modulo` al backend ===
-export async function crearPagoKhipu({ idPago, datosPaciente, modulo = 'trauma', modoGuest = GUEST_DEFAULT }) {
+// Crea el pago en el backend (EL BACKEND DEVUELVE LA URL REAL DE KHIPU)
+export async function crearPagoKhipu({ idPago, datosPaciente, modulo = 'trauma' }) {
   const { ok, status, data, raw, looksHtml, timeout } = await fetchJSON(`${BACKEND_BASE}/crear-pago-khipu`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ idPago, modoGuest, datosPaciente, modulo }),
+    // 👇 SIN modo invitado. Siempre pago real.
+    body: JSON.stringify({ idPago, datosPaciente, modulo }),
   });
 
   if (!ok || !data?.ok || !data?.url) {
@@ -72,15 +65,15 @@ export async function crearPagoKhipu({ idPago, datosPaciente, modulo = 'trauma',
       (looksHtml ? 'Respuesta HTML (revisar URL del backend o ruta /crear-pago-khipu).' : (raw || ''));
     throw new Error(`${msgBase}${detail ? `\n${detail}` : ''}`);
   }
-  return data.url; // URL de Khipu (real) o retorno (guest)
+  return data.url; // URL de Khipu real
 }
 
 /**
- * Flujo completo (ahora con módulo):
- *  - recibe opcionalmente un idPago y modulo: 'trauma' | 'preop' | 'generales'
+ * Flujo completo (con módulo):
+ *  - idPago y modulo: 'trauma' | 'preop' | 'generales'
  *  - guarda idPago + datos + modulo en sessionStorage (respaldo)
  *  - guarda datos en backend (endpoint según módulo)
- *  - solicita URL de pago (manda modulo) y redirige
+ *  - solicita URL de pago al backend y redirige a Khipu
  */
 export async function irAPagoKhipu(datosPaciente, opts = {}) {
   const edadNum = Number(datosPaciente?.edad);
@@ -95,12 +88,10 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
     return;
   }
 
-  // Detecta módulo por prioridad: opts.modulo → sessionStorage → prefijo de id → trauma
   const moduloSS = (typeof window !== 'undefined' && sessionStorage.getItem('modulo')) || null;
   const moduloOpt = (opts?.modulo || moduloSS || '').toLowerCase();
-  let modulo = ['trauma', 'preop', 'generales'].includes(moduloOpt) ? moduloOpt : 'trauma';
+  const modulo = ['trauma', 'preop', 'generales'].includes(moduloOpt) ? moduloOpt : 'trauma';
 
-  // id y prefijo (si ya te llega preop_ o generales_, se respeta)
   const idPago = opts?.idPago || generarIdPago(
     modulo === 'preop' ? 'preop' : modulo === 'generales' ? 'generales' : 'pago'
   );
@@ -112,38 +103,12 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
   }
 
   try {
-    // Guarda según módulo
     await guardarDatos(idPago, { ...datosPaciente, edad: edadNum }, modulo);
-
-    // Crea pago indicando módulo
-    const urlPago = await crearPagoKhipu({
-      idPago,
-      datosPaciente: { ...datosPaciente, edad: edadNum },
-      modulo,
-      modoGuest: GUEST_DEFAULT === true ? true : false
-    });
-
-    window.location.href = urlPago; // abre Khipu o retorno guest
+    const urlPago = await crearPagoKhipu({ idPago, datosPaciente: { ...datosPaciente, edad: edadNum }, modulo });
+    window.location.href = urlPago; // abre Khipu real
   } catch (err) {
     alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
   }
-}
-
-// Simular pago guest (redirige a ?pago=ok&idPago=...) — ahora con módulo
-export async function simularPagoGuest(datosPaciente, modulo = 'trauma') {
-  const prefix = modulo === 'preop' ? 'preop' : modulo === 'generales' ? 'generales' : 'pago';
-  const idPago = generarIdPago(prefix);
-  const d = datosPaciente || { nombre: 'Guest', rut: '99999999-9', edad: 30, dolor: 'Rodilla', lado: 'Izquierda' };
-
-  if (typeof window !== 'undefined') {
-    sessionStorage.setItem('idPago', idPago);
-    sessionStorage.setItem('modulo', modulo);
-    sessionStorage.setItem('datosPacienteJSON', JSON.stringify(d));
-  }
-
-  await guardarDatos(idPago, d, modulo);
-  const urlGuest = await crearPagoKhipu({ idPago, datosPaciente: d, modulo, modoGuest: true });
-  window.location.href = urlGuest;
 }
 
 // Lee retorno ?pago=ok|cancelado&idPago=... (con fallback a sessionStorage)
@@ -160,32 +125,6 @@ export function leerRetornoPago() {
   }
   if (estado === 'cancelado') return { pagoRealizado: false, idPago: idFinal, cancelado: true };
   return { pagoRealizado: false, idPago: idFinal, cancelado: false };
-}
-
-// === (Opcional) Descarga PDF según módulo ===
-// Útil si quieres una sola función en lugar de 3 distintas en cada módulo.
-export async function descargarPDFPorModulo(modulo = 'trauma', nombreBase = 'documento') {
-  const idPago = typeof window !== 'undefined' ? sessionStorage.getItem('idPago') : null;
-  if (!idPago) {
-    alert('ID de pago no encontrado');
-    return;
-  }
-  const route =
-    modulo === 'preop' ? `/pdf-preop/${encodeURIComponent(idPago)}` :
-    modulo === 'generales' ? `/pdf-generales/${encodeURIComponent(idPago)}` :
-    `/pdf/${encodeURIComponent(idPago)}`;
-
-  const r = await fetch(`${BACKEND_BASE}${route}`, { cache: 'no-store' });
-  if (!r.ok) throw new Error('Error al obtener el PDF');
-  const blob = await r.blob();
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${nombreBase}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(url);
 }
 
 // Descarga PDF trauma (compat con tu código existente)
