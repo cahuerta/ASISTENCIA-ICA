@@ -4,8 +4,8 @@ import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
 import { irAPagoKhipu } from './PagoKhipu.jsx';
-import PreopModulo from './modules/PreopModulo.jsx';          // módulo preoperatorio
-import GeneralesModulo from './modules/GeneralesModulo.jsx';  // 👈 NUEVO: módulo exámenes generales
+import PreopModulo from './modules/PreopModulo.jsx';
+import GeneralesModulo from './modules/GeneralesModulo.jsx';
 
 const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
 
@@ -14,29 +14,25 @@ function App() {
     nombre: '',
     rut: '',
     edad: '',
-    genero: '',   // 👈 NUEVO
+    genero: '',
     dolor: '',
     lado: '',
   });
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
-  const [mostrarPago, setMostrarPago] = useState(false); // compat
+  const [mostrarPago, setMostrarPago] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [mensajeDescarga, setMensajeDescarga] = useState('');
   const pollerRef = useRef(null);
 
-  // ⬇️ módulo NO seleccionado al inicio; el usuario elige tras "Generar informe"
   const [modulo, setModulo] = useState(null); // null | 'trauma' | 'preop' | 'generales'
 
-  // Al montar: restaurar datos y manejar retorno ?pago=ok|cancelado&idPago=...
   useEffect(() => {
-    // Restaurar formulario si existe respaldo
     const saved = sessionStorage.getItem('datosPacienteJSON');
     if (saved) {
       try { setDatosPaciente(JSON.parse(saved)); } catch {}
     }
-    // Restaurar módulo si existía
     const moduloSS = sessionStorage.getItem('modulo');
     if (moduloSS === 'trauma' || moduloSS === 'preop' || moduloSS === 'generales') {
       setModulo(moduloSS);
@@ -48,20 +44,17 @@ function App() {
     const idPagoSS = sessionStorage.getItem('idPago');
     const idFinal = idPagoURL || idPagoSS || '';
 
-    // Limpia cualquier poller anterior
     if (pollerRef.current) {
       clearInterval(pollerRef.current);
       pollerRef.current = null;
     }
 
-    // ✅ Mostrar descarga al volver de Khipu, respetando el módulo recordado
     if (pago === 'ok' && idFinal) {
       sessionStorage.setItem('idPago', idFinal);
       setMostrarPago(false);
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
 
-      // (Opcional) Polling en segundo plano (no bloquea la UI)
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
@@ -72,7 +65,6 @@ function App() {
         }
       }, 2000);
     } else if (!pago && idFinal) {
-      // ✅ Recarga sin query params pero hay idPago
       setMostrarPago(false);
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
@@ -119,17 +111,15 @@ function App() {
       alert('Por favor complete todos los campos obligatorios.');
       return;
     }
-    // Mostrar SOLO el menú de módulos; el preview depende de la elección
     setMostrarVistaPrevia(true);
     setPagoRealizado(false);
     setMostrarPago(false);
-    setModulo(null); // el usuario decide
+    setModulo(null);
     sessionStorage.removeItem('modulo');
   };
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  // Descarga (solo TRAUMA en este App; PREOP y GENERALES se manejan en sus módulos)
   const handleDescargarPDF = async () => {
     const idPago = sessionStorage.getItem('idPago');
     if (!idPago) {
@@ -140,7 +130,7 @@ function App() {
     const intentaDescarga = async () => {
       const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: 'no-store' });
       if (res.status === 404) return { ok: false, status: 404 };
-      if (res.status === 402) return { ok: false, status: 402 }; // pago no confirmado
+      if (res.status === 402) return { ok: false, status: 402 };
       if (!res.ok) throw new Error('Error al obtener el PDF');
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -159,14 +149,12 @@ function App() {
 
     let reinyectado = false;
     try {
-      // Reintenta auto hasta 45s (30 intentos * 1.5s)
       const maxIntentos = 30;
       for (let i = 1; i <= maxIntentos; i++) {
         const r = await intentaDescarga();
         if (r.ok) break;
 
         if (r.status === 402) {
-          // pago aún no confirmado → seguir verificando
           setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
           if (i === maxIntentos) {
@@ -176,7 +164,6 @@ function App() {
         }
 
         if (r.status === 404) {
-          // Backend reiniciado → reinyecta una sola vez y reintenta
           if (!reinyectado) {
             setMensajeDescarga('Restaurando datos…');
             const respaldo = sessionStorage.getItem('datosPacienteJSON');
@@ -189,7 +176,6 @@ function App() {
             });
 
             reinyectado = true;
-            // breve espera y reintento inmediato
             await sleep(500);
             continue;
           } else {
@@ -198,7 +184,6 @@ function App() {
           }
         }
 
-        // Otro error inesperado
         alert('No se pudo descargar el PDF.');
         break;
       }
@@ -211,7 +196,6 @@ function App() {
     }
   };
 
-  // Inicia pago real de Khipu (módulo traumatología en este App)
   const handlePagarAhora = async () => {
     const edadNum = Number(datosPaciente.edad);
     if (
@@ -225,22 +209,23 @@ function App() {
     }
 
     try {
-      // Genera y respalda idPago + datos ANTES de ir a Khipu
       const idPagoTmp = sessionStorage.getItem('idPago') ||
         ('pago_' + Date.now() + '_' + Math.floor(Math.random() * 10000));
 
       sessionStorage.setItem('idPago', idPagoTmp);
       sessionStorage.setItem('datosPacienteJSON', JSON.stringify({ ...datosPaciente, edad: edadNum }));
 
-      // Guarda también en backend (por si Render reinicia)
       await fetch(`${BACKEND_BASE}/guardar-datos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idPago: idPagoTmp, datosPaciente: { ...datosPaciente, edad: edadNum } }),
       });
 
-      // Redirige a Khipu (pasa idPago al backend)
-      await irAPagoKhipu({ ...datosPaciente, edad: edadNum, idPago: idPagoTmp });
+      // ⬇️ ÚNICO CAMBIO: pasar idPago y modulo en el 2° parámetro
+      await irAPagoKhipu(
+        { ...datosPaciente, edad: edadNum },
+        { idPago: idPagoTmp, modulo: 'trauma' }
+      );
     } catch (err) {
       console.error('No se pudo generar el link de pago:', err);
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
@@ -256,7 +241,6 @@ function App() {
       <div style={styles.formularioContainer}>
         <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
 
-        {/* Menú de módulos después de ingresar datos (sin preview aún) */}
         {mostrarVistaPrevia && (
           <div style={{ marginTop: '10px' }}>
             <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '1fr 1fr 1fr' }}>
@@ -282,7 +266,6 @@ function App() {
           </div>
         )}
 
-        {/* Controles de pago/descarga SOLO para TRAUMA (PREOP y GENERALES se manejan en sus módulos) */}
         {mostrarVistaPrevia && modulo === 'trauma' && (
           <>
             {!pagoRealizado && !mostrarPago && (
@@ -296,20 +279,18 @@ function App() {
                 <button
                   style={{ ...styles.downloadButton, backgroundColor: '#777', marginTop: '10px' }}
                   onClick={async () => {
-                    // Modo guest: guarda y redirige simulando retorno pagado
                     const idPago = 'guest_test_pago';
                     const datosGuest = {
                       nombre: 'Guest',
                       rut: '99999999-9',
                       edad: 30,
-                      genero: 'Hombre', // opcional para pruebas
+                      genero: 'Hombre',
                       dolor: 'Rodilla',
                       lado: 'Izquierda',
                     };
                     sessionStorage.setItem('idPago', idPago);
                     sessionStorage.setItem('datosPacienteJSON', JSON.stringify(datosGuest));
 
-                    // Marcamos guest como pagado en backend vía crear-pago-khipu modoGuest
                     const resp = await fetch(`${BACKEND_BASE}/crear-pago-khipu`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -317,7 +298,7 @@ function App() {
                     });
                     const j = await resp.json();
                     if (j?.ok && j?.url) {
-                      window.location.href = j.url; // ?pago=ok&idPago=guest_test_pago
+                      window.location.href = j.url;
                     } else {
                       alert('Guest no disponible. Ver backend.');
                     }
@@ -342,7 +323,6 @@ function App() {
         )}
       </div>
 
-      {/* ▶️ PREVIEW A LA DERECHA: depende de la opción elegida */}
       <div style={styles.previewContainer}>
         {mostrarVistaPrevia && modulo === 'trauma' && (
           <PreviewOrden datos={datosPaciente} />
