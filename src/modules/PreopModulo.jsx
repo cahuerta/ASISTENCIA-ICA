@@ -93,8 +93,11 @@ export default function PreopModulo({ initialDatos }) {
         body: JSON.stringify({ idPago, datosPaciente: { ...datos, edad: edadNum } }),
       });
 
-      // redirige a Khipu
-      await irAPagoKhipu({ ...datos, edad: edadNum, idPago });
+      // redirige a Khipu — ÚNICO CAMBIO: pasar idPago y modulo en opts
+      await irAPagoKhipu(
+        { ...datos, edad: edadNum },
+        { idPago, modulo: "preop" }
+      );
     } catch (err) {
       console.error("No se pudo generar el link de pago (preop):", err);
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
