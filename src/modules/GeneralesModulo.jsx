@@ -124,7 +124,11 @@ export default function GeneralesModulo({ initialDatos }) {
         body: JSON.stringify({ idPago, datosPaciente: { ...datos, edad: edadNum } }),
       });
 
-      await irAPagoKhipu({ ...datos, edad: edadNum, idPago });
+      // ÚNICO CAMBIO: pasar idPago y modulo en el segundo parámetro (opts)
+      await irAPagoKhipu(
+        { ...datos, edad: edadNum },
+        { idPago, modulo: 'generales' }
+      );
     } catch (err) {
       console.error("No se pudo generar el link de pago (generales):", err);
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
