@@ -69,12 +69,6 @@ export default function IAModulo({ initialDatos }) {
       }, 2000);
     }
 
-    return () => {
-      if (pollerRef.current) {
-        clearInterval(pollerRef.current);
-        pollerRef.current = null;
-      }
-    };
   }, []);
 
   // ===== Generar PREVIEW (GPT)
@@ -147,14 +141,22 @@ export default function IAModulo({ initialDatos }) {
       );
       return;
     }
+
     try {
+      // 👉 irAPagoKhipu requiere 'dolor' (validación front). Inyectamos valores por defecto.
+      const datosParaPago = {
+        ...datos,
+        edad: edadNum,
+        dolor: (datos.dolor && String(datos.dolor).trim()) || "IA", // 👈 cambio
+        lado: (datos.lado && String(datos.lado).trim()) || "",       // 👈 cambio
+      };
+
       sessionStorage.setItem("idPago", idPago);
       sessionStorage.setItem("modulo", "ia");
-      // (Opcional) Enviar datosPaciente para mantener consistencia del backend
-      await irAPagoKhipu(
-        { ...datos, edad: edadNum },
-        { idPago, modulo: "ia" }
-      );
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosParaPago)); // 👈 cambio
+
+      // Igual que los otros módulos: usa irAPagoKhipu
+      await irAPagoKhipu(datosParaPago, { idPago, modulo: "ia" }); // 👈 sigue igual que el resto
     } catch (err) {
       console.error("No se pudo generar el link de pago (IA):", err);
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
