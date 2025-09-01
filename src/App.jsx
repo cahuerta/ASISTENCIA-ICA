@@ -6,6 +6,7 @@ import PreviewOrden from './PreviewOrden.jsx';
 import { irAPagoKhipu } from './PagoKhipu.jsx';
 import PreopModulo from './modules/PreopModulo.jsx';
 import GeneralesModulo from './modules/GeneralesModulo.jsx';
+import IAModulo from './modules/IAModulo.jsx'; // <-- NUEVO
 
 const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
 
@@ -26,7 +27,7 @@ function App() {
   const [mensajeDescarga, setMensajeDescarga] = useState('');
   const pollerRef = useRef(null);
 
-  const [modulo, setModulo] = useState(null); // null | 'trauma' | 'preop' | 'generales'
+  const [modulo, setModulo] = useState(null); // null | 'trauma' | 'preop' | 'generales' | 'ia'  <-- NUEVO
 
   useEffect(() => {
     const saved = sessionStorage.getItem('datosPacienteJSON');
@@ -34,7 +35,7 @@ function App() {
       try { setDatosPaciente(JSON.parse(saved)); } catch {}
     }
     const moduloSS = sessionStorage.getItem('modulo');
-    if (moduloSS === 'trauma' || moduloSS === 'preop' || moduloSS === 'generales') {
+    if (moduloSS === 'trauma' || moduloSS === 'preop' || moduloSS === 'generales' || moduloSS === 'ia') { // <-- NUEVO
       setModulo(moduloSS);
     }
 
@@ -243,7 +244,7 @@ function App() {
 
         {mostrarVistaPrevia && (
           <div style={{ marginTop: '10px' }}>
-            <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '1fr 1fr 1fr' }}>
+            <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '1fr 1fr 1fr 1fr' }}> {/* <-- 4 columnas ahora */}
               <button
                 style={{ ...styles.downloadButton, backgroundColor: modulo === 'trauma' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('trauma'); sessionStorage.setItem('modulo', 'trauma'); }}
@@ -261,6 +262,12 @@ function App() {
                 onClick={() => { setModulo('generales'); sessionStorage.setItem('modulo', 'generales'); }}
               >
                 Exámenes generales
+              </button>
+              <button
+                style={{ ...styles.downloadButton, backgroundColor: modulo === 'ia' ? '#004B94' : '#0072CE' }} // <-- NUEVO
+                onClick={() => { setModulo('ia'); sessionStorage.setItem('modulo', 'ia'); }} // <-- NUEVO
+              >
+                Informe IA
               </button>
             </div>
           </div>
@@ -334,6 +341,10 @@ function App() {
 
         {mostrarVistaPrevia && modulo === 'generales' && (
           <GeneralesModulo initialDatos={datosPaciente} />
+        )}
+
+        {mostrarVistaPrevia && modulo === 'ia' && ( // <-- NUEVO
+          <IAModulo initialDatos={datosPaciente} />
         )}
       </div>
     </div>
