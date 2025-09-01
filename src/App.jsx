@@ -274,25 +274,25 @@ function App() {
                 style={{ ...styles.downloadButton, backgroundColor: modulo === 'trauma' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('trauma'); sessionStorage.setItem('modulo', 'trauma'); }}
               >
-                Asistencia médica traumatológica
+                ASISTENTE TRAUMATOLOGICO
               </button>
               <button
                 style={{ ...styles.downloadButton, backgroundColor: modulo === 'preop' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('preop'); sessionStorage.setItem('modulo', 'preop'); }}
               >
-                Exámenes preoperatorios
+                EXAMENES PRE QUIRURGICOS
               </button>
               <button
                 style={{ ...styles.downloadButton, backgroundColor: modulo === 'generales' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('generales'); sessionStorage.setItem('modulo', 'generales'); }}
               >
-                Exámenes generales
+                REVISION GENERAL
               </button>
               <button
                 style={{ ...styles.downloadButton, backgroundColor: modulo === 'ia' ? '#004B94' : '#0072CE' }} // <-- NUEVO
                 onClick={() => { setModulo('ia'); sessionStorage.setItem('modulo', 'ia'); }} // <-- NUEVO
               >
-                Informe IA
+                ANALISIS MEDIANTE IA
               </button>
             </div>
           </div>
