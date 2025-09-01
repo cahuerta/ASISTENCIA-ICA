@@ -43,8 +43,8 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         onChange={(e) => onCambiarDato('genero', e.target.value)}
       >
         <option value="">Seleccione…</option>
-        <option value="Hombre">Hombre</option>
-        <option value="Mujer">Mujer</option>
+        <option value="MASCULINO">MASCULINO</option>
+        <option value="FEMENINO">FEMENINO</option>
       </select>
 
       <label style={styles.label}>Dolor:</label>
