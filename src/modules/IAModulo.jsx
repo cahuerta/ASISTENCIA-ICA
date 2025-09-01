@@ -6,7 +6,7 @@ import { irAPagoKhipu } from "../PagoKhipu.jsx";
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
 export default function IAModulo({ initialDatos }) {
-  // ===== Estado base (igual estilo que Preop)
+  // ===== Estado base (estilo similar a Preop)
   const [datos, setDatos] = useState(
     initialDatos || { nombre: "", rut: "", edad: "", consulta: "" }
   );
@@ -69,6 +69,12 @@ export default function IAModulo({ initialDatos }) {
       }, 2000);
     }
 
+    return () => {
+      if (pollerRef.current) {
+        clearInterval(pollerRef.current);
+        pollerRef.current = null;
+      }
+    };
   }, []);
 
   // ===== Generar PREVIEW (GPT)
@@ -125,38 +131,32 @@ export default function IAModulo({ initialDatos }) {
     }
   };
 
-  // ===== Pagar (IA)
+  // ===== Pagar (IA) — usar SIEMPRE los datos del formulario inicial
   const handlePagarIA = async () => {
-    const edadNum = Number(datos.edad);
+    // Tomar exactamente los datos guardados por el formulario inicial
+    const saved = sessionStorage.getItem("datosPacienteJSON");
+    const base = saved ? JSON.parse(saved) : { ...datos, edad: Number(datos.edad) };
+
+    const edadNum = Number(base.edad);
     if (
-      !datos.nombre?.trim() ||
-      !datos.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0 ||
-      !datos.consulta?.trim() ||
+      !base.nombre?.trim() ||
+      !base.rut?.trim() ||
+      !Number.isFinite(edadNum) || edadNum <= 0 ||
+      !base.dolor?.trim() ||           // Dolor/lado vienen del formulario principal
+      !datos.consulta?.trim() ||        // Asegurar que ya generaste preview
       !previewIA?.trim()
     ) {
-      alert(
-        "Completa los datos, genera el PREVIEW IA y luego realiza el pago."
-      );
+      alert("Completa los datos del formulario (incluye Dolor/Lado), genera el PREVIEW IA y luego realiza el pago.");
       return;
     }
 
     try {
-      // 👉 irAPagoKhipu requiere 'dolor' (validación front). Inyectamos valores por defecto.
-      const datosParaPago = {
-        ...datos,
-        edad: edadNum,
-        dolor: (datos.dolor && String(datos.dolor).trim()) || "IA", // 👈 cambio
-        lado: (datos.lado && String(datos.lado).trim()) || "",       // 👈 cambio
-      };
-
       sessionStorage.setItem("idPago", idPago);
       sessionStorage.setItem("modulo", "ia");
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosParaPago)); // 👈 cambio
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(base));
 
-      // Igual que los otros módulos: usa irAPagoKhipu
-      await irAPagoKhipu(datosParaPago, { idPago, modulo: "ia" }); // 👈 sigue igual que el resto
+      // Mismo flujo que otros módulos: irAPagoKhipu
+      await irAPagoKhipu({ ...base, edad: edadNum }, { idPago, modulo: "ia" });
     } catch (err) {
       console.error("No se pudo generar el link de pago (IA):", err);
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
@@ -302,7 +302,7 @@ export default function IAModulo({ initialDatos }) {
     }
   };
 
-  // ===== UI (mismo look & feel que tus módulos)
+  // ===== UI
   return (
     <div style={styles.card}>
       <h3 style={{ marginTop: 0 }}>Vista previa — Informe IA (texto libre)</h3>
