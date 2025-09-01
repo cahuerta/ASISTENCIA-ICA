@@ -55,7 +55,7 @@ function App() {
       try { setDatosPaciente(JSON.parse(saved)); } catch {}
     }
     const moduloSS = sessionStorage.getItem('modulo');
-    if (moduloSS === 'trauma' || moduloSS === 'preop' || moduloSS === 'generales' || moduloSS === 'ia') { // <-- NUEVO
+    if (moduloSS === 'trauma' || moduloSS === 'preop' || moduloSS === 'generales' || moduloSS === 'ia') {
       setModulo(moduloSS);
     }
 
@@ -239,7 +239,6 @@ function App() {
         body: JSON.stringify({ idPago: idPagoTmp, datosPaciente: { ...datosPaciente, edad: edadNum } }),
       });
 
-      // ⬇️ ÚNICO CAMBIO: pasar idPago y modulo en el 2° parámetro
       await irAPagoKhipu(
         { ...datosPaciente, edad: edadNum },
         { idPago: idPagoTmp, modulo: 'trauma' }
@@ -269,30 +268,40 @@ function App() {
 
         {mostrarVistaPrevia && (
           <div style={{ marginTop: '10px' }}>
-            <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '1fr 1fr 1fr 1fr' }}> {/* <-- 4 columnas ahora */}
+            <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
               <button
+                type="button"
                 style={{ ...styles.downloadButton, backgroundColor: modulo === 'trauma' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('trauma'); sessionStorage.setItem('modulo', 'trauma'); }}
               >
-                ASISTENTE TRAUMATOLOGICO
+                ASISTENTE TRAUMATOLÓGICO
               </button>
               <button
+                type="button"
                 style={{ ...styles.downloadButton, backgroundColor: modulo === 'preop' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('preop'); sessionStorage.setItem('modulo', 'preop'); }}
               >
-                EXAMENES PRE QUIRURGICOS
+                EXÁMENES PREQUIRÚRGICOS
               </button>
               <button
+                type="button"
                 style={{ ...styles.downloadButton, backgroundColor: modulo === 'generales' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('generales'); sessionStorage.setItem('modulo', 'generales'); }}
               >
-                REVISION GENERAL
+                REVISIÓN GENERAL
               </button>
               <button
-                style={{ ...styles.downloadButton, backgroundColor: modulo === 'ia' ? '#004B94' : '#0072CE' }} // <-- NUEVO
-                onClick={() => { setModulo('ia'); sessionStorage.setItem('modulo', 'ia'); }} // <-- NUEVO
+                type="button"
+                style={{ ...styles.downloadButton, backgroundColor: modulo === 'ia' ? '#004B94' : '#0072CE' }}
+                onClick={() => {
+                  setModulo('ia');
+                  sessionStorage.setItem('modulo', 'ia');
+                  try {
+                    document.querySelector('[data-preview-col]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  } catch {}
+                }}
               >
-                ANALISIS MEDIANTE IA
+                ANÁLISIS MEDIANTE IA
               </button>
             </div>
           </div>
@@ -303,12 +312,14 @@ function App() {
             {!pagoRealizado && !mostrarPago && (
               <>
                 <button
+                  type="button"
                   style={{ ...styles.downloadButton, backgroundColor: '#004B94', marginTop: '10px' }}
                   onClick={handlePagarAhora}
                 >
                   Pagar ahora
                 </button>
                 <button
+                  type="button"
                   style={{ ...styles.downloadButton, backgroundColor: '#777', marginTop: '10px' }}
                   onClick={async () => {
                     const idPago = 'guest_test_pago';
@@ -343,6 +354,7 @@ function App() {
 
             {mostrarVistaPrevia && pagoRealizado && (
               <button
+                type="button"
                 style={styles.downloadButton}
                 onClick={handleDescargarPDF}
                 disabled={descargando}
@@ -355,7 +367,7 @@ function App() {
         )}
       </div>
 
-      <div style={styles.previewContainer}>
+      <div style={styles.previewContainer} data-preview-col>
         {mostrarVistaPrevia && modulo === 'trauma' && (
           <PreviewOrden datos={datosPaciente} />
         )}
@@ -368,8 +380,8 @@ function App() {
           <GeneralesModulo initialDatos={datosPaciente} />
         )}
 
-        {mostrarVistaPrevia && modulo === 'ia' && ( // <-- NUEVO
-          <IAModulo initialDatos={datosPaciente} />
+        {mostrarVistaPrevia && modulo === 'ia' && (
+          <IAModulo key={`ia-${modulo}`} initialDatos={datosPaciente} />
         )}
       </div>
     </div>
