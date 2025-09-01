@@ -17,6 +17,8 @@ export default function IAModulo({ initialDatos }) {
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [mensajeDescarga, setMensajeDescarga] = useState("");
+  const [descargandoOrden, setDescargandoOrden] = useState(false);           // ⬅️ NUEVO
+  const [mensajeDescargaOrden, setMensajeDescargaOrden] = useState("");      // ⬅️ NUEVO
   const pollerRef = useRef(null);
 
   // ID de pago/módulo
@@ -115,6 +117,10 @@ export default function IAModulo({ initialDatos }) {
           nombre: datos.nombre,
           edad: edadNum,
           rut: datos.rut,
+          // ⬇️ NUEVO: enviar también estos campos (aunque el backend ya puede leerlos de memoria)
+          genero: datos.genero,
+          dolor: datos.dolor,
+          lado: datos.lado,
         }),
       });
       const j = await res.json();
@@ -186,6 +192,9 @@ export default function IAModulo({ initialDatos }) {
           nombre: fake.nombre,
           edad: fake.edad,
           rut: fake.rut,
+          genero: datos.genero,
+          dolor: datos.dolor,
+          lado: datos.lado,
         }),
       });
     } catch {}
@@ -197,7 +206,7 @@ export default function IAModulo({ initialDatos }) {
     window.location.href = url.toString();
   };
 
-  // ===== Descargar PDF IA (post-pago)
+  // ===== Descargar PDF IA (post-pago) — Informe de texto
   const handleDescargarIA = async () => {
     const id = sessionStorage.getItem("idPago") || idPago;
     if (!id) {
@@ -271,6 +280,9 @@ export default function IAModulo({ initialDatos }) {
                 nombre: datosReinyectar?.nombre,
                 edad: Number(datosReinyectar?.edad) || undefined,
                 rut: datosReinyectar?.rut,
+                genero: datosReinyectar?.genero,
+                dolor: datosReinyectar?.dolor,
+                lado: datosReinyectar?.lado,
               }),
             });
 
@@ -299,6 +311,111 @@ export default function IAModulo({ initialDatos }) {
     } finally {
       setDescargando(false);
       setMensajeDescarga("");
+    }
+  };
+
+  // ===== NUEVO: Descargar PDF Orden de Exámenes (post-pago)
+  const handleDescargarOrdenIA = async () => {
+    const id = sessionStorage.getItem("idPago") || idPago;
+    if (!id) {
+      alert("ID de pago no encontrado.");
+      return;
+    }
+
+    const intentaDescarga = async () => {
+      const res = await fetch(`${BACKEND_BASE}/api/pdf-ia-orden/${id}`, {
+        cache: "no-store",
+      });
+      if (res.status === 404) return { ok: false, status: 404 };
+      if (res.status === 402) return { ok: false, status: 402 };
+      if (!res.ok) throw new Error("Error al obtener el PDF de la orden");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const baseName = (datos?.nombre || "paciente").replace(/ /g, "_");
+      a.download = `ordenIA_${baseName}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      return { ok: true };
+    };
+
+    setDescargandoOrden(true);
+    setMensajeDescargaOrden("Verificando pago…");
+
+    let reinyectado = false;
+    try {
+      const maxIntentos = 30;
+      for (let i = 1; i <= maxIntentos; i++) {
+        const r = await intentaDescarga();
+        if (r.ok) break;
+
+        if (r.status === 402) {
+          setMensajeDescargaOrden(`Verificando pago… (${i}/${maxIntentos})`);
+          // intenta marcar de nuevo el pago confirmado
+          fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idPago: id }),
+          }).catch(() => {});
+          await sleep(1500);
+          if (i === maxIntentos)
+            alert("El pago aún no se confirma. Intenta nuevamente.");
+          continue;
+        }
+
+        if (r.status === 404) {
+          if (!reinyectado) {
+            setMensajeDescargaOrden("Restaurando datos de informe (preview IA) …");
+            const respaldo = sessionStorage.getItem("datosPacienteJSON");
+            const datosReinyectar = respaldo
+              ? JSON.parse(respaldo)
+              : { ...datos, edad: Number(datos.edad) || undefined };
+
+            const consultaGuardada =
+              sessionStorage.getItem("consultaIA") || datos.consulta || "";
+
+            await fetch(`${BACKEND_BASE}/api/preview-informe`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                idPago: id,
+                consulta: consultaGuardada,
+                nombre: datosReinyectar?.nombre,
+                edad: Number(datosReinyectar?.edad) || undefined,
+                rut: datosReinyectar?.rut,
+                genero: datosReinyectar?.genero,
+                dolor: datosReinyectar?.dolor,
+                lado: datosReinyectar?.lado,
+              }),
+            });
+
+            await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ idPago: id }),
+            });
+
+            reinyectado = true;
+            await sleep(600);
+            continue;
+          } else {
+            alert("No se pudo descargar la orden después de reintentar.");
+            break;
+          }
+        }
+
+        alert("No se pudo descargar la orden.");
+        break;
+      }
+    } catch (error) {
+      console.error(error);
+      alert("No se pudo descargar la orden.");
+    } finally {
+      setDescargandoOrden(false);
+      setMensajeDescargaOrden("");
     }
   };
 
@@ -397,16 +514,30 @@ export default function IAModulo({ initialDatos }) {
       )}
 
       {pagoRealizado && (
-        <button
-          style={{ ...styles.btn, marginTop: 12 }}
-          onClick={handleDescargarIA}
-          disabled={descargando}
-          title={mensajeDescarga || "Verificar y descargar"}
-        >
-          {descargando
-            ? mensajeDescarga || "Verificando…"
-            : "Descargar Documento"}
-        </button>
+        <>
+          <button
+            style={{ ...styles.btn, marginTop: 12 }}
+            onClick={handleDescargarIA}
+            disabled={descargando}
+            title={mensajeDescarga || "Verificar y descargar"}
+          >
+            {descargando
+              ? mensajeDescarga || "Verificando…"
+              : "Descargar Informe IA"}
+          </button>
+
+          {/* ⬇️ NUEVO: descarga de la Orden (IA) */}
+          <button
+            style={{ ...styles.btn, marginTop: 8 }}
+            onClick={handleDescargarOrdenIA}
+            disabled={descargandoOrden}
+            title={mensajeDescargaOrden || "Verificar y descargar"}
+          >
+            {descargandoOrden
+              ? mensajeDescargaOrden || "Verificando…"
+              : "Descargar Orden de Exámenes (IA)"}
+          </button>
+        </>
       )}
     </div>
   );
