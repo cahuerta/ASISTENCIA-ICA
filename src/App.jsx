@@ -28,7 +28,7 @@ function App() {
   const [mensajeDescarga, setMensajeDescarga] = useState('');
   const pollerRef = useRef(null);
 
-  const [modulo, setModulo] = useState(null); // null | 'trauma' | 'preop' | 'generales' | 'ia'  <-- NUEVO
+  const [modulo, setModulo] = useState(null); // null | 'trauma' | 'preop' | 'generales' | 'ia'
 
   // ---- AVISO LEGAL ----
   const [mostrarAviso, setMostrarAviso] = useState(false);
@@ -263,32 +263,41 @@ function App() {
         <EsquemaHumanoSVG onSeleccionZona={onSeleccionZona} />
       </div>
 
+      {/* Columna izquierda: formulario + selector de módulos */}
       <div style={styles.formularioContainer}>
         <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
 
         {mostrarVistaPrevia && (
           <div style={{ marginTop: '10px' }}>
-            <div style={{ display: 'grid', gap: '8px', gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+            <div
+              style={{
+                display: 'grid',
+                gap: '8px',
+                gridTemplateColumns: '1fr 1fr 1fr 1fr',
+                position: 'relative',
+                zIndex: 3, // asegura clics sobre cualquier overlay accidental
+              }}
+            >
               <button
                 type="button"
                 style={{ ...styles.downloadButton, backgroundColor: modulo === 'trauma' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('trauma'); sessionStorage.setItem('modulo', 'trauma'); }}
               >
-                Asistente Traumatológico
+                ASISTENTE TRAUMATOLÓGICO
               </button>
               <button
                 type="button"
                 style={{ ...styles.downloadButton, backgroundColor: modulo === 'preop' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('preop'); sessionStorage.setItem('modulo', 'preop'); }}
               >
-                Exámenes pre quirúrgicos
+                EXÁMENES PREQUIRÚRGICOS
               </button>
               <button
                 type="button"
                 style={{ ...styles.downloadButton, backgroundColor: modulo === 'generales' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('generales'); sessionStorage.setItem('modulo', 'generales'); }}
               >
-                Revisión General
+                REVISIÓN GENERAL
               </button>
               <button
                 type="button"
@@ -301,14 +310,21 @@ function App() {
                   } catch {}
                 }}
               >
-                Análisis IA
+                ANÁLISIS MEDIANTE IA
               </button>
             </div>
           </div>
         )}
+      </div>
 
+      {/* Columna derecha: previews y acciones de cada módulo */}
+      <div style={styles.previewContainer} data-preview-col>
         {mostrarVistaPrevia && modulo === 'trauma' && (
           <>
+            <PreviewOrden datos={datosPaciente} />
+
+            {/* Botones de pago/descarga del módulo traumatológico
+                — ahora aparecen DEBAJO del preview */}
             {!pagoRealizado && !mostrarPago && (
               <>
                 <button
@@ -355,7 +371,7 @@ function App() {
             {mostrarVistaPrevia && pagoRealizado && (
               <button
                 type="button"
-                style={styles.downloadButton}
+                style={{ ...styles.downloadButton, marginTop: '10px' }}
                 onClick={handleDescargarPDF}
                 disabled={descargando}
                 title={mensajeDescarga || 'Verificar y descargar'}
@@ -364,12 +380,6 @@ function App() {
               </button>
             )}
           </>
-        )}
-      </div>
-
-      <div style={styles.previewContainer} data-preview-col>
-        {mostrarVistaPrevia && modulo === 'trauma' && (
-          <PreviewOrden datos={datosPaciente} />
         )}
 
         {mostrarVistaPrevia && modulo === 'preop' && (
@@ -405,10 +415,14 @@ const styles = {
   formularioContainer: {
     flex: '0 0 400px',
     maxWidth: '400px',
+    position: 'relative', // asegura que esté por encima del preview
+    zIndex: 2,
   },
   previewContainer: {
     flex: 1,
     minWidth: '360px',
+    position: 'relative',
+    zIndex: 1, // por debajo del formulario (evita overlays que tapen botones)
   },
   downloadButton: {
     marginTop: '15px',
