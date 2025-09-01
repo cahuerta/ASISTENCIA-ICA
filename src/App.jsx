@@ -7,6 +7,7 @@ import { irAPagoKhipu } from './PagoKhipu.jsx';
 import PreopModulo from './modules/PreopModulo.jsx';
 import GeneralesModulo from './modules/GeneralesModulo.jsx';
 import IAModulo from './modules/IAModulo.jsx'; // <-- NUEVO
+import AvisoLegal from './components/AvisoLegal.jsx'; // <-- AVISO LEGAL
 
 const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
 
@@ -28,6 +29,25 @@ function App() {
   const pollerRef = useRef(null);
 
   const [modulo, setModulo] = useState(null); // null | 'trauma' | 'preop' | 'generales' | 'ia'  <-- NUEVO
+
+  // ---- AVISO LEGAL ----
+  const [mostrarAviso, setMostrarAviso] = useState(false);
+  const continuarTrasAviso = () => {
+    setMostrarAviso(false);
+    setMostrarVistaPrevia(true);
+    setPagoRealizado(false);
+    setMostrarPago(false);
+    setModulo(null);
+    sessionStorage.removeItem('modulo');
+  };
+  const rechazarAviso = () => {
+    setMostrarAviso(false);
+    try { window.close(); } catch {}
+    setTimeout(() => {
+      if (!window.closed) window.location.href = 'about:blank';
+    }, 0);
+  };
+  // ----------------------
 
   useEffect(() => {
     const saved = sessionStorage.getItem('datosPacienteJSON');
@@ -112,11 +132,8 @@ function App() {
       alert('Por favor complete todos los campos obligatorios.');
       return;
     }
-    setMostrarVistaPrevia(true);
-    setPagoRealizado(false);
-    setMostrarPago(false);
-    setModulo(null);
-    sessionStorage.removeItem('modulo');
+    // Mostrar aviso legal como paso adicional
+    setMostrarAviso(true);
   };
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -235,6 +252,14 @@ function App() {
 
   return (
     <div style={styles.container}>
+      {/* Modal Aviso Legal */}
+      <AvisoLegal
+        visible={mostrarAviso}
+        persist={false}
+        onAccept={continuarTrasAviso}
+        onReject={rechazarAviso}
+      />
+
       <div style={styles.esquemaContainer}>
         <EsquemaHumanoSVG onSeleccionZona={onSeleccionZona} />
       </div>
