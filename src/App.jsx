@@ -8,7 +8,7 @@ import PreopModulo from './modules/PreopModulo.jsx';
 import GeneralesModulo from './modules/GeneralesModulo.jsx';
 import IAModulo from './modules/IAModulo.jsx'; // <-- NUEVO
 import AvisoLegal from './components/AvisoLegal.jsx'; // <-- AVISO LEGAL
-import FormularioResonancia from './components/FormularioResonancia.jsx'; // <-- MIN: import checklist RNM
+import FormularioResonancia from '../components/FormularioResonancia.jsx'; // <-- MIN: import checklist RNM
 
 const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
 
