@@ -8,6 +8,7 @@ import PreopModulo from './modules/PreopModulo.jsx';
 import GeneralesModulo from './modules/GeneralesModulo.jsx';
 import IAModulo from './modules/IAModulo.jsx'; // <-- NUEVO
 import AvisoLegal from './components/AvisoLegal.jsx'; // <-- AVISO LEGAL
+import FormularioResonancia from './components/FormularioResonancia.jsx'; // <-- MIN: import checklist RNM
 
 const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
 
@@ -29,6 +30,34 @@ function App() {
   const pollerRef = useRef(null);
 
   const [modulo, setModulo] = useState(null); // null | 'trauma' | 'preop' | 'generales' | 'ia'
+
+  // ==== MIN: modal reutilizable de RNM (sin cambiar tu lógica) ====
+  const [showReso, setShowReso] = useState(false);
+  const [resolverReso, setResolverReso] = useState(null);
+  const RED_FLAGS = new Set(["marcapasos","coclear_o_neuro","clips_aneurisma","valvula_cardiaca_metal","fragmentos_metalicos"]);
+  const pedirChecklistResonancia = () =>
+    new Promise((resolve)=>{ setResolverReso(()=>resolve); setShowReso(true); });
+  const hasRedFlags = (data) =>
+    Object.entries(data || {}).some(([k,v]) => RED_FLAGS.has(k) && v === true);
+  const resumenResoTexto = (data) => {
+    const si = Object.entries(data || {}).filter(([_,v])=>v===true).map(([k])=>k).join(', ') || '—';
+    const no = Object.entries(data || {}).filter(([_,v])=>v===false).map(([k])=>k).join(', ') || '—';
+    return [
+      'FORMULARIO DE SEGURIDAD PARA RESONANCIA MAGNÉTICA',
+      `Sí: ${si}`,
+      `No: ${no}`,
+      'Declaro que la información es veraz y autorizo la realización del examen.',
+      'Firma Paciente: ______________________     RUT: _______________     Fecha: ____/____/______',
+    ].join('\n');
+  };
+  // Señal mínima: tu programa decide; leemos bandera si ya la dejas en estado o sessionStorage
+  const shouldSolicitarRM = () => {
+    const ss = sessionStorage.getItem('solicitaResonancia');
+    if (ss === 'true' || ss === '1') return true;
+    if (ss === 'false' || ss === '0') return false;
+    return !!datosPaciente?.solicitaResonancia; // por si tu flujo ya la coloca en estado
+  };
+  // ===============================================================
 
   // ---- AVISO LEGAL ----
   const [mostrarAviso, setMostrarAviso] = useState(false);
@@ -233,10 +262,25 @@ function App() {
       sessionStorage.setItem('idPago', idPagoTmp);
       sessionStorage.setItem('datosPacienteJSON', JSON.stringify({ ...datosPaciente, edad: edadNum }));
 
+      // MIN: solo si TU flujo ya decidió solicitar RNM, abrimos el checklist
+      let extras = {};
+      if (shouldSolicitarRM()) {
+        const res = await pedirChecklistResonancia();
+        if (res?.canceled) return;
+
+        if (res.bloquea) {
+          alert('Por seguridad, cambiaremos la resonancia por otro examen.');
+          extras.ordenAlternativa = 'Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).';
+        } else {
+          extras.resonanciaChecklist = res.data || {};
+          extras.resonanciaResumenTexto = res.resumen || resumenResoTexto(res.data || {});
+        }
+      }
+
       await fetch(`${BACKEND_BASE}/guardar-datos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idPago: idPagoTmp, datosPaciente: { ...datosPaciente, edad: edadNum } }),
+        body: JSON.stringify({ idPago: idPagoTmp, datosPaciente: { ...datosPaciente, edad: edadNum }, ...extras }),
       });
 
       await irAPagoKhipu(
@@ -386,6 +430,24 @@ function App() {
           <IAModulo key={`ia-${modulo}`} initialDatos={datosPaciente} />
         )}
       </div>
+
+      {/* ===== MIN: modal RNM ===== */}
+      {showReso && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.35)', display:'grid', placeItems:'center', zIndex:9999 }}>
+          <div style={{ width:'min(900px, 96vw)' }}>
+            <FormularioResonancia
+              onCancel={() => { setShowReso(false); resolverReso?.({ canceled:true }); }}
+              onSave={(data, { riesgos }) => {
+                setShowReso(false);
+                const resumen = resumenResoTexto(data);
+                const bloquea = hasRedFlags(data);
+                resolverReso?.({ canceled:false, bloquea, data, riesgos, resumen });
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {/* ========================= */}
     </div>
   );
 }
@@ -425,7 +487,7 @@ const styles = {
     paddingTop: 4,
     paddingBottom: 8,
     zIndex: 5,
-    borderBottom: '1px solid #dcdcdc',
+    borderBottom: '1px solid '#dcdcdc',
   },
   toolbarGrid: {
     display: 'grid',
