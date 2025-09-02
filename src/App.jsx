@@ -263,45 +263,41 @@ function App() {
         <EsquemaHumanoSVG onSeleccionZona={onSeleccionZona} />
       </div>
 
-      {/* Columna izquierda: formulario + selector de módulos */}
+      {/* Columna izquierda: formulario */}
       <div style={styles.formularioContainer}>
         <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
+        {/* (SE ELIMINA el bloque de botones aquí para evitar superposición) */}
+      </div>
 
+      {/* Columna derecha: toolbar + previews y acciones */}
+      <div style={styles.previewContainer} data-preview-col>
         {mostrarVistaPrevia && (
-          <div style={{ marginTop: '10px' }}>
-            <div
-              style={{
-                display: 'grid',
-                gap: '8px',
-                gridTemplateColumns: '1fr 1fr 1fr 1fr',
-                position: 'relative',
-                zIndex: 3, // asegura clics sobre cualquier overlay accidental
-              }}
-            >
+          <div style={styles.toolbarSticky}>
+            <div style={styles.toolbarGrid}>
               <button
                 type="button"
-                style={{ ...styles.downloadButton, backgroundColor: modulo === 'trauma' ? '#004B94' : '#0072CE' }}
+                style={{ ...styles.toolbarButton, backgroundColor: modulo === 'trauma' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('trauma'); sessionStorage.setItem('modulo', 'trauma'); }}
               >
                 ASISTENTE TRAUMATOLÓGICO
               </button>
               <button
                 type="button"
-                style={{ ...styles.downloadButton, backgroundColor: modulo === 'preop' ? '#004B94' : '#0072CE' }}
+                style={{ ...styles.toolbarButton, backgroundColor: modulo === 'preop' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('preop'); sessionStorage.setItem('modulo', 'preop'); }}
               >
                 EXÁMENES PREQUIRÚRGICOS
               </button>
               <button
                 type="button"
-                style={{ ...styles.downloadButton, backgroundColor: modulo === 'generales' ? '#004B94' : '#0072CE' }}
+                style={{ ...styles.toolbarButton, backgroundColor: modulo === 'generales' ? '#004B94' : '#0072CE' }}
                 onClick={() => { setModulo('generales'); sessionStorage.setItem('modulo', 'generales'); }}
               >
                 REVISIÓN GENERAL
               </button>
               <button
                 type="button"
-                style={{ ...styles.downloadButton, backgroundColor: modulo === 'ia' ? '#004B94' : '#0072CE' }}
+                style={{ ...styles.toolbarButton, backgroundColor: modulo === 'ia' ? '#004B94' : '#0072CE' }}
                 onClick={() => {
                   setModulo('ia');
                   sessionStorage.setItem('modulo', 'ia');
@@ -315,16 +311,12 @@ function App() {
             </div>
           </div>
         )}
-      </div>
 
-      {/* Columna derecha: previews y acciones de cada módulo */}
-      <div style={styles.previewContainer} data-preview-col>
         {mostrarVistaPrevia && modulo === 'trauma' && (
           <>
             <PreviewOrden datos={datosPaciente} />
 
-            {/* Botones de pago/descarga del módulo traumatológico
-                — ahora aparecen DEBAJO del preview */}
+            {/* Botones de pago/descarga del módulo traumatológico: DEBAJO del preview */}
             {!pagoRealizado && !mostrarPago && (
               <>
                 <button
@@ -415,15 +407,47 @@ const styles = {
   formularioContainer: {
     flex: '0 0 400px',
     maxWidth: '400px',
-    position: 'relative', // asegura que esté por encima del preview
+    position: 'relative',
     zIndex: 2,
   },
   previewContainer: {
     flex: 1,
     minWidth: '360px',
     position: 'relative',
-    zIndex: 1, // por debajo del formulario (evita overlays que tapen botones)
+    zIndex: 1,
   },
+
+  /* ===== Toolbar (botones de módulo) ahora en la columna derecha ===== */
+  toolbarSticky: {
+    position: 'sticky',
+    top: 0,
+    background: '#f0f4f8',
+    paddingTop: 4,
+    paddingBottom: 8,
+    zIndex: 5,
+    borderBottom: '1px solid #dcdcdc',
+  },
+  toolbarGrid: {
+    display: 'grid',
+    gap: '8px',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    alignItems: 'stretch',
+  },
+  toolbarButton: {
+    backgroundColor: '#0072CE',
+    color: 'white',
+    border: 'none',
+    padding: '12px',
+    borderRadius: '8px',
+    fontSize: '14px',
+    cursor: 'pointer',
+    width: '100%',
+    whiteSpace: 'normal',
+    lineHeight: 1.2,
+    minHeight: 44,
+  },
+
+  /* ===== Botones de pago/descarga ===== */
   downloadButton: {
     marginTop: '15px',
     backgroundColor: '#0072CE',
