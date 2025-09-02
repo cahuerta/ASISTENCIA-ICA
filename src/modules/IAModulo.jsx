@@ -5,8 +5,8 @@ import { irAPagoKhipu } from "../PagoKhipu.jsx";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-export default function IAModulo({ initialDatos }) {
-  // ===== Estado base (estilo similar a Preop)
+export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
+  // ===== Estado base
   const [datos, setDatos] = useState(
     initialDatos || { nombre: "", rut: "", edad: "", consulta: "" }
   );
@@ -17,8 +17,8 @@ export default function IAModulo({ initialDatos }) {
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [mensajeDescarga, setMensajeDescarga] = useState("");
-  const [descargandoOrden, setDescargandoOrden] = useState(false);           // ⬅️ NUEVO
-  const [mensajeDescargaOrden, setMensajeDescargaOrden] = useState("");      // ⬅️ NUEVO
+  const [descargandoOrden, setDescargandoOrden] = useState(false);
+  const [mensajeDescargaOrden, setMensajeDescargaOrden] = useState("");
   const pollerRef = useRef(null);
 
   // ID de pago/módulo
@@ -79,6 +79,13 @@ export default function IAModulo({ initialDatos }) {
     };
   }, []);
 
+  // ===== Detección simple de si se está pidiendo una RM desde IA
+  const requiereRM = () => {
+    const txt = (previewIA || datos.consulta || "").toLowerCase();
+    // heurística liviana; puedes ajustarla cuando quieras
+    return /(^|\b)(rm|resonancia)(\b|:)/i.test(txt);
+  };
+
   // ===== Generar PREVIEW (GPT)
   const handleGenerarPreview = async () => {
     const edadNum = Number(datos.edad);
@@ -117,7 +124,7 @@ export default function IAModulo({ initialDatos }) {
           nombre: datos.nombre,
           edad: edadNum,
           rut: datos.rut,
-          // ⬇️ NUEVO: enviar también estos campos (aunque el backend ya puede leerlos de memoria)
+          // enviar también estos campos
           genero: datos.genero,
           dolor: datos.dolor,
           lado: datos.lado,
@@ -137,22 +144,26 @@ export default function IAModulo({ initialDatos }) {
     }
   };
 
-  // ===== Pagar (IA) — usar SIEMPRE los datos del formulario inicial
+  // ===== Pagar (IA)
   const handlePagarIA = async () => {
     // Tomar exactamente los datos guardados por el formulario inicial
     const saved = sessionStorage.getItem("datosPacienteJSON");
-    const base = saved ? JSON.parse(saved) : { ...datos, edad: Number(datos.edad) };
+    const base =
+      saved ? JSON.parse(saved) : { ...datos, edad: Number(datos.edad) };
 
     const edadNum = Number(base.edad);
     if (
       !base.nombre?.trim() ||
       !base.rut?.trim() ||
-      !Number.isFinite(edadNum) || edadNum <= 0 ||
-      !base.dolor?.trim() ||           // Dolor/lado vienen del formulario principal
-      !datos.consulta?.trim() ||        // Asegurar que ya generaste preview
+      !Number.isFinite(edadNum) ||
+      edadNum <= 0 ||
+      !base.dolor?.trim() || // Dolor/lado vienen del formulario principal
+      !datos.consulta?.trim() || // Asegurar que ya generaste preview
       !previewIA?.trim()
     ) {
-      alert("Completa los datos del formulario (incluye Dolor/Lado), genera el PREVIEW IA y luego realiza el pago.");
+      alert(
+        "Completa los datos del formulario (incluye Dolor/Lado), genera el PREVIEW IA y luego realiza el pago."
+      );
       return;
     }
 
@@ -160,6 +171,46 @@ export default function IAModulo({ initialDatos }) {
       sessionStorage.setItem("idPago", idPago);
       sessionStorage.setItem("modulo", "ia");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify(base));
+
+      // ======== NUEVO: Gate de Resonancia (opcional) ========
+      // Si detectamos que el informe sugiere RM y existe pedirChecklistResonancia, la pedimos.
+      if (typeof pedirChecklistResonancia === "function" && requiereRM()) {
+        const res = await pedirChecklistResonancia();
+        if (res?.canceled) return; // usuario cerró
+
+        if (res.bloquea) {
+          // Red flags → cambiar RM por examen alternativo
+          const alternativa =
+            "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
+          // Guardar para futura inclusión en PDF/orden (no rompe si el backend aún no lo usa)
+          sessionStorage.setItem("ordenAlternativa", alternativa);
+          await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ idPago, ordenAlternativa: alternativa }),
+          }).catch(() => {});
+        } else {
+          // Sin red flags → adjuntar resumen del checklist para firma
+          sessionStorage.setItem(
+            "resonanciaChecklist",
+            JSON.stringify(res.data || {})
+          );
+          sessionStorage.setItem(
+            "resonanciaResumenTexto",
+            res.resumen || ""
+          );
+          await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              idPago,
+              resonanciaChecklist: res.data || {},
+              resonanciaResumenTexto: res.resumen || "",
+            }),
+          }).catch(() => {});
+        }
+      }
+      // =======================================================
 
       // Mismo flujo que otros módulos: irAPagoKhipu
       await irAPagoKhipu({ ...base, edad: edadNum }, { idPago, modulo: "ia" });
@@ -260,7 +311,7 @@ export default function IAModulo({ initialDatos }) {
         }
 
         if (r.status === 404) {
-          // backend reiniciado → reinyecta: volver a crear preview con los datos guardados
+          // backend reiniciado → reinyecta
           if (!reinyectado) {
             setMensajeDescarga("Restaurando datos de informe (preview IA) …");
             const respaldo = sessionStorage.getItem("datosPacienteJSON");
@@ -286,7 +337,7 @@ export default function IAModulo({ initialDatos }) {
               }),
             });
 
-            // marcar pago confirmado nuevamente por si acaso
+            // marcar pago confirmado nuevamente
             await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -314,7 +365,7 @@ export default function IAModulo({ initialDatos }) {
     }
   };
 
-  // ===== NUEVO: Descargar PDF Orden de Exámenes (post-pago)
+  // ===== Descargar PDF Orden de Exámenes (post-pago)
   const handleDescargarOrdenIA = async () => {
     const id = sessionStorage.getItem("idPago") || idPago;
     if (!id) {
@@ -526,7 +577,7 @@ export default function IAModulo({ initialDatos }) {
               : "Descargar Informe IA"}
           </button>
 
-          {/* ⬇️ NUEVO: descarga de la Orden (IA) */}
+          {/* Orden de Exámenes (IA) */}
           <button
             style={{ ...styles.btn, marginTop: 8 }}
             onClick={handleDescargarOrdenIA}
