@@ -6,8 +6,7 @@ const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
 // Lista EXACTA indicada por ti (en ese orden, sin Rx de tórax, sin extras)
 const EXAMENES_FIJOS = [
-  "HEMOGRAMA",
-  "VHS",
+  "HEMOGRAMA MAS VHS",
   "PCR",
   "ELECTROLITOS PLASMATICOS",
   "PERFIL BIOQUIMICO",
@@ -17,6 +16,8 @@ const EXAMENES_FIJOS = [
   "TTPK",
   "HEMOGLOBINA GLICOSILADA",
   "VITAMINA D",
+  "GRUPO Y RH",
+  "VIH",
   "ORINA",
   "UROCULTIVO",
   "ECG DE REPOSO",
