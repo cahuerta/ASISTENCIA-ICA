@@ -167,6 +167,38 @@ function App() {
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+  // ========= NUEVO: helpers para consultar al backend si hay RM =========
+  const esResonanciaTexto = (t = "") => {
+    const s = (t || "").toLowerCase();
+    return (
+      s.includes("resonancia") ||
+      s.includes("resonancia magn") ||   // "magnética/magnetica"
+      /\brm\b/i.test(t)                  // "RM" como palabra
+    );
+  };
+
+  const detectarResonanciaEnBackend = async (datos) => {
+    try {
+      const r = await fetch(`${BACKEND_BASE}/detectar-resonancia`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datosPaciente: datos })
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      const flag = typeof j?.resonancia === 'boolean'
+        ? j.resonancia
+        : esResonanciaTexto(j?.texto || j?.orden || "");
+      sessionStorage.setItem('solicitaResonancia', flag ? '1' : '0');
+      return !!flag;
+    } catch (e) {
+      console.warn('No se pudo detectar RM en backend:', e);
+      sessionStorage.setItem('solicitaResonancia', '0');
+      return false;
+    }
+  };
+  // =====================================================================
+
   const handleDescargarPDF = async () => {
     const idPago = sessionStorage.getItem('idPago');
     if (!idPago) {
@@ -262,9 +294,11 @@ function App() {
       sessionStorage.setItem('idPago', idPagoTmp);
       sessionStorage.setItem('datosPacienteJSON', JSON.stringify({ ...datosPaciente, edad: edadNum }));
 
-      // MIN: solo si TU flujo ya decidió solicitar RNM, abrimos el checklist
+      // NUEVO: preguntamos al backend si la orden incluye RM
       let extras = {};
-      if (shouldSolicitarRM()) {
+      const solicitarRM = await detectarResonanciaEnBackend({ ...datosPaciente, edad: edadNum });
+
+      if (solicitarRM) {
         const res = await pedirChecklistResonancia();
         if (res?.canceled) return;
 
@@ -487,7 +521,7 @@ const styles = {
     paddingTop: 4,
     paddingBottom: 8,
     zIndex: 5,
-    borderBottom: '1px solid '#dcdcdc',
+    borderBottom: '1px solid #dcdcdc',
   },
   toolbarGrid: {
     display: 'grid',
