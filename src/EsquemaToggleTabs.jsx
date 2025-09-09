@@ -1,34 +1,26 @@
 import React from "react";
 
-/**
- * EsquemaToggleTabs
- * Props:
- *  - vista: "anterior" | "posterior"
- *  - onChange(vista)
- */
 export default function EsquemaToggleTabs({ vista, onChange }) {
-  const Tab = ({ id, label }) => (
-    <button
-      onClick={() => onChange?.(id)}
-      style={{
-        padding: "8px 14px",
-        borderRadius: 8,
-        border: "1px solid #cfd6e4",
-        background: vista === id ? "#ffffff" : "#eef3ff",
-        fontWeight: 600,
-        marginRight: 8,
-        cursor: "pointer",
-      }}
-      aria-pressed={vista === id}
-    >
-      {label}
-    </button>
-  );
-
   return (
-    <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-      <Tab id="anterior" label="Anterior" />
-      <Tab id="posterior" label="Posterior" />
+    <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+      {["anterior", "posterior"].map((key) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onChange?.(key)}
+          style={{
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: "1px solid #d1d5db",
+            background: vista === key ? "#0072CE" : "#fff",
+            color: vista === key ? "#fff" : "#111827",
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          {key === "anterior" ? "Anterior" : "Posterior"}
+        </button>
+      ))}
     </div>
   );
 }
