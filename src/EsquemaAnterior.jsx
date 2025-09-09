@@ -1,9 +1,9 @@
 import React from "react";
 
-/** Vista frontal – igual al mock: ojos, caderas centradas, patelas. */
+/** Vista frontal – ojos, caderas centradas, patelas. */
 export default function EsquemaAnterior({
   onSeleccionZona,
-  width = 260,          // ajusta a 240–260 según tu layout
+  width = 240,
   className = "",
 }) {
   const handle = (z) => typeof onSeleccionZona === "function" && onSeleccionZona(z);
@@ -51,17 +51,55 @@ export default function EsquemaAnterior({
            M144 398c6 36 18 80 18 92 0 10-8 18-18 18h-20c-8 0-12-10-12-18v-16"
       />
 
-      {/* Referencias suaves (esternón) + patelas */}
+      {/* Referencias suaves */}
       <path className="hint" d="M100 154c8-6 32-6 40 0" />
       <ellipse className="hint" cx="100" cy="312" rx="10" ry="14" />
       <ellipse className="hint" cx="140" cy="312" rx="10" ry="14" />
 
-      {/* Zonas clickeables centradas */}
-      <ellipse className="hit" cx="100" cy="222" rx="16" ry="16" onClick={() => handle("Cadera izquierda")} >
+      {/* Zonas clickeables */}
+      <ellipse
+        className="hit"
+        cx="100"
+        cy="222"
+        rx="16"
+        ry="16"
+        onClick={() => handle("Cadera izquierda")}
+      >
         <title>Cadera izquierda</title>
       </ellipse>
-      <ellipse className="hit" cx="140" cy="222" rx="16" ry="16" onClick={() => handle("Cadera derecha")} >
+
+      <ellipse
+        className="hit"
+        cx="140"
+        cy="222"
+        rx="16"
+        ry="16"
+        onClick={() => handle("Cadera derecha")}
+      >
         <title>Cadera derecha</title>
       </ellipse>
-      <ellipse className="hit" cx="100" cy="312" rx="14" ry="14" onClick={() => handle("Rodilla izquierda")} >
-        <title>R
+
+      <ellipse
+        className="hit"
+        cx="100"
+        cy="312"
+        rx="14"
+        ry="14"
+        onClick={() => handle("Rodilla izquierda")}
+      >
+        <title>Rodilla izquierda</title>
+      </ellipse>
+
+      <ellipse
+        className="hit"
+        cx="140"
+        cy="312"
+        rx="14"
+        ry="14"
+        onClick={() => handle("Rodilla derecha")}
+      >
+        <title>Rodilla derecha</title>
+      </ellipse>
+    </svg>
+  );
+}
