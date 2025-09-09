@@ -1,6 +1,10 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-import EsquemaHumanoSVG from './EsquemaHumanoSVG.jsx';
+/* REEMPLAZO DE IMPORT DEL ESQUEMA */
+import EsquemaAnterior from './EsquemaAnterior.jsx';
+import EsquemaPosterior from './EsquemaPosterior.jsx';
+import EsquemaToggleTabs from './EsquemaToggleTabs.jsx';
+
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
 import { irAPagoKhipu } from './PagoKhipu.jsx';
@@ -30,6 +34,7 @@ function App() {
   const pollerRef = useRef(null);
 
   const [modulo, setModulo] = useState(null); // null | 'trauma' | 'preop' | 'generales' | 'ia'
+  const [vista, setVista] = useState('anterior'); // 'anterior' | 'posterior'  <-- NUEVO
 
   // ==== MIN: modal reutilizable de RNM (sin cambiar tu lógica) ====
   const [showReso, setShowReso] = useState(false);
@@ -338,7 +343,13 @@ function App() {
       />
 
       <div style={styles.esquemaContainer}>
-        <EsquemaHumanoSVG onSeleccionZona={onSeleccionZona} />
+        {/* NUEVO: Tabs + esquema anterior/posterior */}
+        <EsquemaToggleTabs vista={vista} onChange={setVista} />
+        {vista === 'anterior' ? (
+          <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={240} />
+        ) : (
+          <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={240} />
+        )}
       </div>
 
       {/* Columna izquierda: formulario */}
