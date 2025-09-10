@@ -4,29 +4,32 @@ import cuerpoFrontal from "./assets/cuerpoFrontal.png";
 
 /**
  * Esquema anterior (híbrido): imagen base + hotspots SVG.
- * Ajuste: caderas y rodillas más LATERALES (estaban muy juntas).
- * Recuerda: IZQUIERDA de pantalla = DERECHA del paciente.
+ * - Caderas OK (previas)
+ * - Rodillas: más separadas y un poco más arriba
+ * Nota: IZQUIERDA de pantalla = DERECHA del paciente.
  */
 export default function EsquemaAnterior({
   onSeleccionZona,
-  width = 400,  // igual al ancho del formulario
+  width = 400,  // mismo ancho que el formulario
   className = "",
   baseSrc = cuerpoFrontal,
 }) {
   const handle = (z) =>
     typeof onSeleccionZona === "function" && onSeleccionZona(z);
 
-  const VB = 1024; // imagen base 1024x1024
+  const VB = 1024; // base 1024x1024
 
-  // Más separación lateral:
-  // Caderas: de 0.45/0.55 -> 0.43/0.57  (y = 0.48)
-  // Rodillas: de 0.46/0.54 -> 0.44/0.56 (y = 0.77)
+  // Caderas (se mantienen como estaban bien)
   const puntos = {
     // En pantalla IZQUIERDA => DERECHA del paciente
     pantallaIzq_cadera:  { cx: VB * 0.43, cy: VB * 0.48, rx: 48, ry: 40 },
     pantallaDer_cadera:  { cx: VB * 0.57, cy: VB * 0.48, rx: 48, ry: 40 },
-    pantallaIzq_rodilla: { cx: VB * 0.44, cy: VB * 0.77, rx: 44, ry: 44 },
-    pantallaDer_rodilla: { cx: VB * 0.56, cy: VB * 0.77, rx: 44, ry: 44 },
+
+    // RODILLAS AJUSTADAS:
+    // Antes: cx 0.44/0.56, cy 0.77
+    // Ahora: más laterales (0.42 / 0.58) y un poco más arriba (cy 0.75)
+    pantallaIzq_rodilla: { cx: VB * 0.42, cy: VB * 0.75, rx: 44, ry: 44 },
+    pantallaDer_rodilla: { cx: VB * 0.58, cy: VB * 0.75, rx: 44, ry: 44 },
   };
 
   const onKey = (z) => (e) => {
@@ -48,7 +51,6 @@ export default function EsquemaAnterior({
       }}
       aria-label="Esquema humano anterior"
     >
-      {/* Imagen base (fondo) */}
       <img
         src={baseSrc}
         alt="Cuerpo humano frontal"
@@ -56,7 +58,6 @@ export default function EsquemaAnterior({
         draggable={false}
       />
 
-      {/* Capa SVG interactiva */}
       <svg
         viewBox={`0 0 ${VB} ${VB}`}
         preserveAspectRatio="xMidYMid meet"
