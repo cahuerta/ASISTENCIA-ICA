@@ -2,13 +2,6 @@
 import React from "react";
 import cuerpoPosterior from "./assets/cuerpoPosterior.png";
 
-/** Vista posterior (híbrido)
- * Ajustes:
- * - Caderas: más centradas (antes 0.40/0.60 → ahora 0.43/0.57).
- * - Rodillas: más arriba (0.78 → 0.76) y un poco más centradas (0.41/0.59 → 0.44/0.56).
- * - Columna: la línea punteada parte más arriba (0.16 → 0.12) y termina donde estaba (0.47).
- * Nota orientación: en posterior, IZQ de pantalla = IZQ del paciente.
- */
 export default function EsquemaPosterior({
   onSeleccionZona,
   width = 400,
@@ -24,15 +17,14 @@ export default function EsquemaPosterior({
   const VB = 1024;
 
   const puntos = {
-    // Caderas ~ línea de pelvis
     caderaIzq: { cx: VB * 0.43, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera izquierda" },
     caderaDer: { cx: VB * 0.57, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera derecha" },
 
-    // Rodillas (fosa poplítea)
-    rodillaIzq: { cx: VB * 0.44, cy: VB * 0.76, rx: 46, ry: 46, label: "Rodilla izquierda (posterior)" },
-    rodillaDer: { cx: VB * 0.56, cy: VB * 0.76, rx: 46, ry: 46, label: "Rodilla derecha (posterior)" },
+    // Rodillas: más laterales y un poco más arriba
+    rodillaIzq: { cx: VB * 0.41, cy: VB * 0.75, rx: 46, ry: 46, label: "Rodilla izquierda (posterior)" },
+    rodillaDer: { cx: VB * 0.59, cy: VB * 0.75, rx: 46, ry: 46, label: "Rodilla derecha (posterior)" },
 
-    // Lumbar por encima de pelvis (sin tocar glúteos) — se mantiene
+    // Lumbar se mantiene sobre pelvis
     lumbar: { x: VB * 0.5 - 42, y: VB * 0.36, w: 84, h: 110, rx: 12, label: "Columna lumbar" },
   };
 
@@ -70,10 +62,9 @@ export default function EsquemaPosterior({
           `}</style>
         </defs>
 
-        {/* Columna: parte un poco más arriba y termina igual (por encima de caderas) */}
-        <line className="spine" x1={VB*0.5} y1={VB*0.12} x2={VB*0.5} y2={VB*0.47} />
+        {/* Columna: parte más arriba, termina igual */}
+        <line className="spine" x1={VB*0.5} y1={VB*0.08} x2={VB*0.5} y2={VB*0.47} />
 
-        {/* Zona clickeable: lumbar (sobre pelvis) */}
         <rect
           className="hit"
           x={puntos.lumbar.x}
@@ -90,7 +81,6 @@ export default function EsquemaPosterior({
           <title>{puntos.lumbar.label}</title>
         </rect>
 
-        {/* Cadera izquierda */}
         <ellipse
           className="hit"
           cx={puntos.caderaIzq.cx}
@@ -106,7 +96,6 @@ export default function EsquemaPosterior({
           <title>{puntos.caderaIzq.label}</title>
         </ellipse>
 
-        {/* Cadera derecha */}
         <ellipse
           className="hit"
           cx={puntos.caderaDer.cx}
@@ -122,7 +111,6 @@ export default function EsquemaPosterior({
           <title>{puntos.caderaDer.label}</title>
         </ellipse>
 
-        {/* Rodilla izquierda */}
         <ellipse
           className="hit"
           cx={puntos.rodillaIzq.cx}
@@ -138,7 +126,6 @@ export default function EsquemaPosterior({
           <title>{puntos.rodillaIzq.label}</title>
         </ellipse>
 
-        {/* Rodilla derecha */}
         <ellipse
           className="hit"
           cx={puntos.rodillaDer.cx}
