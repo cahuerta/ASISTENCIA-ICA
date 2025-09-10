@@ -370,9 +370,9 @@ function App() {
 
         {/* (4) Alineación/proporción: ancho 320px para calzar base 1024x1024 */}
         {vista === 'anterior' ? (
-          <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={320} />
+          <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
         ) : (
-          <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={320} />
+          <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
         )}
 
         {/* (3) Mensajería accesible (aria-live) */}
