@@ -2,57 +2,36 @@
 import React from "react";
 import cuerpoPosterior from "./assets/cuerpoPosterior.png";
 
-/**
- * Esquema posterior (híbrido): imagen base + hotspots SVG.
- * Hotspots: Columna lumbar (clickeable), Cadera izq/der y Rodilla izq/der.
- *
- * Props:
- * - onSeleccionZona(z: string)
- * - width: ancho del contenedor (ej. 320 o "100%")
- * - className: clases extra
- * - baseSrc: para reemplazar la imagen base si se requiere
+/** Esquema posterior (híbrido) con ajustes:
+ * - Caderas y rodillas: más mediales y un poco más bajas.
+ * - Columna (línea y rectángulo lumbar) por encima de las caderas.
  */
 export default function EsquemaPosterior({
   onSeleccionZona,
-  width = 320,
+  width = 380,
   className = "",
   baseSrc = cuerpoPosterior,
 }) {
   const handle = (z) =>
     typeof onSeleccionZona === "function" && onSeleccionZona(z);
-
   const onKey = (z) => (e) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      handle(z);
-    }
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handle(z); }
   };
 
-  // Usamos el mismo sistema de coordenadas que en el frontal (imagen 1024x1024)
   const VB = 1024;
 
-  // Coordenadas aproximadas para vista posterior del maniquí
+  // === NUEVAS COORDENADAS (más mediales y un poco más bajas) ===
   const puntos = {
-    // Centro de la pelvis (para referencia)
-    pelvisY: VB * 0.46,
+    // Caderas ~ nivel pelvis
+    caderaIzq: { cx: VB * 0.47, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera izquierda" },
+    caderaDer: { cx: VB * 0.53, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera derecha" },
 
-    // Caderas (aprox. sobre trocánteres; “zona glútea/huéspedes posteriores” no clickeable extra por ahora)
-    caderaIzq: { cx: VB * 0.41, cy: VB * 0.46, rx: 50, ry: 40, label: "Cadera izquierda" },
-    caderaDer: { cx: VB * 0.59, cy: VB * 0.46, rx: 50, ry: 40, label: "Cadera derecha" },
+    // Rodillas (fosas poplíteas): más mediales y un poco más abajo
+    rodillaIzq: { cx: VB * 0.46, cy: VB * 0.78, rx: 46, ry: 46, label: "Rodilla izquierda (posterior)" },
+    rodillaDer: { cx: VB * 0.54, cy: VB * 0.78, rx: 46, ry: 46, label: "Rodilla derecha (posterior)" },
 
-    // Rodillas (fosas poplíteas aprox.)
-    rodillaIzq: { cx: VB * 0.41, cy: VB * 0.73, rx: 44, ry: 44, label: "Rodilla izquierda (posterior)" },
-    rodillaDer: { cx: VB * 0.59, cy: VB * 0.73, rx: 44, ry: 44, label: "Rodilla derecha (posterior)" },
-
-    // Columna lumbar: rectángulo centrado en L1–L5 (ligeramente por debajo de la línea de costillas)
-    lumbar: {
-      x: VB * 0.5 - 40,
-      y: VB * 0.48,
-      w: 80,
-      h: 140,
-      rx: 10,
-      label: "Columna lumbar",
-    },
+    // Lumbar por encima de cadera: subimos la caja y acortamos la línea
+    lumbar: { x: VB * 0.5 - 42, y: VB * 0.42, w: 84, h: 115, rx: 12, label: "Columna lumbar" },
   };
 
   return (
@@ -67,7 +46,6 @@ export default function EsquemaPosterior({
       }}
       aria-label="Esquema humano posterior"
     >
-      {/* Imagen base (fondo) */}
       <img
         src={baseSrc}
         alt="Cuerpo humano posterior"
@@ -75,53 +53,25 @@ export default function EsquemaPosterior({
         draggable={false}
       />
 
-      {/* Capa SVG interactiva */}
       <svg
         viewBox={`0 0 ${VB} ${VB}`}
         preserveAspectRatio="xMidYMid meet"
         aria-hidden="false"
         role="img"
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          pointerEvents: "none",
-        }}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
       >
         <defs>
           <style>{`
-            .hit {
-              fill: #2f6bd8;
-              opacity: .18;
-              transition: opacity .15s ease;
-              pointer-events: auto;
-              cursor: pointer;
-            }
-            .hit:hover, .hit:focus { opacity: .30; outline: none; }
-
-            .spine {
-              stroke: #8c8c8c;
-              stroke-width: 8;
-              stroke-dasharray: 18 14;
-              stroke-linecap: round;
-              fill: none;
-              opacity: .55;
-              pointer-events: none;
-            }
+            .hit{ fill:#2f6bd8; opacity:.18; transition:opacity .15s ease; pointer-events:auto; cursor:pointer; }
+            .hit:hover, .hit:focus{ opacity:.30; outline:none; }
+            .spine{ stroke:#8c8c8c; stroke-width:8; stroke-dasharray:18 14; stroke-linecap:round; fill:none; opacity:.55; pointer-events:none; }
           `}</style>
         </defs>
 
-        {/* Columna (línea punteada solo como referencia visual) */}
-        <line
-          className="spine"
-          x1={VB * 0.5}
-          y1={VB * 0.16}
-          x2={VB * 0.5}
-          y2={VB * 0.74}
-        />
+        {/* Columna: más corta, termina por encima de caderas */}
+        <line className="spine" x1={VB*0.5} y1={VB*0.16} x2={VB*0.5} y2={VB*0.54} />
 
-        {/* Zona clickeable: Columna lumbar */}
+        {/* Zona clickeable: lumbar por encima de caderas */}
         <rect
           className="hit"
           x={puntos.lumbar.x}
@@ -170,7 +120,7 @@ export default function EsquemaPosterior({
           <title>{puntos.caderaDer.label}</title>
         </ellipse>
 
-        {/* Rodilla izquierda (posterior) */}
+        {/* Rodilla izquierda */}
         <ellipse
           className="hit"
           cx={puntos.rodillaIzq.cx}
@@ -186,7 +136,7 @@ export default function EsquemaPosterior({
           <title>{puntos.rodillaIzq.label}</title>
         </ellipse>
 
-        {/* Rodilla derecha (posterior) */}
+        {/* Rodilla derecha */}
         <ellipse
           className="hit"
           cx={puntos.rodillaDer.cx}
