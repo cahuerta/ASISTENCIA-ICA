@@ -2,9 +2,12 @@
 import React from "react";
 import cuerpoPosterior from "./assets/cuerpoPosterior.png";
 
-/** Esquema posterior (híbrido) con ajustes:
- * - Caderas y rodillas: más laterales (estaban muy juntas).
- * - Columna: línea y zona lumbar por encima de la cadera, sin tocar glúteos.
+/** Vista posterior (híbrido)
+ * Ajustes:
+ * - Caderas: más centradas (antes 0.40/0.60 → ahora 0.43/0.57).
+ * - Rodillas: más arriba (0.78 → 0.76) y un poco más centradas (0.41/0.59 → 0.44/0.56).
+ * - Columna: la línea punteada parte más arriba (0.16 → 0.12) y termina donde estaba (0.47).
+ * Nota orientación: en posterior, IZQ de pantalla = IZQ del paciente.
  */
 export default function EsquemaPosterior({
   onSeleccionZona,
@@ -20,19 +23,16 @@ export default function EsquemaPosterior({
 
   const VB = 1024;
 
-  // === NUEVAS COORDENADAS ===
-  // Más separación lateral y la columna estrictamente por encima de caderas.
   const puntos = {
-    // Caderas (línea de pelvis ~0.50). Más laterales: 0.40 / 0.60
-    caderaIzq: { cx: VB * 0.40, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera izquierda" },
-    caderaDer: { cx: VB * 0.60, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera derecha" },
+    // Caderas ~ línea de pelvis
+    caderaIzq: { cx: VB * 0.43, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera izquierda" },
+    caderaDer: { cx: VB * 0.57, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera derecha" },
 
-    // Rodillas (fosa poplítea). Más laterales: 0.41 / 0.59
-    rodillaIzq: { cx: VB * 0.41, cy: VB * 0.78, rx: 46, ry: 46, label: "Rodilla izquierda (posterior)" },
-    rodillaDer: { cx: VB * 0.59, cy: VB * 0.78, rx: 46, ry: 46, label: "Rodilla derecha (posterior)" },
+    // Rodillas (fosa poplítea)
+    rodillaIzq: { cx: VB * 0.44, cy: VB * 0.76, rx: 46, ry: 46, label: "Rodilla izquierda (posterior)" },
+    rodillaDer: { cx: VB * 0.56, cy: VB * 0.76, rx: 46, ry: 46, label: "Rodilla derecha (posterior)" },
 
-    // Lumbar por encima de la pelvis (no toca glúteos):
-    // y=0.36, h=110 => base en ~0.36+0.107=0.467 (< 0.50 pelvis)
+    // Lumbar por encima de pelvis (sin tocar glúteos) — se mantiene
     lumbar: { x: VB * 0.5 - 42, y: VB * 0.36, w: 84, h: 110, rx: 12, label: "Columna lumbar" },
   };
 
@@ -70,10 +70,10 @@ export default function EsquemaPosterior({
           `}</style>
         </defs>
 
-        {/* Columna: línea punteada termina por ENCIMA de caderas */}
-        <line className="spine" x1={VB*0.5} y1={VB*0.16} x2={VB*0.5} y2={VB*0.47} />
+        {/* Columna: parte un poco más arriba y termina igual (por encima de caderas) */}
+        <line className="spine" x1={VB*0.5} y1={VB*0.12} x2={VB*0.5} y2={VB*0.47} />
 
-        {/* Zona clickeable: lumbar (completamente sobre la pelvis) */}
+        {/* Zona clickeable: lumbar (sobre pelvis) */}
         <rect
           className="hit"
           x={puntos.lumbar.x}
