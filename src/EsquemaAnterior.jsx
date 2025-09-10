@@ -4,34 +4,29 @@ import cuerpoFrontal from "./assets/cuerpoFrontal.png";
 
 /**
  * Esquema anterior (híbrido): imagen base + hotspots SVG.
- * Hotspots: Cadera (zona inguinal) izquierda/derecha y Rodilla izquierda/derecha.
- *
- * Props:
- * - onSeleccionZona(z: string): callback al hacer click/enter/space en una zona
- * - width (number|string): ancho del contenedor (ej. 320, "100%")
- * - className (string): clases extra para el contenedor
- * - baseSrc (string): opcional, para usar otra imagen base
+ * Ajustes solicitados:
+ * - Caderas: más bajas y medializadas.
+ * - Rodillas: más bajas y medializadas.
  */
 export default function EsquemaAnterior({
   onSeleccionZona,
-  width = 320,
+  width = 380,            // Dibujo más grande (puedes subir a 400 si quieres)
   className = "",
   baseSrc = cuerpoFrontal,
 }) {
   const handle = (z) =>
     typeof onSeleccionZona === "function" && onSeleccionZona(z);
 
-  // Usamos un viewBox cuadrado pensado para la imagen generada (1024x1024).
-  // Las posiciones son relativas a ese sistema; así se adaptan a cualquier tamaño mostrado.
-  const VB = 1024;
+  const VB = 1024; // imagen base 1024x1024
 
-  // Coordenadas aproximadas centradas en anatomía frontal del maniquí
-  // (afinables después a tu preferencia visual)
+  // === COORDENADAS AJUSTADAS ===
+  // Caderas: antes (cx 0.41/0.59, cy 0.44) → ahora más medial (0.45/0.55) y más bajas (0.48).
+  // Rodillas: antes (cx 0.41/0.59, cy 0.73) → ahora más medial (0.46/0.54) y más bajas (0.77).
   const puntos = {
-    caderaIzq: { cx: VB * 0.41, cy: VB * 0.44, rx: 48, ry: 38, label: "Cadera izquierda (inguinal)" },
-    caderaDer: { cx: VB * 0.59, cy: VB * 0.44, rx: 48, ry: 38, label: "Cadera derecha (inguinal)" },
-    rodillaIzq: { cx: VB * 0.41, cy: VB * 0.73, rx: 44, ry: 44, label: "Rodilla izquierda" },
-    rodillaDer: { cx: VB * 0.59, cy: VB * 0.73, rx: 44, ry: 44, label: "Rodilla derecha" },
+    caderaIzq:   { cx: VB * 0.45, cy: VB * 0.48, rx: 50, ry: 40, label: "Cadera izquierda (inguinal)" },
+    caderaDer:   { cx: VB * 0.55, cy: VB * 0.48, rx: 50, ry: 40, label: "Cadera derecha (inguinal)" },
+    rodillaIzq:  { cx: VB * 0.46, cy: VB * 0.77, rx: 46, ry: 46, label: "Rodilla izquierda" },
+    rodillaDer:  { cx: VB * 0.54, cy: VB * 0.77, rx: 46, ry: 46, label: "Rodilla derecha" },
   };
 
   const onKey = (z) => (e) => {
@@ -72,7 +67,7 @@ export default function EsquemaAnterior({
           inset: 0,
           width: "100%",
           height: "100%",
-          pointerEvents: "none", // evitamos capturar scroll/drag fuera de hotspots
+          pointerEvents: "none",
         }}
       >
         <defs>
@@ -81,17 +76,14 @@ export default function EsquemaAnterior({
               fill: #2f6bd8;
               opacity: .18;
               transition: opacity .15s ease;
-              pointer-events: auto;      /* reactivamos eventos solo en el hotspot */
+              pointer-events: auto;
               cursor: pointer;
             }
-            .hit:hover, .hit:focus {
-              opacity: .30;
-              outline: none;
-            }
+            .hit:hover, .hit:focus { opacity: .30; outline: none; }
           `}</style>
         </defs>
 
-        {/* Cadera izquierda (zona inguinal) */}
+        {/* Cadera izquierda (inguinal) */}
         <ellipse
           className="hit"
           cx={puntos.caderaIzq.cx}
@@ -107,7 +99,7 @@ export default function EsquemaAnterior({
           <title>{puntos.caderaIzq.label}</title>
         </ellipse>
 
-        {/* Cadera derecha (zona inguinal) */}
+        {/* Cadera derecha (inguinal) */}
         <ellipse
           className="hit"
           cx={puntos.caderaDer.cx}
