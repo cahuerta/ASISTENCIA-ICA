@@ -8,41 +8,26 @@ export default function EsquemaPosterior({
   className = "",
   baseSrc = cuerpoPosterior,
 }) {
-  const handle = (z) =>
-    typeof onSeleccionZona === "function" && onSeleccionZona(z);
-  const onKey = (z) => (e) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handle(z); }
-  };
+  const handle = (z) => typeof onSeleccionZona === "function" && onSeleccionZona(z);
+  const onKey = (z) => (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handle(z); } };
 
   const VB = 1024;
 
   const puntos = {
     caderaIzq: { cx: VB * 0.43, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera izquierda" },
     caderaDer: { cx: VB * 0.57, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera derecha" },
-    // Rodillas: un poco más centradas (antes 0.41/0.59)
-    rodillaIzq: { cx: VB * 0.43, cy: VB * 0.75, rx: 46, ry: 46, label: "Rodilla izquierda (posterior)" },
-    rodillaDer: { cx: VB * 0.57, cy: VB * 0.75, rx: 46, ry: 46, label: "Rodilla derecha (posterior)" },
-    lumbar: { x: VB * 0.5 - 42, y: VB * 0.36, w: 84, h: 110, rx: 12, label: "Columna lumbar" },
+    rodillaIzq: { cx: VB * 0.42, cy: VB * 0.75, rx: 46, ry: 46, label: "Rodilla izquierda (posterior)" },
+    rodillaDer: { cx: VB * 0.58, cy: VB * 0.75, rx: 46, ry: 46, label: "Rodilla derecha (posterior)" },
+    lumbar: { x: VB * 0.5 - 42, y: VB * 0.30, w: 84, h: 120, rx: 12, label: "Columna lumbar" },
   };
 
   return (
     <div
       className={className}
-      style={{
-        position: "relative",
-        width: typeof width === "number" ? `${width}px` : width,
-        maxWidth: "100%",
-        display: "inline-block",
-        lineHeight: 0,
-      }}
+      style={{ position: "relative", width: typeof width === "number" ? `${width}px` : width, maxWidth: "100%", display: "inline-block", lineHeight: 0 }}
       aria-label="Vista posterior"
     >
-      <img
-        src={baseSrc}
-        alt="Cuerpo humano posterior"
-        style={{ width: "100%", height: "auto", display: "block" }}
-        draggable={false}
-      />
+      <img src={baseSrc} alt="Cuerpo humano posterior" style={{ width: "100%", height: "auto", display: "block" }} draggable={false} />
 
       <svg
         viewBox={`0 0 ${VB} ${VB}`}
@@ -59,9 +44,10 @@ export default function EsquemaPosterior({
           `}</style>
         </defs>
 
-        {/* Columna: inicia más alto y termina antes del glúteo */}
-        <line className="spine" x1={VB*0.5} y1={VB*0.06} x2={VB*0.5} y2={VB*0.46} />
+        {/* Columna */}
+        <line className="spine" x1={VB*0.5} y1={VB*0.04} x2={VB*0.5} y2={VB*0.46} />
 
+        {/* Lumbar */}
         <rect
           className="hit"
           x={puntos.lumbar.x}
@@ -76,6 +62,7 @@ export default function EsquemaPosterior({
           onKeyDown={onKey("Columna lumbar")}
         />
 
+        {/* Caderas */}
         <ellipse
           className="hit"
           cx={puntos.caderaIzq.cx}
@@ -101,6 +88,7 @@ export default function EsquemaPosterior({
           onKeyDown={onKey("Cadera derecha")}
         />
 
+        {/* Rodillas */}
         <ellipse
           className="hit"
           cx={puntos.rodillaIzq.cx}
