@@ -4,13 +4,12 @@ import cuerpoFrontal from "./assets/cuerpoFrontal.png";
 
 /**
  * Esquema anterior (híbrido): imagen base + hotspots SVG.
- * Ajustes solicitados:
- * - Caderas: más bajas y medializadas.
- * - Rodillas: más bajas y medializadas.
+ * Ajuste: caderas y rodillas más LATERALES (estaban muy juntas).
+ * Recuerda: IZQUIERDA de pantalla = DERECHA del paciente.
  */
 export default function EsquemaAnterior({
   onSeleccionZona,
-  width = 380,            // Dibujo más grande (puedes subir a 400 si quieres)
+  width = 400,  // igual al ancho del formulario
   className = "",
   baseSrc = cuerpoFrontal,
 }) {
@@ -19,14 +18,15 @@ export default function EsquemaAnterior({
 
   const VB = 1024; // imagen base 1024x1024
 
-  // === COORDENADAS AJUSTADAS ===
-  // Caderas: antes (cx 0.41/0.59, cy 0.44) → ahora más medial (0.45/0.55) y más bajas (0.48).
-  // Rodillas: antes (cx 0.41/0.59, cy 0.73) → ahora más medial (0.46/0.54) y más bajas (0.77).
+  // Más separación lateral:
+  // Caderas: de 0.45/0.55 -> 0.43/0.57  (y = 0.48)
+  // Rodillas: de 0.46/0.54 -> 0.44/0.56 (y = 0.77)
   const puntos = {
-    caderaIzq:   { cx: VB * 0.45, cy: VB * 0.48, rx: 50, ry: 40, label: "Cadera izquierda (inguinal)" },
-    caderaDer:   { cx: VB * 0.55, cy: VB * 0.48, rx: 50, ry: 40, label: "Cadera derecha (inguinal)" },
-    rodillaIzq:  { cx: VB * 0.46, cy: VB * 0.77, rx: 46, ry: 46, label: "Rodilla izquierda" },
-    rodillaDer:  { cx: VB * 0.54, cy: VB * 0.77, rx: 46, ry: 46, label: "Rodilla derecha" },
+    // En pantalla IZQUIERDA => DERECHA del paciente
+    pantallaIzq_cadera:  { cx: VB * 0.43, cy: VB * 0.48, rx: 48, ry: 40 },
+    pantallaDer_cadera:  { cx: VB * 0.57, cy: VB * 0.48, rx: 48, ry: 40 },
+    pantallaIzq_rodilla: { cx: VB * 0.44, cy: VB * 0.77, rx: 44, ry: 44 },
+    pantallaDer_rodilla: { cx: VB * 0.56, cy: VB * 0.77, rx: 44, ry: 44 },
   };
 
   const onKey = (z) => (e) => {
@@ -83,68 +83,68 @@ export default function EsquemaAnterior({
           `}</style>
         </defs>
 
-        {/* Cadera izquierda (inguinal) */}
+        {/* En pantalla IZQUIERDA = DERECHA del paciente */}
         <ellipse
           className="hit"
-          cx={puntos.caderaIzq.cx}
-          cy={puntos.caderaIzq.cy}
-          rx={puntos.caderaIzq.rx}
-          ry={puntos.caderaIzq.ry}
+          cx={puntos.pantallaIzq_cadera.cx}
+          cy={puntos.pantallaIzq_cadera.cy}
+          rx={puntos.pantallaIzq_cadera.rx}
+          ry={puntos.pantallaIzq_cadera.ry}
           tabIndex={0}
           role="button"
-          aria-label={puntos.caderaIzq.label}
-          onClick={() => handle("Cadera izquierda")}
-          onKeyDown={onKey("Cadera izquierda")}
-        >
-          <title>{puntos.caderaIzq.label}</title>
-        </ellipse>
-
-        {/* Cadera derecha (inguinal) */}
-        <ellipse
-          className="hit"
-          cx={puntos.caderaDer.cx}
-          cy={puntos.caderaDer.cy}
-          rx={puntos.caderaDer.rx}
-          ry={puntos.caderaDer.ry}
-          tabIndex={0}
-          role="button"
-          aria-label={puntos.caderaDer.label}
+          aria-label="Cadera derecha (inguinal)"
           onClick={() => handle("Cadera derecha")}
           onKeyDown={onKey("Cadera derecha")}
         >
-          <title>{puntos.caderaDer.label}</title>
+          <title>Cadera derecha (inguinal)</title>
         </ellipse>
 
-        {/* Rodilla izquierda */}
+        {/* En pantalla DERECHA = IZQUIERDA del paciente */}
         <ellipse
           className="hit"
-          cx={puntos.rodillaIzq.cx}
-          cy={puntos.rodillaIzq.cy}
-          rx={puntos.rodillaIzq.rx}
-          ry={puntos.rodillaIzq.ry}
+          cx={puntos.pantallaDer_cadera.cx}
+          cy={puntos.pantallaDer_cadera.cy}
+          rx={puntos.pantallaDer_cadera.rx}
+          ry={puntos.pantallaDer_cadera.ry}
           tabIndex={0}
           role="button"
-          aria-label={puntos.rodillaIzq.label}
-          onClick={() => handle("Rodilla izquierda")}
-          onKeyDown={onKey("Rodilla izquierda")}
+          aria-label="Cadera izquierda (inguinal)"
+          onClick={() => handle("Cadera izquierda")}
+          onKeyDown={onKey("Cadera izquierda")}
         >
-          <title>{puntos.rodillaIzq.label}</title>
+          <title>Cadera izquierda (inguinal)</title>
         </ellipse>
 
-        {/* Rodilla derecha */}
+        {/* Rodilla – pantalla IZQUIERDA = DERECHA del paciente */}
         <ellipse
           className="hit"
-          cx={puntos.rodillaDer.cx}
-          cy={puntos.rodillaDer.cy}
-          rx={puntos.rodillaDer.rx}
-          ry={puntos.rodillaDer.ry}
+          cx={puntos.pantallaIzq_rodilla.cx}
+          cy={puntos.pantallaIzq_rodilla.cy}
+          rx={puntos.pantallaIzq_rodilla.rx}
+          ry={puntos.pantallaIzq_rodilla.ry}
           tabIndex={0}
           role="button"
-          aria-label={puntos.rodillaDer.label}
+          aria-label="Rodilla derecha"
           onClick={() => handle("Rodilla derecha")}
           onKeyDown={onKey("Rodilla derecha")}
         >
-          <title>{puntos.rodillaDer.label}</title>
+          <title>Rodilla derecha</title>
+        </ellipse>
+
+        {/* Rodilla – pantalla DERECHA = IZQUIERDA del paciente */}
+        <ellipse
+          className="hit"
+          cx={puntos.pantallaDer_rodilla.cx}
+          cy={puntos.pantallaDer_rodilla.cy}
+          rx={puntos.pantallaDer_rodilla.rx}
+          ry={puntos.pantallaDer_rodilla.ry}
+          tabIndex={0}
+          role="button"
+          aria-label="Rodilla izquierda"
+          onClick={() => handle("Rodilla izquierda")}
+          onKeyDown={onKey("Rodilla izquierda")}
+        >
+          <title>Rodilla izquierda</title>
         </ellipse>
       </svg>
     </div>
