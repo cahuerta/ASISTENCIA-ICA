@@ -552,8 +552,8 @@ const styles = {
     minHeight: '100vh',
   },
   esquemaContainer: {
-    flex: '0 0 320px',       // (4) ancho indicado para calce visual
-    maxWidth: '320px',
+    flex: '0 0 400px',       // (4) ancho indicado para calce visual
+    maxWidth: '400px',
   },
   formularioContainer: {
     flex: '0 0 400px',
