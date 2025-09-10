@@ -34,7 +34,9 @@ function App() {
   const pollerRef = useRef(null);
 
   const [modulo, setModulo] = useState(null); // null | 'trauma' | 'preop' | 'generales' | 'ia'
-  const [vista, setVista] = useState('anterior'); // 'anterior' | 'posterior'  <-- NUEVO
+
+  // (1) Persistencia de vista (anterior/posterior)
+  const [vista, setVista] = useState('anterior'); // 'anterior' | 'posterior'
 
   // ==== MIN: modal reutilizable de RNM (sin cambiar tu lógica) ====
   const [showReso, setShowReso] = useState(false);
@@ -54,13 +56,6 @@ function App() {
       'Declaro que la información es veraz y autorizo la realización del examen.',
       'Firma Paciente: ______________________     RUT: _______________     Fecha: ____/____/______',
     ].join('\n');
-  };
-  // Señal mínima: tu programa decide; leemos bandera si ya la dejas en estado o sessionStorage
-  const shouldSolicitarRM = () => {
-    const ss = sessionStorage.getItem('solicitaResonancia');
-    if (ss === 'true' || ss === '1') return true;
-    if (ss === 'false' || ss === '0') return false;
-    return !!datosPaciente?.solicitaResonancia; // por si tu flujo ya la coloca en estado
   };
   // ===============================================================
 
@@ -84,13 +79,22 @@ function App() {
   // ----------------------
 
   useEffect(() => {
+    // Restaurar datos del paciente si existen
     const saved = sessionStorage.getItem('datosPacienteJSON');
     if (saved) {
       try { setDatosPaciente(JSON.parse(saved)); } catch {}
     }
+
+    // Restaurar modulo si existe
     const moduloSS = sessionStorage.getItem('modulo');
     if (moduloSS === 'trauma' || moduloSS === 'preop' || moduloSS === 'generales' || moduloSS === 'ia') {
       setModulo(moduloSS);
+    }
+
+    // (1) Restaurar vista si existe
+    const vistaSS = sessionStorage.getItem('vistaEsquema');
+    if (vistaSS === 'anterior' || vistaSS === 'posterior') {
+      setVista(vistaSS);
     }
 
     const params = new URLSearchParams(window.location.search);
@@ -140,10 +144,23 @@ function App() {
     };
   }, []);
 
+  // (1) Guardar vista cuando cambie
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('vistaEsquema', vista);
+    } catch {}
+  }, [vista]);
+
   const handleCambiarDato = (campo, valor) => {
-    setDatosPaciente((prev) => ({ ...prev, [campo]: valor }));
+    setDatosPaciente((prev) => {
+      const next = { ...prev, [campo]: valor };
+      // (2) Persistir selección/datos tras cambios manuales también
+      try { sessionStorage.setItem('datosPacienteJSON', JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
+  // (2) Persistir selección tras onSeleccionZona
   const onSeleccionZona = (zona) => {
     let dolor = '';
     let lado = '';
@@ -157,7 +174,12 @@ function App() {
       dolor = 'Rodilla';
       lado = zona.includes('izquierda') ? 'Izquierda' : 'Derecha';
     }
-    setDatosPaciente((prev) => ({ ...prev, dolor, lado }));
+
+    setDatosPaciente((prev) => {
+      const next = { ...prev, dolor, lado };
+      try { sessionStorage.setItem('datosPacienteJSON', JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
   const handleSubmit = (e) => {
@@ -345,11 +367,33 @@ function App() {
       <div style={styles.esquemaContainer}>
         {/* NUEVO: Tabs + esquema anterior/posterior */}
         <EsquemaToggleTabs vista={vista} onChange={setVista} />
+
+        {/* (4) Alineación/proporción: ancho 320px para calzar base 1024x1024 */}
         {vista === 'anterior' ? (
-          <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={240} />
+          <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={320} />
         ) : (
-          <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={240} />
+          <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={320} />
         )}
+
+        {/* (3) Mensajería accesible (aria-live) */}
+        <div
+          aria-live="polite"
+          role="status"
+          style={{
+            marginTop: 8,
+            fontSize: 14,
+            color: '#374151',
+            background: '#F3F4F6',
+            padding: '6px 8px',
+            borderRadius: 8,
+            border: '1px solid #E5E7EB',
+            minHeight: 30,
+          }}
+        >
+          {datosPaciente?.dolor
+            ? <>Zona seleccionada: <strong>{datosPaciente.dolor}{datosPaciente.lado ? ` — ${datosPaciente.lado}` : ''}</strong></>
+            : 'Seleccione una zona en el esquema'}
+        </div>
       </div>
 
       {/* Columna izquierda: formulario */}
@@ -508,7 +552,7 @@ const styles = {
     minHeight: '100vh',
   },
   esquemaContainer: {
-    flex: '0 0 320px',
+    flex: '0 0 320px',       // (4) ancho indicado para calce visual
     maxWidth: '320px',
   },
   formularioContainer: {
