@@ -19,12 +19,9 @@ export default function EsquemaPosterior({
   const puntos = {
     caderaIzq: { cx: VB * 0.43, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera izquierda" },
     caderaDer: { cx: VB * 0.57, cy: VB * 0.50, rx: 50, ry: 40, label: "Cadera derecha" },
-
-    // Rodillas: más laterales y un poco más arriba
-    rodillaIzq: { cx: VB * 0.41, cy: VB * 0.75, rx: 46, ry: 46, label: "Rodilla izquierda (posterior)" },
-    rodillaDer: { cx: VB * 0.59, cy: VB * 0.75, rx: 46, ry: 46, label: "Rodilla derecha (posterior)" },
-
-    // Lumbar se mantiene sobre pelvis
+    // Rodillas: un poco más centradas (antes 0.41/0.59)
+    rodillaIzq: { cx: VB * 0.43, cy: VB * 0.75, rx: 46, ry: 46, label: "Rodilla izquierda (posterior)" },
+    rodillaDer: { cx: VB * 0.57, cy: VB * 0.75, rx: 46, ry: 46, label: "Rodilla derecha (posterior)" },
     lumbar: { x: VB * 0.5 - 42, y: VB * 0.36, w: 84, h: 110, rx: 12, label: "Columna lumbar" },
   };
 
@@ -38,7 +35,7 @@ export default function EsquemaPosterior({
         display: "inline-block",
         lineHeight: 0,
       }}
-      aria-label="Esquema humano posterior"
+      aria-label="Vista posterior"
     >
       <img
         src={baseSrc}
@@ -62,8 +59,8 @@ export default function EsquemaPosterior({
           `}</style>
         </defs>
 
-        {/* Columna: parte más arriba, termina igual */}
-        <line className="spine" x1={VB*0.5} y1={VB*0.08} x2={VB*0.5} y2={VB*0.47} />
+        {/* Columna: inicia más alto y termina antes del glúteo */}
+        <line className="spine" x1={VB*0.5} y1={VB*0.06} x2={VB*0.5} y2={VB*0.46} />
 
         <rect
           className="hit"
@@ -77,9 +74,7 @@ export default function EsquemaPosterior({
           aria-label={puntos.lumbar.label}
           onClick={() => handle("Columna lumbar")}
           onKeyDown={onKey("Columna lumbar")}
-        >
-          <title>{puntos.lumbar.label}</title>
-        </rect>
+        />
 
         <ellipse
           className="hit"
@@ -92,10 +87,7 @@ export default function EsquemaPosterior({
           aria-label={puntos.caderaIzq.label}
           onClick={() => handle("Cadera izquierda")}
           onKeyDown={onKey("Cadera izquierda")}
-        >
-          <title>{puntos.caderaIzq.label}</title>
-        </ellipse>
-
+        />
         <ellipse
           className="hit"
           cx={puntos.caderaDer.cx}
@@ -107,9 +99,7 @@ export default function EsquemaPosterior({
           aria-label={puntos.caderaDer.label}
           onClick={() => handle("Cadera derecha")}
           onKeyDown={onKey("Cadera derecha")}
-        >
-          <title>{puntos.caderaDer.label}</title>
-        </ellipse>
+        />
 
         <ellipse
           className="hit"
@@ -122,10 +112,7 @@ export default function EsquemaPosterior({
           aria-label={puntos.rodillaIzq.label}
           onClick={() => handle("Rodilla izquierda (posterior)")}
           onKeyDown={onKey("Rodilla izquierda (posterior)")}
-        >
-          <title>{puntos.rodillaIzq.label}</title>
-        </ellipse>
-
+        />
         <ellipse
           className="hit"
           cx={puntos.rodillaDer.cx}
@@ -137,9 +124,7 @@ export default function EsquemaPosterior({
           aria-label={puntos.rodillaDer.label}
           onClick={() => handle("Rodilla derecha (posterior)")}
           onKeyDown={onKey("Rodilla derecha (posterior)")}
-        >
-          <title>{puntos.rodillaDer.label}</title>
-        </ellipse>
+        />
       </svg>
     </div>
   );
