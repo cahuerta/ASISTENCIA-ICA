@@ -3,20 +3,62 @@ import React, { useEffect, useMemo, useState } from "react";
 
 /** ====== Estilos (en línea, como tu app) ====== */
 const S = {
-  card: { background:"#fff", borderRadius:12, padding:16, boxShadow:"0 2px 10px rgba(0,0,0,0.06)" },
+  card: {
+    background:"#fff",
+    borderRadius:12,
+    padding:16,
+    boxShadow:"0 2px 10px rgba(0,0,0,0.06)",
+    // Scroller interno para permitir bajar hasta los botones
+    maxHeight:"80vh",
+    overflowY:"auto",
+  },
   title: { fontWeight:800, fontSize:18, marginBottom:10 },
   grid: { display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))" },
   row: { display:"grid", gap:6 },
   label: { fontWeight:600, fontSize:13, lineHeight:1.2 },
   seg: { display:"flex", gap:6 },
   segBtn: (active) => ({
-    flex:1, padding:"10px 12px", borderRadius:8, border:"1px solid #d0d7de",
-    background: active ? "#0072CE" : "#fff", color: active ? "#fff" : "#111",
-    cursor:"pointer", fontWeight:700, textAlign:"center"
+    flex:1,
+    padding:"10px 12px",
+    borderRadius:8,
+    border:"1px solid #d0d7de",
+    background: active ? "#0072CE" : "#fff",
+    color: active ? "#fff" : "#111",
+    cursor:"pointer",
+    fontWeight:700,
+    textAlign:"center"
   }),
-  actions:{ display:"flex", gap:10, marginTop:14, flexWrap:"wrap" },
-  btn: { flex:"1 0 200px", background:"#0072CE", color:"#fff", border:"none", padding:"12px 14px", borderRadius:8, cursor:"pointer", fontWeight:700 },
-  btnGray: { flex:"1 0 200px", background:"#667085", color:"#fff", border:"none", padding:"12px 14px", borderRadius:8, cursor:"pointer", fontWeight:700 },
+  // Acciones pegadas al borde inferior del scroller
+  actions:{
+    position:"sticky",
+    bottom:0,
+    background:"linear-gradient(transparent, #fff 40%)",
+    paddingTop:12,
+    display:"flex",
+    gap:10,
+    marginTop:14,
+    flexWrap:"wrap"
+  },
+  btn: {
+    flex:"1 0 200px",
+    background:"#0072CE",
+    color:"#fff",
+    border:"none",
+    padding:"12px 14px",
+    borderRadius:8,
+    cursor:"pointer",
+    fontWeight:700
+  },
+  btnGray: {
+    flex:"1 0 200px",
+    background:"#667085",
+    color:"#fff",
+    border:"none",
+    padding:"12px 14px",
+    borderRadius:8,
+    cursor:"pointer",
+    fontWeight:700
+  },
   hint:{ fontSize:12, color:"#555" },
   warnCard:{ background:"#fff8e1", border:"1px solid #ffe08a", borderRadius:8, padding:10, marginBottom:10, color:"#5f370e" },
   okCard:{ background:"#e6fffa", border:"1px solid #b2f5ea", borderRadius:8, padding:10, marginBottom:10, color:"#234e52" },
@@ -50,7 +92,7 @@ const ITEMS = [
   // Dispositivos externos
   { key:"bomba_insulina_u_otro", label:"¿Usa bomba de insulina u otro dispositivo externo?" },
 
-  // Contraste (gadolinio): solo son preguntas Sí/No; decisión clínica vendrá después
+  // Contraste (gadolinio)
   { key:"requiere_contraste", label:"¿Este examen requiere contraste (gadolinio)?" },
   { key:"erc_o_egfr_bajo", label:"¿Insuficiencia renal conocida o eGFR < 30?" },
   { key:"alergia_gadolinio", label:"¿Alergia previa a gadolinio?" },
@@ -152,7 +194,9 @@ export default function FormularioResonancia({ initial = {}, onSave, onCancel })
           <ul style={{ margin:"6px 0 0 18px" }}>
             {riesgos.map((t, i) => <li key={i}>{t}</li>)}
           </ul>
-          <div style={S.hint}>Este resumen es informativo; la decisión clínica y logística se define fuera del formulario.</div>
+          <div style={S.hint}>
+            Este resumen es informativo; la decisión clínica y logística se define fuera del formulario.
+          </div>
         </div>
       ) : (
         <div style={S.okCard}>
@@ -187,12 +231,19 @@ export default function FormularioResonancia({ initial = {}, onSave, onCancel })
         ))}
       </div>
 
-      {/* Observaciones opcional (mantengo Sí/No como pediste; esto es libre por si necesitas anotar algo puntual) */}
+      {/* Observaciones opcional */}
       <div style={{ marginTop:12 }}>
         <div style={S.row}>
           <label style={S.label}>Observaciones (opcional)</label>
           <textarea
-            style={{ width:"100%", padding:10, borderRadius:8, border:"1px solid #d0d7de", minHeight:84, background:"#fff" }}
+            style={{
+              width:"100%",
+              padding:10,
+              borderRadius:8,
+              border:"1px solid #d0d7de",
+              minHeight:84,
+              background:"#fff"
+            }}
             value={form.observaciones}
             onChange={(e)=>setForm(f=>({ ...f, observaciones: e.target.value }))}
             placeholder="Notas: fechas de cirugía, tipo de dispositivo, documentación adjunta, etc."
@@ -202,9 +253,15 @@ export default function FormularioResonancia({ initial = {}, onSave, onCancel })
 
       {/* Acciones */}
       <div style={S.actions}>
-        <button type="button" style={S.btnGray} onClick={responderTodoNo}>Marcar todo en No</button>
-        <button type="button" style={S.btnGray} onClick={()=>onCancel?.()}>Cancelar</button>
-        <button type="button" style={S.btn} onClick={guardar}>Guardar</button>
+        <button type="button" style={S.btnGray} onClick={responderTodoNo}>
+          Marcar todo en No
+        </button>
+        <button type="button" style={S.btnGray} onClick={()=>onCancel?.()}>
+          Cancelar
+        </button>
+        <button type="button" style={S.btn} onClick={guardar}>
+          Guardar
+        </button>
       </div>
 
       <div style={{ marginTop:8, ...S.hint }}>
