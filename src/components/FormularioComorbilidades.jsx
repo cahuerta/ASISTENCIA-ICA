@@ -18,6 +18,8 @@ const S = {
   actions:{ display:"flex", gap:10, marginTop:14 },
   btn: { flex:1, background:"#0072CE", color:"#fff", border:"none", padding:"12px 14px", borderRadius:8, cursor:"pointer", fontWeight:700 },
   btnGray: { flex:1, background:"#667085", color:"#fff", border:"none", padding:"12px 14px", borderRadius:8, cursor:"pointer", fontWeight:700 },
+  hint: { fontSize:12, color:"#667085" },
+  error: { fontSize:12, color:"#B42318", marginTop:4 }
 };
 
 const LISTA = [
@@ -40,8 +42,17 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
     ...base,
     alergias: "",
     otras: "",
+    // NUEVOS CAMPOS
+    medicamentos: "",
+    cirugiasPrevias: "",
+    anticoagulantes_detalle: "",
+    tabaco: "",
+    alcohol: "",
+    observaciones: "",
     ...initial,
   });
+
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     try {
@@ -51,12 +62,51 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
         setForm(prev => ({ ...prev, ...data }));
       }
     } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
 
   const setYN = (key, val) => setForm(f => ({ ...f, [key]: !!val }));
+
+  const validar = () => {
+    const e = {};
+    if (form.anticoagulantes === true && !form.anticoagulantes_detalle.trim()) {
+      e.anticoagulantes_detalle = "Indique cuál/es.";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   const guardar = () => {
-    sessionStorage.setItem("comorbilidadesJSON", JSON.stringify(form));
-    onSave?.(form);
+    if (!validar()) return;
+    const payload = {
+      // flags sí/no
+      hta: !!form.hta,
+      dm2: !!form.dm2,
+      dislipidemia: !!form.dislipidemia,
+      obesidad: !!form.obesidad,
+      tabaquismo: !!form.tabaquismo,
+      epoc_asma: !!form.epoc_asma,
+      cardiopatia: !!form.cardiopatia,
+      erc: !!form.erc,
+      hipotiroidismo: !!form.hipotiroidismo,
+      anticoagulantes: !!form.anticoagulantes,
+      artritis_reumatoide: !!form.artritis_reumatoide,
+
+      // existentes
+      alergias: (form.alergias || "").trim(),
+      otras: (form.otras || "").trim(),
+
+      // NUEVOS
+      medicamentos: (form.medicamentos || "").trim(),
+      cirugiasPrevias: (form.cirugiasPrevias || "").trim(),
+      anticoagulantes_detalle: (form.anticoagulantes_detalle || "").trim(),
+      tabaco: (form.tabaco || "").trim(),
+      alcohol: (form.alcohol || "").trim(),
+      observaciones: (form.observaciones || "").trim(),
+    };
+
+    sessionStorage.setItem("comorbilidadesJSON", JSON.stringify(payload));
+    onSave?.(payload);
   };
 
   return (
@@ -85,8 +135,44 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
                 No
               </button>
             </div>
+
+            {/* Detalle solo si usa anticoagulantes */}
+            {key === "anticoagulantes" && form.anticoagulantes === true && (
+              <div>
+                <input
+                  style={S.input}
+                  value={form.anticoagulantes_detalle}
+                  onChange={(e)=>setForm(f=>({ ...f, anticoagulantes_detalle: e.target.value }))}
+                  placeholder="Detalle: warfarina, DOAC, AAS, clopidogrel…"
+                />
+                {errors.anticoagulantes_detalle && (
+                  <div style={S.error}>{errors.anticoagulantes_detalle}</div>
+                )}
+              </div>
+            )}
           </div>
         ))}
+
+        <div style={{ ...S.row, gridColumn:"1/-1" }}>
+          <label style={S.label}>Medicamentos actuales</label>
+          <textarea
+            style={S.textarea}
+            value={form.medicamentos}
+            onChange={(e)=>setForm(f=>({ ...f, medicamentos: e.target.value }))}
+            placeholder="Nombre – dosis – frecuencia (uno por línea)"
+          />
+          <div style={S.hint}>Ej.: Losartán 50 mg cada 12 h; Metformina 850 mg cada 12 h…</div>
+        </div>
+
+        <div style={{ ...S.row, gridColumn:"1/-1" }}>
+          <label style={S.label}>Cirugías previas</label>
+          <textarea
+            style={S.textarea}
+            value={form.cirugiasPrevias}
+            onChange={(e)=>setForm(f=>({ ...f, cirugiasPrevias: e.target.value }))}
+            placeholder="Ej.: Colecistectomía 2015; Meniscectomía 2020…"
+          />
+        </div>
 
         <div style={{ ...S.row, gridColumn:"1/-1" }}>
           <label style={S.label}>Alergias (texto libre)</label>
@@ -99,12 +185,42 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
         </div>
 
         <div style={{ ...S.row, gridColumn:"1/-1" }}>
+          <label style={S.label}>Tabaquismo</label>
+          <input
+            style={S.input}
+            value={form.tabaco}
+            onChange={(e)=>setForm(f=>({ ...f, tabaco: e.target.value }))}
+            placeholder="No / Ex / Actual (frecuencia)"
+          />
+        </div>
+
+        <div style={{ ...S.row, gridColumn:"1/-1" }}>
+          <label style={S.label}>Alcohol</label>
+          <input
+            style={S.input}
+            value={form.alcohol}
+            onChange={(e)=>setForm(f=>({ ...f, alcohol: e.target.value }))}
+            placeholder="No / Ocasional / Frecuente"
+          />
+        </div>
+
+        <div style={{ ...S.row, gridColumn:"1/-1" }}>
           <label style={S.label}>Otras comorbilidades (opcional)</label>
           <input
             style={S.input}
             value={form.otras}
             onChange={(e)=>setForm(f=>({ ...f, otras: e.target.value }))}
             placeholder="Ej.: VIH, enfermedad hepática, epilepsia…"
+          />
+        </div>
+
+        <div style={{ ...S.row, gridColumn:"1/-1" }}>
+          <label style={S.label}>Observaciones</label>
+          <textarea
+            style={S.textarea}
+            value={form.observaciones}
+            onChange={(e)=>setForm(f=>({ ...f, observaciones: e.target.value }))}
+            placeholder="Notas adicionales relevantes para el preoperatorio"
           />
         </div>
       </div>
