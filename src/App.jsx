@@ -417,7 +417,13 @@ function App() {
               <button
                 type="button"
                 style={{ ...styles.toolbarButton, backgroundColor: modulo === 'preop' ? '#004B94' : '#0072CE' }}
-                onClick={() => { setModulo('preop'); sessionStorage.setItem('modulo', 'preop'); }}
+                onClick={() => {
+                  setModulo('preop');
+                  sessionStorage.setItem('modulo', 'preop');
+                  try {
+                    document.querySelector('[data-preview-col]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  } catch {}
+                }}
               >
                 EXÁMENES PREQUIRÚRGICOS
               </button>
