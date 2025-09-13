@@ -14,6 +14,9 @@ import IAModulo from './modules/IAModulo.jsx'; // <-- NUEVO
 import AvisoLegal from './components/AvisoLegal.jsx'; // <-- AVISO LEGAL
 import FormularioResonancia from './components/FormularioResonancia.jsx'; // <-- MIN: import checklist RNM
 
+// >>> NUEVO: modal de Comorbilidades (no tocar nada más)
+import FormularioComorbilidades from './components/FormularioComorbilidades.jsx';
+
 const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
 
 function App() {
@@ -77,6 +80,15 @@ function App() {
     }, 0);
   };
   // ----------------------
+
+  // >>> NUEVO: estado para Comorbilidades (no interfiere con nada más)
+  const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
+  const [comorbilidades, setComorbilidades] = useState(null);
+  const handleSaveComorbilidades = (payload) => {
+    setComorbilidades(payload);
+    setMostrarVistaPrevia(true);
+    if (!modulo) setModulo('preop'); // enfoca preop si no hay módulo seleccionado
+  };
 
   useEffect(() => {
     // Restaurar datos del paciente si existen
@@ -368,7 +380,7 @@ function App() {
         {/* NUEVO: Tabs + esquema anterior/posterior */}
         <EsquemaToggleTabs vista={vista} onChange={setVista} />
 
-        {/* (4) Alineación/proporción: ancho 320px para calzar base 1024x1024 */}
+        {/* (4) Alineación/proporción: ancho 400px */}
         {vista === 'anterior' ? (
           <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
         ) : (
@@ -399,7 +411,6 @@ function App() {
       {/* Columna izquierda: formulario */}
       <div style={styles.formularioContainer}>
         <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
-        {/* (SE ELIMINA el bloque de botones aquí para evitar superposición) */}
       </div>
 
       {/* Columna derecha: toolbar + previews y acciones */}
@@ -514,11 +525,37 @@ function App() {
         )}
 
         {mostrarVistaPrevia && modulo === 'preop' && (
-          <PreopModulo initialDatos={datosPaciente} />
+          <>
+            {/* Botón para abrir Comorbilidades en PREOP (opcional) */}
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+              <button
+                type="button"
+                onClick={() => setMostrarComorbilidades(true)}
+                style={{ ...styles.toolbarButton, maxWidth: 260 }}
+              >
+                COMORBILIDADES
+              </button>
+            </div>
+
+            <PreopModulo initialDatos={datosPaciente} />
+          </>
         )}
 
         {mostrarVistaPrevia && modulo === 'generales' && (
-          <GeneralesModulo initialDatos={datosPaciente} />
+          <>
+            {/* Botón para abrir Comorbilidades en GENERALES (opcional) */}
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+              <button
+                type="button"
+                onClick={() => setMostrarComorbilidades(true)}
+                style={{ ...styles.toolbarButton, maxWidth: 260 }}
+              >
+                COMORBILIDADES
+              </button>
+            </div>
+
+            <GeneralesModulo initialDatos={datosPaciente} />
+          </>
         )}
 
         {mostrarVistaPrevia && modulo === 'ia' && (
@@ -543,6 +580,16 @@ function App() {
         </div>
       )}
       {/* ========================= */}
+
+      {/* ===== NUEVO: modal de Comorbilidades ===== */}
+      {mostrarComorbilidades && (
+        <FormularioComorbilidades
+          initial={comorbilidades || {}}
+          onSave={handleSaveComorbilidades}
+          onCancel={() => setMostrarComorbilidades(false)}
+        />
+      )}
+      {/* ========================================= */}
     </div>
   );
 }
@@ -558,7 +605,7 @@ const styles = {
     minHeight: '100vh',
   },
   esquemaContainer: {
-    flex: '0 0 400px',       // (4) ancho indicado para calce visual
+    flex: '0 0 400px',
     maxWidth: '400px',
   },
   formularioContainer: {
