@@ -143,12 +143,12 @@ export default function PreopModulo({ initialDatos }) {
     setPaso("comorbilidades");
   };
 
-  // ========= Paso 1: Recibir Comorbilidades (TU FORMULARIO)
+  // ========= Paso 1: Recibir Comorbilidades (nuevo API de tu formulario)
   const handleEnviarComorbilidades = async (formData) => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
 
-    const limpio = normalizarComorbilidades(formData);
+    const limpio = normalizarComorbilidades(formData); // <-- mapea al shape esperado por backend
     setComorbilidades(limpio);
     sessionStorage.setItem(`preop_comorbilidades_${idPago}`, JSON.stringify(limpio));
 
@@ -461,14 +461,17 @@ export default function PreopModulo({ initialDatos }) {
             <div style={styles.modal}>
               <div style={styles.modalCard}>
                 <h4 style={{ marginTop: 0 }}>Formulario de Comorbilidades</h4>
-                {/* Tu componente EXACTO */}
+
+                {/* USO CORRECTO del componente */}
                 <FormularioComorbilidades
-                  initialValues={comorbilidades}
-                  onSubmit={handleEnviarComorbilidades}
+                  initial={comorbilidades || {}}
+                  onSave={handleEnviarComorbilidades}
+                  onCancel={() => setPaso("idle")}
                 />
+
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                   <button style={{ ...styles.btn, background: "#777" }} onClick={() => setPaso("idle")}>
-                    Cancelar
+                    Cerrar
                   </button>
                 </div>
               </div>
@@ -536,17 +539,39 @@ export default function PreopModulo({ initialDatos }) {
 
 /* ================= Helpers ================= */
 
+/**
+ * Adapta el payload devuelto por FormularioComorbilidades (nuevo)
+ * a un shape estable y claro para el backend.
+ */
 function normalizarComorbilidades(c) {
   if (!c) return {};
   return {
-    antecedentes: c.antecedentes || {},
-    cirugiasPrevias: (c.cirugiasPrevias || "").toString(),
-    alergias: (c.alergias || "").toString(),
-    medicamentos: (c.medicamentos || "").toString(),
-    anticoagulantes: c.anticoagulantes || { usa: false, detalle: "" },
-    tabaco: (c.tabaco || "").toString(),
-    alcohol: (c.alcohol || "").toString(),
-    observaciones: (c.observaciones || "").toString(),
+    // Booleans de comorbilidades principales
+    hta: !!c.hta,
+    dm2: !!c.dm2,
+    dislipidemia: !!c.dislipidemia,
+    obesidad: !!c.obesidad,
+    tabaquismo: !!c.tabaquismo,
+    epoc_asma: !!c.epoc_asma,
+    cardiopatia: !!c.cardiopatia,
+    erc: !!c.erc,
+    hipotiroidismo: !!c.hipotiroidismo,
+    artritis_reumatoide: !!c.artritis_reumatoide,
+
+    // Anticoagulantes (objeto con usa/detalle)
+    anticoagulantes: {
+      usa: !!c.anticoagulantes,
+      detalle: (c.anticoagulantes_detalle || "").toString(),
+    },
+
+    // Alergias (sí/no + detalle breve)
+    alergias: {
+      tiene: !!c.alergias_flag,
+      detalle: (c.alergias_detalle || "").toString(),
+    },
+
+    // Otros (texto breve opcional)
+    otras: (c.otras || "").toString(),
   };
 }
 
