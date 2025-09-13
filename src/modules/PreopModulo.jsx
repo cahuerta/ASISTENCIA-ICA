@@ -24,7 +24,7 @@ const EXAMENES_FIJOS = [
   "ECG DE REPOSO",
 ];
 
-// Opciones de cirugía (ajústalas si quieres)
+// Opciones de cirugía
 const TIPOS_CIRUGIA = [
   "Artroplastia total de cadera (ATC)",
   "Artroplastia total de rodilla (ATR)",
@@ -51,14 +51,18 @@ export default function PreopModulo({ initialDatos }) {
       const idPago = sessionStorage.getItem("idPago") || "";
       const raw = idPago ? sessionStorage.getItem(`preop_comorbilidades_${idPago}`) : null;
       return raw ? JSON.parse(raw) : {};
-    } catch { return {}; }
+    } catch {
+      return {};
+    }
   });
 
   const [tipoCirugia, setTipoCirugia] = useState(() => {
     try {
       const idPago = sessionStorage.getItem("idPago") || "";
       return idPago ? sessionStorage.getItem(`preop_tipoCirugia_${idPago}`) || "" : "";
-    } catch { return ""; }
+    } catch {
+      return "";
+    }
   });
   const [tipoCirugiaLibre, setTipoCirugiaLibre] = useState("");
 
@@ -67,13 +71,17 @@ export default function PreopModulo({ initialDatos }) {
       const idPago = sessionStorage.getItem("idPago") || "";
       const raw = idPago ? sessionStorage.getItem(`preop_examenes_IA_${idPago}`) : null;
       return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   });
   const [informeIA, setInformeIA] = useState(() => {
     try {
       const idPago = sessionStorage.getItem("idPago") || "";
       return idPago ? sessionStorage.getItem(`preop_informe_IA_${idPago}`) || "" : "";
-    } catch { return ""; }
+    } catch {
+      return "";
+    }
   });
 
   // ===== Montaje: sincroniza datos y detecta retorno de pago
@@ -93,7 +101,9 @@ export default function PreopModulo({ initialDatos }) {
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
-        try { await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`); } catch {}
+        try {
+          await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`);
+        } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
           pollerRef.current = null;
@@ -117,7 +127,8 @@ export default function PreopModulo({ initialDatos }) {
     if (
       !datos.nombre?.trim() ||
       !datos.rut?.trim() ||
-      !Number.isFinite(edadNum) || edadNum <= 0 ||
+      !Number.isFinite(edadNum) ||
+      edadNum <= 0 ||
       !datos.dolor?.trim()
     ) {
       alert("Complete nombre, RUT, edad (>0) y dolor antes de continuar.");
@@ -126,7 +137,7 @@ export default function PreopModulo({ initialDatos }) {
 
     const idPago =
       sessionStorage.getItem("idPago") ||
-      ("preop_" + Date.now() + "_" + Math.floor(Math.random() * 10000));
+      "preop_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
 
     sessionStorage.setItem("idPago", idPago);
     sessionStorage.setItem("modulo", "preop");
@@ -143,12 +154,12 @@ export default function PreopModulo({ initialDatos }) {
     setPaso("comorbilidades");
   };
 
-  // ========= Paso 1: Recibir Comorbilidades (nuevo API de tu formulario)
+  // ========= Paso 1: Recibir Comorbilidades
   const handleEnviarComorbilidades = async (formData) => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
 
-    const limpio = normalizarComorbilidades(formData); // <-- mapea al shape esperado por backend
+    const limpio = normalizarComorbilidades(formData); // ← alineado a preopIA.js
     setComorbilidades(limpio);
     sessionStorage.setItem(`preop_comorbilidades_${idPago}`, JSON.stringify(limpio));
 
@@ -181,7 +192,12 @@ export default function PreopModulo({ initialDatos }) {
       await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idPago, datosPaciente: { ...datos }, comorbilidades, tipoCirugia: seleccion }),
+        body: JSON.stringify({
+          idPago,
+          datosPaciente: { ...datos },
+          comorbilidades,
+          tipoCirugia: seleccion,
+        }),
       });
     } catch {}
 
@@ -206,7 +222,7 @@ export default function PreopModulo({ initialDatos }) {
         },
         comorbilidades,
         tipoCirugia,
-        catalogoExamenes: EXAMENES_FIJOS, // para forzar nombres exactos
+        catalogoExamenes: EXAMENES_FIJOS, // mantén nombres exactos
       };
 
       const res = await fetch(`${BACKEND_BASE}/ia-preop`, {
@@ -223,7 +239,7 @@ export default function PreopModulo({ initialDatos }) {
         informe = (data?.informeIA || "").toString();
       }
 
-      const finalExamenes = (examenes && examenes.length) ? examenes : EXAMENES_FIJOS;
+      const finalExamenes = examenes && examenes.length ? examenes : EXAMENES_FIJOS;
       const finalInforme = informe || "Informe IA no disponible por el momento.";
 
       setExamenesIA(finalExamenes);
@@ -396,16 +412,22 @@ export default function PreopModulo({ initialDatos }) {
 
       {/* Datos Paciente */}
       <div style={{ marginBottom: 10 }}>
-        <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
-        <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
-        <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
+        <div>
+          <strong>Paciente:</strong> {datos?.nombre || "—"}
+        </div>
+        <div>
+          <strong>RUT:</strong> {datos?.rut || "—"}
+        </div>
+        <div>
+          <strong>Edad:</strong> {datos?.edad || "—"}
+        </div>
         <div>
           <strong>Clínica:</strong>{" "}
           {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
         </div>
       </div>
 
-      {/* PREVIEW (si ya hay resultados o estamos en preview) */}
+      {/* PREVIEW */}
       {(paso === "preview" || examenesIA) && (
         <>
           <div>
@@ -434,7 +456,7 @@ export default function PreopModulo({ initialDatos }) {
           disabled={descargando}
           title={mensajeDescarga || "Verificar y descargar"}
         >
-          {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
+          {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
         </button>
       ) : (
         <>
@@ -462,7 +484,6 @@ export default function PreopModulo({ initialDatos }) {
               <div style={styles.modalCard}>
                 <h4 style={{ marginTop: 0 }}>Formulario de Comorbilidades</h4>
 
-                {/* USO CORRECTO del componente */}
                 <FormularioComorbilidades
                   initial={comorbilidades || {}}
                   onSave={handleEnviarComorbilidades}
@@ -540,13 +561,32 @@ export default function PreopModulo({ initialDatos }) {
 /* ================= Helpers ================= */
 
 /**
- * Adapta el payload devuelto por FormularioComorbilidades (nuevo)
- * a un shape estable y claro para el backend.
+ * Normaliza el payload del formulario para que coincida con lo que espera el backend (preopIA.js):
+ * - Booleans planos para comorbilidades (hta, dm2, …, anticoagulantes, artritis_reumatoide)
+ * - Strings para: alergias, medicamentos, cirugiasPrevias, tabaco, alcohol, observaciones, otras
+ * - Campo adicional 'anticoagulantes_detalle' (string)
  */
-function normalizarComorbilidades(c) {
-  if (!c) return {};
+function normalizarComorbilidades(c = {}) {
+  // permitir tanto objetos {alergias:{tiene,detalle}} como strings
+  const alergiaStr =
+    typeof c.alergias === "string"
+      ? c.alergias
+      : c.alergias_flag
+      ? String(c.alergias_detalle || "").trim()
+      : "";
+
+  const anticoagulantesBool =
+    typeof c.anticoagulantes === "boolean"
+      ? c.anticoagulantes
+      : !!c?.anticoagulantes?.usa;
+
+  const anticoagulantesDetalle =
+    typeof c.anticoagulantes_detalle === "string"
+      ? c.anticoagulantes_detalle
+      : (c?.anticoagulantes?.detalle || "").toString();
+
   return {
-    // Booleans de comorbilidades principales
+    // booleans principales
     hta: !!c.hta,
     dm2: !!c.dm2,
     dislipidemia: !!c.dislipidemia,
@@ -558,19 +598,17 @@ function normalizarComorbilidades(c) {
     hipotiroidismo: !!c.hipotiroidismo,
     artritis_reumatoide: !!c.artritis_reumatoide,
 
-    // Anticoagulantes (objeto con usa/detalle)
-    anticoagulantes: {
-      usa: !!c.anticoagulantes,
-      detalle: (c.anticoagulantes_detalle || "").toString(),
-    },
+    // anticoagulantes como espera el backend
+    anticoagulantes: anticoagulantesBool,
+    anticoagulantes_detalle: anticoagulantesDetalle,
 
-    // Alergias (sí/no + detalle breve)
-    alergias: {
-      tiene: !!c.alergias_flag,
-      detalle: (c.alergias_detalle || "").toString(),
-    },
-
-    // Otros (texto breve opcional)
+    // textos libres esperados por el backend
+    alergias: alergiaStr,
+    medicamentos: (c.medicamentos || c.meds || "").toString(),
+    cirugiasPrevias: (c.cirugiasPrevias || c.cirugias_previas || c.cirugias || "").toString(),
+    tabaco: (c.tabaco || (c.tabaquismo ? "Sí" : "")).toString(),
+    alcohol: (c.alcohol || "").toString(),
+    observaciones: (c.observaciones || "").toString(),
     otras: (c.otras || "").toString(),
   };
 }
@@ -593,7 +631,6 @@ function limpiarListaExamenesContraCatalogo(lista, catalogo) {
 }
 
 /* ================= Estilos ================= */
-
 const styles = {
   card: {
     background: "#fff",
