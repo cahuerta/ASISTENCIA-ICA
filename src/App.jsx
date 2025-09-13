@@ -12,9 +12,9 @@ import PreopModulo from './modules/PreopModulo.jsx';
 import GeneralesModulo from './modules/GeneralesModulo.jsx';
 import IAModulo from './modules/IAModulo.jsx'; // <-- NUEVO
 import AvisoLegal from './components/AvisoLegal.jsx'; // <-- AVISO LEGAL
-import FormularioResonancia from './components/FormularioResonancia.jsx'; // <-- MIN: import checklist RNM
+import FormularioResonancia from './components/FormularioResonancia.jsx'; // <-- checklist RNM
 
-// >>> NUEVO: modal de Comorbilidades (no tocar nada más)
+// >>> Modal de Comorbilidades
 import FormularioComorbilidades from './components/FormularioComorbilidades.jsx';
 
 const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
@@ -41,7 +41,7 @@ function App() {
   // (1) Persistencia de vista (anterior/posterior)
   const [vista, setVista] = useState('anterior'); // 'anterior' | 'posterior'
 
-  // ==== MIN: modal reutilizable de RNM (sin cambiar tu lógica) ====
+  // ==== Modal reutilizable de RNM ====
   const [showReso, setShowReso] = useState(false);
   const [resolverReso, setResolverReso] = useState(null);
   const RED_FLAGS = new Set(["marcapasos","coclear_o_neuro","clips_aneurisma","valvula_cardiaca_metal","fragmentos_metalicos"]);
@@ -81,13 +81,14 @@ function App() {
   };
   // ----------------------
 
-  // >>> NUEVO: estado para Comorbilidades (no interfiere con nada más)
+  // >>> Estado para Comorbilidades (igual mecánica que RNM)
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(null);
   const handleSaveComorbilidades = (payload) => {
     setComorbilidades(payload);
     setMostrarVistaPrevia(true);
-    if (!modulo) setModulo('preop'); // enfoca preop si no hay módulo seleccionado
+    setModulo('preop');               // enfoca Preop siempre
+    setMostrarComorbilidades(false);  // cierre desde el padre (como RNM)
   };
 
   useEffect(() => {
@@ -166,7 +167,6 @@ function App() {
   const handleCambiarDato = (campo, valor) => {
     setDatosPaciente((prev) => {
       const next = { ...prev, [campo]: valor };
-      // (2) Persistir selección/datos tras cambios manuales también
       try { sessionStorage.setItem('datosPacienteJSON', JSON.stringify(next)); } catch {}
       return next;
     });
@@ -206,13 +206,13 @@ function App() {
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  // ========= NUEVO: helpers para consultar al backend si hay RM =========
+  // ========= Helpers para consultar al backend si hay RM =========
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return (
       s.includes("resonancia") ||
-      s.includes("resonancia magn") ||   // "magnética/magnetica"
-      /\brm\b/i.test(t)                  // "RM" como palabra
+      s.includes("resonancia magn") ||
+      /\brm\b/i.test(t)
     );
   };
 
@@ -333,7 +333,7 @@ function App() {
       sessionStorage.setItem('idPago', idPagoTmp);
       sessionStorage.setItem('datosPacienteJSON', JSON.stringify({ ...datosPaciente, edad: edadNum }));
 
-      // NUEVO: preguntamos al backend si la orden incluye RM
+      // Preguntamos al backend si la orden incluye RM
       let extras = {};
       const solicitarRM = await detectarResonanciaEnBackend({ ...datosPaciente, edad: edadNum });
 
@@ -377,17 +377,17 @@ function App() {
       />
 
       <div style={styles.esquemaContainer}>
-        {/* NUEVO: Tabs + esquema anterior/posterior */}
+        {/* Tabs + esquema anterior/posterior */}
         <EsquemaToggleTabs vista={vista} onChange={setVista} />
 
-        {/* (4) Alineación/proporción: ancho 400px */}
+        {/* Alineación/proporción: ancho 400px */}
         {vista === 'anterior' ? (
           <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
         ) : (
           <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
         )}
 
-        {/* (3) Mensajería accesible (aria-live) */}
+        {/* Mensajería accesible */}
         <div
           aria-live="polite"
           role="status"
@@ -526,7 +526,7 @@ function App() {
 
         {mostrarVistaPrevia && modulo === 'preop' && (
           <>
-            {/* Botón para abrir Comorbilidades en PREOP (opcional) */}
+            {/* Botón para abrir Comorbilidades en PREOP */}
             <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
               <button
                 type="button"
@@ -543,7 +543,7 @@ function App() {
 
         {mostrarVistaPrevia && modulo === 'generales' && (
           <>
-            {/* Botón para abrir Comorbilidades en GENERALES (opcional) */}
+            {/* Botón para abrir Comorbilidades en GENERALES */}
             <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
               <button
                 type="button"
@@ -563,7 +563,7 @@ function App() {
         )}
       </div>
 
-      {/* ===== MIN: modal RNM ===== */}
+      {/* ===== Modal RNM ===== */}
       {showReso && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.35)', display:'grid', placeItems:'center', zIndex:9999 }}>
           <div style={{ width:'min(900px, 96vw)' }}>
@@ -579,15 +579,18 @@ function App() {
           </div>
         </div>
       )}
-      {/* ========================= */}
 
-      {/* ===== NUEVO: modal de Comorbilidades ===== */}
+      {/* ===== Modal Comorbilidades (mismo overlay que RNM) ===== */}
       {mostrarComorbilidades && (
-        <FormularioComorbilidades
-          initial={comorbilidades || {}}
-          onSave={handleSaveComorbilidades}
-          onCancel={() => setMostrarComorbilidades(false)}
-        />
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.35)', display:'grid', placeItems:'center', zIndex:9999 }}>
+          <div style={{ width:'min(900px, 96vw)' }}>
+            <FormularioComorbilidades
+              initial={comorbilidades || {}}
+              onSave={handleSaveComorbilidades}
+              onCancel={() => setMostrarComorbilidades(false)}
+            />
+          </div>
+        </div>
       )}
       {/* ========================================= */}
     </div>
@@ -621,7 +624,7 @@ const styles = {
     zIndex: 1,
   },
 
-  /* ===== Toolbar (botones de módulo) ahora en la columna derecha ===== */
+  /* ===== Toolbar (botones de módulo) en la columna derecha ===== */
   toolbarSticky: {
     position: 'sticky',
     top: 0,
