@@ -1,19 +1,19 @@
 "use client";
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
+const Z_TOP = 2147483647; // máximo seguro
 const S = {
-  // NUEVO: capa oscura detrás (pantalla completa)
   backdrop: {
     position: "fixed",
     inset: 0,
     background: "rgba(0,0,0,0.35)",
-    zIndex: 9999,
+    zIndex: Z_TOP,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     padding: 16,
   },
-  // NUEVO: contenedor del modal (tarjeta centrada, con scroll interno)
   shell: {
     width: "100%",
     maxWidth: 820,
@@ -59,12 +59,12 @@ const LISTA = [
 ];
 
 export default function FormularioComorbilidades({ initial = {}, onSave, onCancel }) {
+  // ---- estado original (igual que el tuyo)
   const base = LISTA.reduce((acc, it) => ({ ...acc, [it.key]: false }), {});
   const [form, setForm] = useState({
     ...base,
     alergias: "",
     otras: "",
-    // NUEVOS CAMPOS
     medicamentos: "",
     cirugiasPrevias: "",
     anticoagulantes_detalle: "",
@@ -73,10 +73,9 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
     observaciones: "",
     ...initial,
   });
-
   const [errors, setErrors] = useState({});
 
-  // Carga desde sessionStorage si existe
+  // ---- cargar sessionStorage (igual)
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("comorbilidadesJSON");
@@ -88,7 +87,7 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
 
-  // NUEVO: bloquear scroll del body y cierre con ESC
+  // ---- bloquear scroll + ESC (igual)
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -114,7 +113,6 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
   const guardar = () => {
     if (!validar()) return;
     const payload = {
-      // flags sí/no
       hta: !!form.hta,
       dm2: !!form.dm2,
       dislipidemia: !!form.dislipidemia,
@@ -127,11 +125,9 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
       anticoagulantes: !!form.anticoagulantes,
       artritis_reumatoide: !!form.artritis_reumatoide,
 
-      // existentes
       alergias: (form.alergias || "").trim(),
       otras: (form.otras || "").trim(),
 
-      // nuevos
       medicamentos: (form.medicamentos || "").trim(),
       cirugiasPrevias: (form.cirugiasPrevias || "").trim(),
       anticoagulantes_detalle: (form.anticoagulantes_detalle || "").trim(),
@@ -144,13 +140,14 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
     onSave?.(payload);
   };
 
-  // NUEVO: cerrar al hacer clic fuera de la tarjeta
+  // ---- cerrar por clic fuera
   const onBackdropClick = (e) => {
     if (e.target === e.currentTarget) onCancel?.();
   };
 
-  return (
-    <div style={S.backdrop} onMouseDown={onBackdropClick}>
+  // ======== PORTAL AL BODY (clave para ganar cualquier z-index/stacking) ========
+  return createPortal(
+    <div style={S.backdrop} onMouseDown={onBackdropClick} role="dialog" aria-modal="true">
       <div style={S.shell} onMouseDown={(e) => e.stopPropagation()}>
         <div style={S.card}>
           <div style={S.title}>Comorbilidades</div>
@@ -272,6 +269,7 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
