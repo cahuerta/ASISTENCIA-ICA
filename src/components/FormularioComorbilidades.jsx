@@ -31,11 +31,18 @@ const S = {
   grid: { display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fit, minmax(240px, 1fr))" },
   row: { display:"grid", gap:6 },
   label: { fontWeight:600, fontSize:13 },
-  seg: { display:"flex", gap:6 },
+  seg: { display:"flex", gap:6, width:"100%" },
+  // 👉 ancho fijo 50/50 para uniformidad en todos los ítems
   segBtn: (active) => ({
-    flex:1, padding:"10px 12px", borderRadius:8, border:"1px solid #d0d7de",
-    background: active ? "#0072CE" : "#fff", color: active ? "#fff" : "#111", cursor:"pointer",
-    fontWeight:600, textAlign:"center"
+    flex: "0 0 50%",
+    padding:"10px 12px",
+    borderRadius:8,
+    border:"1px solid #d0d7de",
+    background: active ? "#0072CE" : "#fff",
+    color: active ? "#fff" : "#111",
+    cursor:"pointer",
+    fontWeight:600,
+    textAlign:"center"
   }),
   input:{ width:"100%", padding:10, borderRadius:8, border:"1px solid #d0d7de", background:"#fff" },
   actions:{ display:"flex", gap:10, marginTop:14, position:"sticky", bottom:0, background:"#fff", paddingTop:8 },
@@ -45,31 +52,29 @@ const S = {
   error: { fontSize:12, color:"#B42318", marginTop:4 }
 };
 
+// 🔤 Etiquetas actualizadas
 const LISTA = [
   { key:"hta", label:"Hipertensión arterial" },
   { key:"dm2", label:"Diabetes mellitus tipo 2" },
   { key:"dislipidemia", label:"Dislipidemia" },
   { key:"obesidad", label:"Obesidad" },
-  { key:"tabaquismo", label:"Tabaquismo activo" }, // lo mantengo como flag por si lo necesitas binario
+  { key:"tabaquismo", label:"Tabaco" },
   { key:"epoc_asma", label:"EPOC / Asma" },
   { key:"cardiopatia", label:"Cardiopatía (coronaria/insuficiencia)" },
   { key:"erc", label:"Enfermedad renal crónica" },
   { key:"hipotiroidismo", label:"Hipotiroidismo" },
   { key:"anticoagulantes", label:"Uso de anticoagulantes/antiagregantes" },
-  { key:"artritis_reumatoide", label:"Artritis reumatoide u otra autoinmune" },
+  { key:"artritis_reumatoide", label:"Artritis reumatoide / autoinmune" },
 ];
 
 export default function FormularioComorbilidades({ initial = {}, onSave, onCancel }) {
   const base = LISTA.reduce((acc, it) => ({ ...acc, [it.key]: false }), {});
   const [form, setForm] = useState({
     ...base,
-
-    // nuevo modelo simplificado
-    alergias_flag: false,              // Sí/No
-    alergias_detalle: "",              // corto cuando Sí
-    otras: "",                         // texto corto “Otros”
-    anticoagulantes_detalle: "",       // se mantiene cuando anticoagulantes = Sí
-
+    alergias_flag: false,
+    alergias_detalle: "",
+    otras: "",
+    anticoagulantes_detalle: "",
     ...initial,
   });
 
@@ -83,7 +88,6 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
         setForm(prev => ({ ...prev, ...data }));
       }
     } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial]);
 
   useEffect(() => {
@@ -114,12 +118,11 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
   const guardar = () => {
     if (!validar()) return;
     const payload = {
-      // flags sí/no
       hta: !!form.hta,
       dm2: !!form.dm2,
       dislipidemia: !!form.dislipidemia,
       obesidad: !!form.obesidad,
-      tabaquismo: !!form.tabaquismo,             // binario (no texto)
+      tabaquismo: !!form.tabaquismo,
       epoc_asma: !!form.epoc_asma,
       cardiopatia: !!form.cardiopatia,
       erc: !!form.erc,
@@ -127,7 +130,6 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
       anticoagulantes: !!form.anticoagulantes,
       artritis_reumatoide: !!form.artritis_reumatoide,
 
-      // simplificados
       alergias_flag: !!form.alergias_flag,
       alergias_detalle: (form.alergias_detalle || "").slice(0, MAX_ALERGIA).trim(),
       otras: (form.otras || "").slice(0, MAX_OTRAS).trim(),
@@ -135,7 +137,9 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
     };
 
     sessionStorage.setItem("comorbilidadesJSON", JSON.stringify(payload));
-    onSave?.(payload);
+
+    // ⛳️ ahora cierra siempre después de guardar
+    try { onSave?.(payload); } finally { onCancel?.(); }
   };
 
   const onBackdropClick = (e) => {
@@ -149,7 +153,6 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
           <div style={S.title}>Comorbilidades</div>
 
           <div style={S.grid}>
-            {/* Lista de comorbilidades binarias */}
             {LISTA.map(({ key, label }) => (
               <div key={key} style={S.row}>
                 <label style={S.label}>{label}</label>
@@ -172,7 +175,6 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
                   </button>
                 </div>
 
-                {/* Detalle solo si usa anticoagulantes */}
                 {key === "anticoagulantes" && form.anticoagulantes === true && (
                   <div>
                     <input
@@ -189,7 +191,7 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
               </div>
             ))}
 
-            {/* Alergias: Sí/No + texto corto cuando Sí */}
+            {/* Alergias */}
             <div style={{ ...S.row, gridColumn:"1/-1" }}>
               <label style={S.label}>Alergias</label>
               <div style={S.seg} role="group" aria-label="Alergias">
@@ -224,12 +226,11 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
                     <span>Indique cuál(es)</span>
                     <span>{(form.alergias_detalle || "").length}/{MAX_ALERGIA}</span>
                   </div>
-                  {errors.alergias_detalle && <div style={S.error}>{errors.alergias_detalle}</div>}
                 </div>
               )}
             </div>
 
-            {/* Otros: texto corto acotado */}
+            {/* Otros */}
             <div style={{ ...S.row, gridColumn:"1/-1" }}>
               <label style={S.label}>Otros (opcional)</label>
               <input
