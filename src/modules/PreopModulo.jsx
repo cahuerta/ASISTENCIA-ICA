@@ -18,7 +18,7 @@ const TIPOS_CIRUGIA = [
 ];
 
 export default function PreopModulo({ initialDatos }) {
-  // ===== Estados base existentes
+  // ===== Estados base
   const [datos, setDatos] = useState(initialDatos || {});
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [descargando, setDescargando] = useState(false);
@@ -34,17 +34,26 @@ export default function PreopModulo({ initialDatos }) {
       const idPago = sessionStorage.getItem("idPago") || "";
       const raw = idPago ? sessionStorage.getItem(`preop_comorbilidades_${idPago}`) : null;
       return raw ? JSON.parse(raw) : {};
-    } catch { return {}; }
+    } catch {
+      return {};
+    }
   });
 
-  // Tipo de cirugía (lee preferencia guardada por FormularioPaciente)
+  // Tipo de cirugía (preferimos lo que viene del padre; si no, sessionStorage)
   const [tipoCirugia, setTipoCirugia] = useState(() => {
     try {
+      const fromParent = String(initialDatos?.tipoCirugia || "").trim();
+      if (fromParent) return fromParent;
+
       const preset = sessionStorage.getItem("preop_tipoCirugia") || "";
       const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
-      if (preset && preset.startsWith("Otro") && otro.trim()) return otro.trim();
+      if (preset && preset.startsWith("Otro")) {
+        return otro.trim() || ""; // no usar "Otro..." como valor final
+      }
       return preset || "";
-    } catch { return ""; }
+    } catch {
+      return "";
+    }
   });
   const [tipoCirugiaLibre, setTipoCirugiaLibre] = useState("");
 
@@ -54,13 +63,17 @@ export default function PreopModulo({ initialDatos }) {
       const idPago = sessionStorage.getItem("idPago") || "";
       const raw = idPago ? sessionStorage.getItem(`preop_examenes_IA_${idPago}`) : null;
       return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   });
   const [informeIA, setInformeIA] = useState(() => {
     try {
       const idPago = sessionStorage.getItem("idPago") || "";
       return idPago ? sessionStorage.getItem(`preop_informe_IA_${idPago}`) || "" : "";
-    } catch { return ""; }
+    } catch {
+      return "";
+    }
   });
 
   // ===== Montaje: sincroniza datos y detecta retorno de pago
@@ -80,7 +93,9 @@ export default function PreopModulo({ initialDatos }) {
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
-        try { await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`); } catch {}
+        try {
+          await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`);
+        } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
           pollerRef.current = null;
@@ -104,7 +119,8 @@ export default function PreopModulo({ initialDatos }) {
     if (
       !datos.nombre?.trim() ||
       !datos.rut?.trim() ||
-      !Number.isFinite(edadNum) || edadNum <= 0 ||
+      !Number.isFinite(edadNum) ||
+      edadNum <= 0 ||
       !datos.dolor?.trim()
     ) {
       alert("Complete nombre, RUT, edad (>0) y dolor antes de continuar.");
@@ -113,7 +129,7 @@ export default function PreopModulo({ initialDatos }) {
 
     const idPago =
       sessionStorage.getItem("idPago") ||
-      ("preop_" + Date.now() + "_" + Math.floor(Math.random() * 10000));
+      "preop_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
 
     sessionStorage.setItem("idPago", idPago);
     sessionStorage.setItem("modulo", "preop");
@@ -130,7 +146,7 @@ export default function PreopModulo({ initialDatos }) {
     setPaso("comorbilidades");
   };
 
-  // ========= Paso 1: Recibir Comorbilidades (tu formulario)
+  // ========= Paso 1: Recibir Comorbilidades (tu componente, modal arriba)
   const handleEnviarComorbilidades = async (formData) => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
@@ -140,9 +156,17 @@ export default function PreopModulo({ initialDatos }) {
     sessionStorage.setItem(`preop_comorbilidades_${idPago}`, JSON.stringify(limpio));
 
     // Determinar tipo de cirugía “efectivo” desde sessionStorage si ya existe
-    const preset = (sessionStorage.getItem("preop_tipoCirugia") || "").trim();
-    const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").trim();
-    const seleccion = preset && preset.startsWith("Otro") ? (otro || preset) : preset;
+    const presetRaw = (sessionStorage.getItem("preop_tipoCirugia") || "").trim();
+    const otroRaw = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").trim();
+
+    let seleccion = "";
+    if (presetRaw) {
+      if (presetRaw.startsWith("Otro")) {
+        if (otroRaw) seleccion = otroRaw; // solo si el "Otro" fue especificado
+      } else {
+        seleccion = presetRaw;
+      }
+    }
 
     try {
       await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
@@ -161,7 +185,7 @@ export default function PreopModulo({ initialDatos }) {
       setTipoCirugia(seleccion);
       await llamarIAyConstruirPreview(seleccion, limpio);
     } else {
-      setPaso("cirugia");
+      setPaso("cirugia"); // pedir tipo de cirugía en modal arriba si aún no lo tenemos
     }
   };
 
@@ -174,6 +198,7 @@ export default function PreopModulo({ initialDatos }) {
     if (!seleccion) return alert("Seleccione el tipo de cirugía.");
     if (seleccion.startsWith("Otro") && !tipoCirugiaLibre.trim())
       return alert("Especifique el tipo de cirugía en 'Otro'.");
+
     if (seleccion.startsWith("Otro")) seleccion = tipoCirugiaLibre.trim();
 
     setTipoCirugia(seleccion);
@@ -195,7 +220,7 @@ export default function PreopModulo({ initialDatos }) {
     await llamarIAyConstruirPreview(seleccion, comorbilidades);
   };
 
-  // ========= Paso 3: IA → examenes/informe → PREVIEW (sin fallback)
+  // ========= Paso 3: IA → examenes/informe → PREVIEW (sin catálogo fijo)
   const llamarIAyConstruirPreview = async (tipoSel, comorb) => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
@@ -213,7 +238,6 @@ export default function PreopModulo({ initialDatos }) {
         },
         comorbilidades: comorb || comorbilidades || {},
         tipoCirugia: tipoSel || tipoCirugia || "",
-        // ❌ sin catálogo fijo: dejamos que el backend IA decida
       };
 
       const res = await fetch(`${BACKEND_BASE}/ia-preop`, {
@@ -404,7 +428,7 @@ export default function PreopModulo({ initialDatos }) {
         <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
         <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
         <div>
-          <strong>Clínica:</strong>{" "}
+          <strong>Motivo/Área:</strong>{" "}
           {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
         </div>
         {tipoCirugia ? (
@@ -548,10 +572,9 @@ export default function PreopModulo({ initialDatos }) {
 }
 
 /* ================= Helpers ================= */
-
 function normalizarComorbilidades(c) {
   if (!c) return {};
-  // Mapeo compatible con tu backend preopIA.js (booleans + textos)
+  // Estructura compatible con tu backend (booleans + objetos para alergias/anticoagulantes)
   return {
     hta: !!c.hta,
     dm2: !!c.dm2,
@@ -564,14 +587,27 @@ function normalizarComorbilidades(c) {
     hipotiroidismo: !!c.hipotiroidismo,
     artritis_reumatoide: !!c.artritis_reumatoide,
 
-    alergias: (c.alergias || "").toString(),
+    // Alergias
+    alergias:
+      typeof c.alergias_flag !== "undefined" || typeof c.alergias_detalle !== "undefined"
+        ? {
+            tiene: !!c.alergias_flag,
+            detalle: (c.alergias_detalle || "").toString(),
+          }
+        : (c.alergias || "").toString(),
+
+    // Anticoagulantes (objeto con usa/detalle) para que el backend pueda incluir el detalle en el informe
+    anticoagulantes: {
+      usa: !!c.anticoagulantes,
+      detalle: (c.anticoagulantes_detalle || "").toString(),
+    },
+
+    // Otros textos
+    otras: (c.otras || "").toString(),
     medicamentos: (c.medicamentos || "").toString(),
     cirugiasPrevias: (c.cirugiasPrevias || "").toString(),
-    anticoagulantes: !!c.anticoagulantes,
-    anticoagulantes_detalle: (c.anticoagulantes_detalle || "").toString(),
     tabaco: (c.tabaco || "").toString(),
     alcohol: (c.alcohol || "").toString(),
-    otras: (c.otras || "").toString(),
     observaciones: (c.observaciones || "").toString(),
   };
 }
