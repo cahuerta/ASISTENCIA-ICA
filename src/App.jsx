@@ -1,36 +1,36 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-
 /* ESQUEMA */
 import EsquemaAnterior from './EsquemaAnterior.jsx';
 import EsquemaPosterior from './EsquemaPosterior.jsx';
 import EsquemaToggleTabs from './EsquemaToggleTabs.jsx';
 
-/* FORM + PREVIEW */
+/* MÓDULOS Y COMPONENTES */
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
-
-/* PAGO + MÓDULOS */
 import { irAPagoKhipu } from './PagoKhipu.jsx';
 import PreopModulo from './modules/PreopModulo.jsx';
 import GeneralesModulo from './modules/GeneralesModulo.jsx';
 import IAModulo from './modules/IAModulo.jsx';
-
-/* AVISOS + MODALES */
 import AvisoLegal from './components/AvisoLegal.jsx';
 import FormularioResonancia from './components/FormularioResonancia.jsx';
 import FormularioComorbilidades from './components/FormularioComorbilidades.jsx';
 
+/* THEME (JSON) */
+import theme from './theme.json';
+
 const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
 
-/* ===== Paleta ICA ===== */
-const ICA = {
-  primary: '#0B2C5E',        // azul marino
-  primaryHover: '#0E3770',
-  primaryActive: '#072046',
-  accent: '#C2A86A',         // dorado
-  bg: '#F5F7FA',             // fondo
-  text: '#0B2C5E',
+/* Mapea con fallback por si falta alguna clave en el JSON */
+const T = {
+  primary: theme?.primary || '#0072CE',
+  primaryHover: theme?.primaryHover || '#0B64B3',
+  accent: theme?.accent || '#00B3B8',
+  bg: theme?.bg || '#f0f4f8',
+  surface: theme?.surface || '#ffffff',
+  textPrimary: theme?.textPrimary || '#0A0A0A',
+  textMuted: theme?.textMuted || '#667085',
+  border: theme?.border || '#E5E7EB'
 };
 
 function App() {
@@ -50,12 +50,10 @@ function App() {
   const [mensajeDescarga, setMensajeDescarga] = useState('');
   const pollerRef = useRef(null);
 
-  const [modulo, setModulo] = useState('trauma'); // default visible arriba
-
-  // Vista esquema
+  const [modulo, setModulo] = useState(null); // null | 'trauma' | 'preop' | 'generales' | 'ia'
   const [vista, setVista] = useState('anterior'); // 'anterior' | 'posterior'
 
-  // ===== Modal RNM =====
+  // ==== Modal RNM ====
   const [showReso, setShowReso] = useState(false);
   const [resolverReso, setResolverReso] = useState(null);
   const RED_FLAGS = new Set(["marcapasos","coclear_o_neuro","clips_aneurisma","valvula_cardiaca_metal","fragmentos_metalicos"]);
@@ -75,23 +73,23 @@ function App() {
     ].join('\n');
   };
 
-  // ===== Aviso Legal =====
+  // ---- AVISO LEGAL ----
   const [mostrarAviso, setMostrarAviso] = useState(false);
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
-    setMostrarVistaPrevia(true);   // solo abre el área de preview; la barra ya está arriba
+    setMostrarVistaPrevia(true);
     setPagoRealizado(false);
     setMostrarPago(false);
+    setModulo(null);
+    sessionStorage.removeItem('modulo');
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
     try { window.close(); } catch {}
-    setTimeout(() => {
-      if (!window.closed) window.location.href = 'about:blank';
-    }, 0);
+    setTimeout(() => { if (!window.closed) window.location.href = 'about:blank'; }, 0);
   };
 
-  // ===== Comorbilidades (modal) =====
+  // ---- Comorbilidades (mismo overlay que RNM) ----
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(null);
   const handleSaveComorbilidades = (payload) => {
@@ -101,22 +99,24 @@ function App() {
     setMostrarComorbilidades(false);
   };
 
+  // ====== Montaje / Restauración ======
   useEffect(() => {
-    // Restaurar datos
-    const saved = sessionStorage.getItem('datosPacienteJSON');
-    if (saved) {
-      try { setDatosPaciente(JSON.parse(saved)); } catch {}
-    }
-    // Restaurar módulo
+    // Aplica color de fondo del theme al body
+    try { document.body.style.background = T.bg; } catch {}
+
+    try {
+      const saved = sessionStorage.getItem('datosPacienteJSON');
+      if (saved) setDatosPaciente(JSON.parse(saved));
+    } catch {}
+
     const moduloSS = sessionStorage.getItem('modulo');
     if (['trauma','preop','generales','ia'].includes(moduloSS)) {
       setModulo(moduloSS);
     }
-    // Restaurar vista
+
     const vistaSS = sessionStorage.getItem('vistaEsquema');
     if (vistaSS === 'anterior' || vistaSS === 'posterior') setVista(vistaSS);
 
-    // Pago return
     const params = new URLSearchParams(window.location.search);
     const pago = params.get('pago');
     const idPagoURL = params.get('idPago');
@@ -177,19 +177,13 @@ function App() {
     });
   };
 
+  // Selección en esquema
   const onSeleccionZona = (zona) => {
     let dolor = '';
     let lado = '';
-    if (zona.includes('Columna')) {
-      dolor = 'Columna lumbar';
-      lado = '';
-    } else if (zona.includes('Cadera')) {
-      dolor = 'Cadera';
-      lado = zona.includes('izquierda') ? 'Izquierda' : 'Derecha';
-    } else if (zona.includes('Rodilla')) {
-      dolor = 'Rodilla';
-      lado = zona.includes('izquierda') ? 'Izquierda' : 'Derecha';
-    }
+    if (zona.includes('Columna')) { dolor = 'Columna lumbar'; lado = ''; }
+    else if (zona.includes('Cadera')) { dolor = 'Cadera'; lado = zona.includes('izquierda') ? 'Izquierda' : 'Derecha'; }
+    else if (zona.includes('Rodilla')) { dolor = 'Rodilla'; lado = zona.includes('izquierda') ? 'Izquierda' : 'Derecha'; }
 
     setDatosPaciente((prev) => {
       const next = { ...prev, dolor, lado };
@@ -204,17 +198,17 @@ function App() {
       alert('Por favor complete todos los campos obligatorios.');
       return;
     }
-    // ABRE aviso legal; la barra ya está arriba y NO aparece/ desaparece
     setMostrarAviso(true);
   };
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  // ===== Detectar RM en backend =====
+  // ========= Detección RM (para RNM modal) =========
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
   };
+
   const detectarResonanciaEnBackend = async (datos) => {
     try {
       const r = await fetch(`${BACKEND_BASE}/detectar-resonancia`, {
@@ -236,7 +230,7 @@ function App() {
     }
   };
 
-  // ===== Descargar PDF (Trauma)
+  // ========= Descargar PDF (Trauma) =========
   const handleDescargarPDF = async () => {
     const idPago = sessionStorage.getItem('idPago');
     if (!idPago) return alert('ID de pago no encontrado');
@@ -308,7 +302,7 @@ function App() {
     }
   };
 
-  // ===== Pagar (Trauma)
+  // ========= Pago (Trauma) =========
   const handlePagarAhora = async () => {
     const edadNum = Number(datosPaciente.edad);
     if (
@@ -328,7 +322,7 @@ function App() {
       sessionStorage.setItem('idPago', idPagoTmp);
       sessionStorage.setItem('datosPacienteJSON', JSON.stringify({ ...datosPaciente, edad: edadNum }));
 
-      // Check RM
+      // ¿Incluye RM?
       let extras = {};
       const solicitarRM = await detectarResonanciaEnBackend({ ...datosPaciente, edad: edadNum });
 
@@ -361,59 +355,28 @@ function App() {
     }
   };
 
-  /* ==== Render ==== */
-  return (
-    <div style={styles.page}>
-      {/* Barra superior fija (siempre visible) */}
-      <div style={styles.topbar}>
-        <div style={styles.topbarGrid}>
-          <button
-            type="button"
-            style={{
-              ...styles.topBtn,
-              backgroundColor: modulo === 'trauma' ? ICA.primaryActive : ICA.primary,
-              borderColor: ICA.accent,
-            }}
-            onClick={() => { setModulo('trauma'); sessionStorage.setItem('modulo', 'trauma'); }}
-          >
-            ASISTENTE TRAUMATOLÓGICO
-          </button>
-          <button
-            type="button"
-            style={{
-              ...styles.topBtn,
-              backgroundColor: modulo === 'preop' ? ICA.primaryActive : ICA.primary,
-              borderColor: ICA.accent,
-            }}
-            onClick={() => { setModulo('preop'); sessionStorage.setItem('modulo', 'preop'); }}
-          >
-            EXÁMENES PREQUIRÚRGICOS
-          </button>
-          <button
-            type="button"
-            style={{
-              ...styles.topBtn,
-              backgroundColor: modulo === 'generales' ? ICA.primaryActive : ICA.primary,
-              borderColor: ICA.accent,
-            }}
-            onClick={() => { setModulo('generales'); sessionStorage.setItem('modulo', 'generales'); }}
-          >
-            REVISIÓN GENERAL
-          </button>
-          <button
-            type="button"
-            style={{
-              ...styles.topBtn,
-              backgroundColor: modulo === 'ia' ? ICA.primaryActive : ICA.primary,
-              borderColor: ICA.accent,
-            }}
-            onClick={() => { setModulo('ia'); sessionStorage.setItem('modulo', 'ia'); }}
-          >
-            ANÁLISIS MEDIANTE IA
-          </button>
-        </div>
-      </div>
+  // ===== Estilos dinámicos de botón (resalte del activo) =====
+  const btnStyle = (active) => ({
+    ...styles.toolbarButton,
+    backgroundColor: active ? T.primary : T.primaryHover,
+    border: active ? `2px solid ${T.accent}` : "1px solid transparent",
+    color: '#fff',
+    boxShadow: active ? `0 0 0 3px ${T.accent}33` : "none",
+    transform: active ? "translateY(-1px)" : "none",
+    transition: "all .15s ease",
+    position: "relative",
+  });
 
+  const underlineStyle = {
+    height: 4,
+    borderRadius: 999,
+    background: T.accent,
+    marginTop: 6,
+    opacity: 1,
+  };
+
+  return (
+    <div style={{ ...styles.appRoot, background: T.bg }}>
       {/* Modal Aviso Legal */}
       <AvisoLegal
         visible={mostrarAviso}
@@ -422,20 +385,76 @@ function App() {
         onReject={rechazarAviso}
       />
 
-      {/* Cuerpo: esquema + formulario + preview */}
-      <div style={styles.main}>
+      {/* ===== BARRA SUPERIOR FIJA (usa theme.json) ===== */}
+      {mostrarVistaPrevia && (
+        <div style={{ ...styles.topBar, background: T.surface, borderBottom: `2px solid ${T.accent}` }}>
+          <div style={styles.topBarGrid} role="tablist" aria-label="Módulos">
+            <button
+              type="button"
+              style={btnStyle(modulo === 'trauma')}
+              aria-current={modulo === 'trauma' ? 'page' : undefined}
+              onClick={() => { setModulo('trauma'); sessionStorage.setItem('modulo', 'trauma'); }}
+            >
+              ASISTENTE TRAUMATOLÓGICO
+              {modulo === 'trauma' && <div style={underlineStyle} />}
+            </button>
+
+            <button
+              type="button"
+              style={btnStyle(modulo === 'preop')}
+              aria-current={modulo === 'preop' ? 'page' : undefined}
+              onClick={() => {
+                setModulo('preop');
+                sessionStorage.setItem('modulo', 'preop');
+                try { document.querySelector('[data-preview-col]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
+              }}
+            >
+              EXÁMENES PREQUIRÚRGICOS
+              {modulo === 'preop' && <div style={underlineStyle} />}
+            </button>
+
+            <button
+              type="button"
+              style={btnStyle(modulo === 'generales')}
+              aria-current={modulo === 'generales' ? 'page' : undefined}
+              onClick={() => { setModulo('generales'); sessionStorage.setItem('modulo', 'generales'); }}
+            >
+              REVISIÓN GENERAL
+              {modulo === 'generales' && <div style={underlineStyle} />}
+            </button>
+
+            <button
+              type="button"
+              style={btnStyle(modulo === 'ia')}
+              aria-current={modulo === 'ia' ? 'page' : undefined}
+              onClick={() => {
+                setModulo('ia');
+                sessionStorage.setItem('modulo', 'ia');
+                try { document.querySelector('[data-preview-col]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
+              }}
+            >
+              ANÁLISIS MEDIANTE IA
+              {modulo === 'ia' && <div style={underlineStyle} />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== CONTENIDO PRINCIPAL ===== */}
+      <div style={styles.container}>
         {/* Columna: esquema */}
         <div style={styles.esquemaContainer}>
           <EsquemaToggleTabs vista={vista} onChange={setVista} />
           {vista === 'anterior'
             ? <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
-            : <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
-          }
-
+            : <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />}
           <div
             aria-live="polite"
             role="status"
-            style={styles.status}
+            style={{
+              marginTop: 8, fontSize: 14, color: T.textPrimary, background: '#F3F4F6',
+              padding: '6px 8px', borderRadius: 8, border: `1px solid ${T.border}`, minHeight: 30,
+            }}
           >
             {datosPaciente?.dolor
               ? <>Zona seleccionada: <strong>{datosPaciente.dolor}{datosPaciente.lado ? ` — ${datosPaciente.lado}` : ''}</strong></>
@@ -443,25 +462,22 @@ function App() {
           </div>
         </div>
 
-        {/* Columna: formulario */}
+        {/* Columna: formulario paciente */}
         <div style={styles.formularioContainer}>
-          <FormularioPaciente
-            datos={datosPaciente}
-            onCambiarDato={handleCambiarDato}
-            onSubmit={handleSubmit}
-          />
+          <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
         </div>
 
-        {/* Columna: preview/acciones */}
+        {/* Columna: preview / acciones */}
         <div style={styles.previewContainer} data-preview-col>
           {mostrarVistaPrevia && modulo === 'trauma' && (
             <>
               <PreviewOrden datos={datosPaciente} />
+
               {!pagoRealizado && !mostrarPago && (
                 <>
                   <button
                     type="button"
-                    style={{ ...styles.downloadButton, backgroundColor: ICA.primaryActive }}
+                    style={{ ...styles.downloadButton, backgroundColor: T.primary }}
                     onClick={handlePagarAhora}
                   >
                     Pagar ahora
@@ -503,7 +519,7 @@ function App() {
               {mostrarVistaPrevia && pagoRealizado && (
                 <button
                   type="button"
-                  style={{ ...styles.downloadButton, backgroundColor: ICA.primary }}
+                  style={{ ...styles.downloadButton, backgroundColor: T.primary }}
                   onClick={handleDescargarPDF}
                   disabled={descargando}
                   title={mensajeDescarga || 'Verificar y descargar'}
@@ -520,7 +536,7 @@ function App() {
                 <button
                   type="button"
                   onClick={() => setMostrarComorbilidades(true)}
-                  style={{ ...styles.pillBtn }}
+                  style={{ ...styles.toolbarButton, maxWidth: 260, backgroundColor: T.primary }}
                 >
                   COMORBILIDADES
                 </button>
@@ -535,7 +551,7 @@ function App() {
                 <button
                   type="button"
                   onClick={() => setMostrarComorbilidades(true)}
-                  style={{ ...styles.pillBtn }}
+                  style={{ ...styles.toolbarButton, maxWidth: 260, backgroundColor: T.primary }}
                 >
                   COMORBILIDADES
                 </button>
@@ -550,10 +566,10 @@ function App() {
         </div>
       </div>
 
-      {/* Modal RNM */}
+      {/* ===== Modal RNM ===== */}
       {showReso && (
         <div style={styles.overlay}>
-          <div style={{ width:'min(900px, 96vw)' }}>
+          <div style={styles.overlayCard}>
             <FormularioResonancia
               onCancel={() => { setShowReso(false); resolverReso?.({ canceled:true }); }}
               onSave={(data, { riesgos }) => {
@@ -567,10 +583,10 @@ function App() {
         </div>
       )}
 
-      {/* Modal Comorbilidades */}
+      {/* ===== Modal Comorbilidades ===== */}
       {mostrarComorbilidades && (
         <div style={styles.overlay}>
-          <div style={{ width:'min(900px, 96vw)' }}>
+          <div style={styles.overlayCard}>
             <FormularioComorbilidades
               initial={comorbilidades || {}}
               onSave={handleSaveComorbilidades}
@@ -583,111 +599,77 @@ function App() {
   );
 }
 
-/* ===== Estilos ===== */
 const styles = {
-  page: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 16,
-    padding: 16,
-    fontFamily: 'Arial, sans-serif',
-    backgroundColor: ICA.bg,
+  appRoot: {
     minHeight: '100vh',
   },
-
-  topbar: {
+  container: {
+    display: 'grid',
+    gridTemplateColumns: '400px 400px 1fr',
+    gap: '40px',
+    padding: '20px',
+  },
+  topBar: {
     position: 'sticky',
     top: 0,
-    zIndex: 50,
-    background: ICA.bg,
-    padding: '8px 0 4px',
-    borderBottom: `2px solid ${ICA.accent}`,
+    zIndex: 10,
+    padding: '10px 16px',
   },
-  topbarGrid: {
+  topBarGrid: {
     display: 'grid',
-    gap: 8,
+    gap: '8px',
     gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    alignItems: 'stretch',
+    maxWidth: 1400,
+    margin: '0 auto',
   },
-  topBtn: {
-    color: '#fff',
-    border: `1px solid ${ICA.accent}`,
-    borderRadius: 10,
-    padding: '12px',
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: 'pointer',
-    width: '100%',
-    lineHeight: 1.2,
-    minHeight: 44,
-    boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
-  },
-
-  main: {
-    display: 'flex',
-    flexDirection: 'row',
-    gap: 40,
-  },
-
   esquemaContainer: {
     flex: '0 0 400px',
     maxWidth: '400px',
   },
-  status: {
-    marginTop: 8,
-    fontSize: 14,
-    color: '#374151',
-    background: '#F3F4F6',
-    padding: '6px 8px',
-    borderRadius: 8,
-    border: '1px solid #E5E7EB',
-    minHeight: 30,
-  },
-
   formularioContainer: {
     flex: '0 0 400px',
     maxWidth: '400px',
     position: 'relative',
     zIndex: 2,
   },
-
   previewContainer: {
     flex: 1,
     minWidth: '360px',
     position: 'relative',
     zIndex: 1,
   },
-
-  downloadButton: {
-    marginTop: 12,
+  toolbarButton: {
+    backgroundColor: '#0072CE',
     color: 'white',
     border: 'none',
     padding: '12px',
-    borderRadius: 10,
-    fontSize: 16,
+    borderRadius: '10px',
+    fontSize: '14px',
+    cursor: 'pointer',
+    width: '100%',
+    whiteSpace: 'normal',
+    lineHeight: 1.2,
+    minHeight: 48,
+  },
+  downloadButton: {
+    marginTop: '15px',
+    backgroundColor: '#0072CE',
+    color: 'white',
+    border: 'none',
+    padding: '12px',
+    borderRadius: '8px',
+    fontSize: '16px',
     cursor: 'pointer',
     width: '100%',
   },
-
-  pillBtn: {
-    background: ICA.primary,
-    color: '#fff',
-    border: `1px solid ${ICA.accent}`,
-    padding: '10px 14px',
-    borderRadius: 999,
-    fontSize: 13,
-    fontWeight: 700,
-    cursor: 'pointer',
-  },
-
   overlay: {
-    position:'fixed',
-    inset:0,
-    background:'rgba(0,0,0,0.35)',
-    display:'grid',
-    placeItems:'center',
-    zIndex:9999,
-    padding: 12,
+    position:'fixed', inset:0, background:'rgba(0,0,0,0.35)',
+    display:'grid', placeItems:'center', zIndex:9999
   },
+  overlayCard: {
+    width:'min(900px, 96vw)'
+  }
 };
 
 export default App;
