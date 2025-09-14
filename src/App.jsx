@@ -20,7 +20,7 @@ import FormularioResonancia from "./components/FormularioResonancia.jsx";
 import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx";
 
 /* Tema (JSON + helper) */
-import { getTheme } from "./theme.js"; // <-- quitamos cx
+import { getTheme } from "./theme.js";
 const T = getTheme();
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
@@ -35,9 +35,7 @@ function App() {
     lado: "",
   });
 
-  // Módulo activo
   const [modulo, setModulo] = useState("trauma");
-
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false);
@@ -45,10 +43,9 @@ function App() {
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
-  // Vista esquema (frontal/posterior)
   const [vista, setVista] = useState("anterior");
 
-  // ====== Aviso Legal ======
+  // Aviso legal
   const [mostrarAviso, setMostrarAviso] = useState(false);
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
@@ -58,42 +55,19 @@ function App() {
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
-    try {
-      window.close();
-    } catch {}
-    setTimeout(() => {
-      if (!window.closed) window.location.href = "about:blank";
-    }, 0);
+    try { window.close(); } catch {}
+    setTimeout(() => { if (!window.closed) window.location.href = "about:blank"; }, 0);
   };
 
-  // ====== RNM (checklist) ======
+  // RNM
   const [showReso, setShowReso] = useState(false);
   const [resolverReso, setResolverReso] = useState(null);
-  const RED_FLAGS = new Set([
-    "marcapasos",
-    "coclear_o_neuro",
-    "clips_aneurisma",
-    "valvula_cardiaca_metal",
-    "fragmentos_metalicos",
-  ]);
-  const pedirChecklistResonancia = () =>
-    new Promise((resolve) => {
-      setResolverReso(() => resolve);
-      setShowReso(true);
-    });
-  const hasRedFlags = (data) =>
-    Object.entries(data || {}).some(([k, v]) => RED_FLAGS.has(k) && v === true);
+  const RED_FLAGS = new Set(["marcapasos","coclear_o_neuro","clips_aneurisma","valvula_cardiaca_metal","fragmentos_metalicos"]);
+  const pedirChecklistResonancia = () => new Promise((resolve) => { setResolverReso(() => resolve); setShowReso(true); });
+  const hasRedFlags = (data) => Object.entries(data || {}).some(([k,v]) => RED_FLAGS.has(k) && v === true);
   const resumenResoTexto = (data) => {
-    const si =
-      Object.entries(data || {})
-        .filter(([_, v]) => v === true)
-        .map(([k]) => k)
-        .join(", ") || "—";
-    const no =
-      Object.entries(data || {})
-        .filter(([_, v]) => v === false)
-        .map(([k]) => k)
-        .join(", ") || "—";
+    const si = Object.entries(data || {}).filter(([_,v])=>v===true).map(([k])=>k).join(", ") || "—";
+    const no = Object.entries(data || {}).filter(([_,v])=>v===false).map(([k])=>k).join(", ") || "—";
     return [
       "FORMULARIO DE SEGURIDAD PARA RESONANCIA MAGNÉTICA",
       `Sí: ${si}`,
@@ -103,7 +77,7 @@ function App() {
     ].join("\n");
   };
 
-  // ====== Comorbilidades (modal suelto) ======
+  // Comorbilidades (modal suelto; los módulos lo consumen)
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(null);
   const handleSaveComorbilidades = (payload) => {
@@ -111,19 +85,13 @@ function App() {
     setMostrarComorbilidades(false);
   };
 
-  // ====== Restauración de estado ======
+  // Restauración estado
   useEffect(() => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
-    if (saved) {
-      try {
-        setDatosPaciente(JSON.parse(saved));
-      } catch {}
-    }
+    if (saved) { try { setDatosPaciente(JSON.parse(saved)); } catch {} }
 
     const moduloSS = sessionStorage.getItem("modulo");
-    if (["trauma", "preop", "generales", "ia"].includes(moduloSS)) {
-      setModulo(moduloSS);
-    }
+    if (["trauma","preop","generales","ia"].includes(moduloSS)) setModulo(moduloSS);
 
     const vistaSS = sessionStorage.getItem("vistaEsquema");
     if (vistaSS === "anterior" || vistaSS === "posterior") setVista(vistaSS);
@@ -134,10 +102,7 @@ function App() {
     const idPagoSS = sessionStorage.getItem("idPago");
     const idFinal = idPagoURL || idPagoSS || "";
 
-    if (pollerRef.current) {
-      clearInterval(pollerRef.current);
-      pollerRef.current = null;
-    }
+    if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; }
 
     if (pago === "ok" && idFinal) {
       sessionStorage.setItem("idPago", idFinal);
@@ -148,13 +113,8 @@ function App() {
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
-        try {
-          await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`);
-        } catch {}
-        if (intentos >= 30) {
-          clearInterval(pollerRef.current);
-          pollerRef.current = null;
-        }
+        try { await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`); } catch {}
+        if (intentos >= 30) { clearInterval(pollerRef.current); pollerRef.current = null; }
       }, 2000);
     } else if (!pago && idFinal) {
       setMostrarPago(false);
@@ -169,65 +129,38 @@ function App() {
       setPagoRealizado(false);
     }
 
-    return () => {
-      if (pollerRef.current) {
-        clearInterval(pollerRef.current);
-        pollerRef.current = null;
-      }
-    };
+    return () => { if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; } };
   }, []);
 
-  // Persistir vista
-  useEffect(() => {
-    try {
-      sessionStorage.setItem("vistaEsquema", vista);
-    } catch {}
-  }, [vista]);
+  // Persistir vista esquema
+  useEffect(() => { try { sessionStorage.setItem("vistaEsquema", vista); } catch {} }, [vista]);
 
   const handleCambiarDato = (campo, valor) => {
     setDatosPaciente((prev) => {
       const next = { ...prev, [campo]: valor };
-      try {
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-      } catch {}
+      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
       return next;
     });
   };
 
   const onSeleccionZona = (zona) => {
-    let dolor = "";
-    let lado = "";
-    if (zona.includes("Columna")) {
-      dolor = "Columna lumbar";
-      lado = "";
-    } else if (zona.includes("Cadera")) {
-      dolor = "Cadera";
-      lado = zona.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zona.includes("Rodilla")) {
-      dolor = "Rodilla";
-      lado = zona.includes("izquierda") ? "Izquierda" : "Derecha";
-    }
+    let dolor = "", lado = "";
+    if (zona.includes("Columna")) { dolor = "Columna lumbar"; lado = ""; }
+    else if (zona.includes("Cadera")) { dolor = "Cadera"; lado = zona.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zona.includes("Rodilla")) { dolor = "Rodilla"; lado = zona.includes("izquierda") ? "Izquierda" : "Derecha"; }
 
     setDatosPaciente((prev) => {
       const next = { ...prev, dolor, lado };
-      try {
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-      } catch {}
+      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
       return next;
     });
   };
 
-  // Submit del formulario principal
+  // Submit principal
   const handleSubmit = (e) => {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
-    if (
-      !datosPaciente.nombre?.trim() ||
-      !datosPaciente.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0 ||
-      !datosPaciente.dolor?.trim()
-    ) {
+    if (!datosPaciente.nombre?.trim() || !datosPaciente.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0 || !datosPaciente.dolor?.trim()) {
       alert("Por favor complete todos los campos obligatorios.");
       return;
     }
@@ -249,14 +182,10 @@ function App() {
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
-      const flag =
-        typeof j?.resonancia === "boolean"
-          ? j.resonancia
-          : esResonanciaTexto(j?.texto || j?.orden || "");
+      const flag = typeof j?.resonancia === "boolean" ? j.resonancia : esResonanciaTexto(j?.texto || j?.orden || "");
       sessionStorage.setItem("solicitaResonancia", flag ? "1" : "0");
       return !!flag;
-    } catch (e) {
-      console.warn("No se pudo detectar RM en backend:", e);
+    } catch {
       sessionStorage.setItem("solicitaResonancia", "0");
       return false;
     }
@@ -264,10 +193,7 @@ function App() {
 
   const handleDescargarPDF = async () => {
     const idPago = sessionStorage.getItem("idPago");
-    if (!idPago) {
-      alert("ID de pago no encontrado");
-      return;
-    }
+    if (!idPago) { alert("ID de pago no encontrado"); return; }
 
     const intentaDescarga = async () => {
       const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
@@ -299,9 +225,7 @@ function App() {
         if (r.status === 402) {
           setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
-          if (i === maxIntentos) {
-            alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
-          }
+          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
           continue;
         }
 
@@ -330,7 +254,6 @@ function App() {
         break;
       }
     } catch (error) {
-      console.error(error);
       alert("No se pudo descargar el PDF.");
     } finally {
       setDescargando(false);
@@ -340,65 +263,39 @@ function App() {
 
   const handlePagarAhora = async () => {
     const edadNum = Number(datosPaciente.edad);
-    if (
-      !datosPaciente.nombre?.trim() ||
-      !datosPaciente.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0 ||
-      !datosPaciente.dolor?.trim()
-    ) {
+    if (!datosPaciente.nombre?.trim() || !datosPaciente.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0 || !datosPaciente.dolor?.trim()) {
       alert("Complete nombre, RUT, edad (>0) y dolor antes de pagar.");
       return;
     }
 
     try {
-      const idPagoTmp =
-        sessionStorage.getItem("idPago") ||
-        "pago_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-
+      const idPagoTmp = sessionStorage.getItem("idPago") || "pago_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
       sessionStorage.setItem("idPago", idPagoTmp);
-      sessionStorage.setItem(
-        "datosPacienteJSON",
-        JSON.stringify({ ...datosPaciente, edad: edadNum })
-      );
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datosPaciente, edad: edadNum }));
 
       let extras = {};
-      const solicitarRM = await detectarResonanciaEnBackend({
-        ...datosPaciente,
-        edad: edadNum,
-      });
-
+      const solicitarRM = await detectarResonanciaEnBackend({ ...datosPaciente, edad: edadNum });
       if (solicitarRM) {
         const res = await pedirChecklistResonancia();
         if (res?.canceled) return;
 
         if (res.bloquea) {
           alert("Por seguridad, cambiaremos la resonancia por otro examen.");
-          extras.ordenAlternativa =
-            "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
+          extras.ordenAlternativa = "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
         } else {
           extras.resonanciaChecklist = res.data || {};
-          extras.resonanciaResumenTexto =
-            res.resumen || resumenResoTexto(res.data || {});
+          extras.resonanciaResumenTexto = res.resumen || resumenResoTexto(res.data || {});
         }
       }
 
       await fetch(`${BACKEND_BASE}/guardar-datos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPago: idPagoTmp,
-          datosPaciente: { ...datosPaciente, edad: edadNum },
-          ...extras,
-        }),
+        body: JSON.stringify({ idPago: idPagoTmp, datosPaciente: { ...datosPaciente, edad: edadNum }, ...extras }),
       });
 
-      await irAPagoKhipu(
-        { ...datosPaciente, edad: edadNum },
-        { idPago: idPagoTmp, modulo: "trauma" }
-      );
+      await irAPagoKhipu({ ...datosPaciente, edad: edadNum }, { idPago: idPagoTmp, modulo: "trauma" });
     } catch (err) {
-      console.error("No se pudo generar el link de pago:", err);
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
     }
   };
@@ -409,24 +306,18 @@ function App() {
       <div style={styles.topBarWrap}>
         <div style={styles.topBar}>
           {[
-            { key: "trauma", label: "ASISTENTE TRAUMATOLÓGICO" },
-            { key: "preop", label: "EXÁMENES PREQUIRÚRGICOS" },
-            { key: "generales", label: "REVISIÓN GENERAL" },
-            { key: "ia", label: "ANÁLISIS MEDIANTE IA" },
+            { key: "trauma",     label: "ASISTENTE TRAUMATOLÓGICO" },
+            { key: "preop",      label: "EXÁMENES PREQUIRÚRGICOS" },
+            { key: "generales",  label: "REVISIÓN GENERAL" },
+            { key: "ia",         label: "ANÁLISIS MEDIANTE IA" },
           ].map((b) => {
             const active = modulo === b.key;
             return (
               <button
                 key={b.key}
                 type="button"
-                onClick={() => {
-                  setModulo(b.key);
-                  sessionStorage.setItem("modulo", b.key);
-                }}
-                style={{
-                  ...styles.topBtn,
-                  ...(active ? styles.topBtnActive : styles.topBtnIdle),
-                }}
+                onClick={() => { setModulo(b.key); sessionStorage.setItem("modulo", b.key); }}
+                style={{ ...styles.topBtn, ...(active ? styles.topBtnActive : styles.topBtnIdle) }}
                 aria-current={active ? "page" : undefined}
               >
                 {b.label}
@@ -437,12 +328,7 @@ function App() {
       </div>
 
       {/* Modal Aviso Legal */}
-      <AvisoLegal
-        visible={mostrarAviso}
-        persist={false}
-        onAccept={continuarTrasAviso}
-        onReject={rechazarAviso}
-      />
+      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
 
       <div style={styles.content}>
         {/* Columna 1 - Esquema */}
@@ -453,29 +339,16 @@ function App() {
           ) : (
             <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
           )}
-
           <div aria-live="polite" role="status" style={styles.statusBox}>
             {datosPaciente?.dolor ? (
-              <>
-                Zona seleccionada:{" "}
-                <strong>
-                  {datosPaciente.dolor}
-                  {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
-                </strong>
-              </>
-            ) : (
-              "Seleccione una zona en el esquema"
-            )}
+              <>Zona seleccionada: <strong>{datosPaciente.dolor}{datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}</strong></>
+            ) : "Seleccione una zona en el esquema"}
           </div>
         </div>
 
         {/* Columna 2 - Formulario Paciente */}
         <div style={styles.formCol}>
-          <FormularioPaciente
-            datos={datosPaciente}
-            onCambiarDato={handleCambiarDato}
-            onSubmit={handleSubmit}
-          />
+          <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
         </div>
 
         {/* Columna 3 - Previews / Acciones */}
@@ -485,94 +358,57 @@ function App() {
               <PreviewOrden datos={datosPaciente} />
               {!pagoRealizado && !mostrarPago && (
                 <>
-                  <button
-                    type="button"
-                    style={{ ...styles.actionBtn, backgroundColor: T.primary }}
-                    onClick={handlePagarAhora}
-                  >
+                  <button type="button" style={{ ...styles.actionBtn, backgroundColor: T.primary, color: T.white }} onClick={handlePagarAhora}>
                     Pagar ahora
                   </button>
                   <button
                     type="button"
-                    style={{ ...styles.actionBtn, backgroundColor: T.muted }}
+                    style={{ ...styles.actionBtn, backgroundColor: T.muted, color: T.white }}
                     onClick={async () => {
                       const idPago = "guest_test_pago";
-                      const datosGuest = {
-                        nombre: "Guest",
-                        rut: "99999999-9",
-                        edad: 30,
-                        genero: "Hombre",
-                        dolor: "Rodilla",
-                        lado: "Izquierda",
-                      };
+                      const datosGuest = { nombre: "Guest", rut: "99999999-9", edad: 30, genero: "Hombre", dolor: "Rodilla", lado: "Izquierda" };
                       sessionStorage.setItem("idPago", idPago);
-                      sessionStorage.setItem(
-                        "datosPacienteJSON",
-                        JSON.stringify(datosGuest)
-                      );
-
-                      const resp = await fetch(
-                        `${BACKEND_BASE}/crear-pago-khipu`,
-                        {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            idPago,
-                            modoGuest: true,
-                            datosPaciente: datosGuest,
-                          }),
-                        }
-                      );
+                      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
+                      const resp = await fetch(`${BACKEND_BASE}/crear-pago-khipu`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ idPago, modoGuest: true, datosPaciente: datosGuest }),
+                      });
                       const j = await resp.json();
-                      if (j?.ok && j?.url) {
-                        window.location.href = j.url;
-                      } else {
-                        alert("Guest no disponible. Ver backend.");
-                      }
+                      if (j?.ok && j?.url) window.location.href = j.url;
+                      else alert("Guest no disponible. Ver backend.");
                     }}
                   >
                     Simular Pago como Guest
                   </button>
                 </>
               )}
-
               {mostrarVistaPrevia && pagoRealizado && (
                 <button
                   type="button"
-                  style={styles.actionBtn}
+                  style={{ ...styles.actionBtn, backgroundColor: T.primary, color: T.white }}
                   onClick={handleDescargarPDF}
                   disabled={descargando}
                   title={mensajeDescarga || "Verificar y descargar"}
                 >
-                  {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
+                  {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
                 </button>
               )}
             </>
           )}
 
-          {mostrarVistaPrevia && modulo === "preop" && (
-            <PreopModulo initialDatos={datosPaciente} />
-          )}
-
-          {mostrarVistaPrevia && modulo === "generales" && (
-            <GeneralesModulo initialDatos={datosPaciente} />
-          )}
-
-          {mostrarVistaPrevia && modulo === "ia" && (
-            <IAModulo key={`ia-${modulo}`} initialDatos={datosPaciente} />
-          )}
+          {mostrarVistaPrevia && modulo === "preop" && <PreopModulo initialDatos={datosPaciente} />}
+          {mostrarVistaPrevia && modulo === "generales" && <GeneralesModulo initialDatos={datosPaciente} />}
+          {mostrarVistaPrevia && modulo === "ia" && <IAModulo key={`ia-${modulo}`} initialDatos={datosPaciente} />}
         </div>
       </div>
 
-      {/* ===== Modal RNM ===== */}
+      {/* Modal RNM */}
       {showReso && (
         <div style={styles.modalOverlay}>
           <div style={{ width: "min(900px, 96vw)" }}>
             <FormularioResonancia
-              onCancel={() => {
-                setShowReso(false);
-                resolverReso?.({ canceled: true });
-              }}
+              onCancel={() => { setShowReso(false); resolverReso?.({ canceled: true }); }}
               onSave={(data, { riesgos }) => {
                 setShowReso(false);
                 const resumen = resumenResoTexto(data);
@@ -584,7 +420,7 @@ function App() {
         </div>
       )}
 
-      {/* ===== Modal Comorbilidades ===== */}
+      {/* Modal Comorbilidades */}
       {mostrarComorbilidades && (
         <div style={styles.modalOverlay}>
           <div style={{ width: "min(900px, 96vw)" }}>
@@ -600,101 +436,26 @@ function App() {
   );
 }
 
-/* ================== Styles (usando el theme.json) ================== */
+/* ================== Styles (solo theme) ================== */
 const styles = {
-  page: {
-    fontFamily: "Arial, sans-serif",
-    backgroundColor: T.bg,
-    minHeight: "100vh",
-  },
+  page: { fontFamily: "Arial, sans-serif", backgroundColor: T.bg, minHeight: "100vh" },
 
-  /* Top bar */
-  topBarWrap: {
-    position: "sticky",
-    top: 0,
-    zIndex: 50,
-    background: T.bg,
-    borderBottom: `1px solid ${T.border}`,
-    boxShadow: T.shadowSm,
-  },
-  topBar: {
-    maxWidth: 1200,
-    margin: "0 auto",
-    padding: "12px 16px",
-    display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: 12,
-  },
-  topBtn: {
-    borderRadius: 10,
-    padding: "12px 14px",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-    border: "2px solid",
-    transition: "all .18s ease",
-    lineHeight: 1.2,
-  },
-  topBtnActive: {
-    backgroundColor: T.primary,
-    color: "#fff",
-    borderColor: T.primaryDark,
-    boxShadow: `0 0 0 3px ${T.accentAlpha}, ${T.shadowMd}`,
-    transform: "translateY(-1px)",
-  },
-  topBtnIdle: {
-    backgroundColor: "#fff",
-    color: T.primary,
-    borderColor: T.primary,
-  },
+  topBarWrap: { position: "sticky", top: 0, zIndex: 50, background: T.bg, borderBottom: `1px solid ${T.border}`, boxShadow: T.shadowSm },
+  topBar: { maxWidth: 1200, margin: "0 auto", padding: "12px 16px", display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 },
+  topBtn: { borderRadius: 10, padding: "12px 14px", fontSize: 14, fontWeight: 700, cursor: "pointer", border: "2px solid", transition: "all .18s ease", lineHeight: 1.2 },
+  topBtnActive: { backgroundColor: T.primary, color: T.white, borderColor: T.primaryDark, boxShadow: `0 0 0 3px ${T.accentAlpha}, ${T.shadowMd}`, transform: "translateY(-1px)" },
+  topBtnIdle: { backgroundColor: T.white, color: T.primary, borderColor: T.primary },
 
-  /* Layout */
-  content: {
-    display: "grid",
-    gridTemplateColumns: "400px 400px 1fr",
-    gap: 40,
-    maxWidth: 1200,
-    margin: "18px auto",
-    padding: "0 16px 24px",
-  },
+  content: { display: "grid", gridTemplateColumns: "400px 400px 1fr", gap: 40, maxWidth: 1200, margin: "18px auto", padding: "0 16px 24px" },
   esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
   formCol: { flex: "0 0 400px", maxWidth: 400, position: "relative", zIndex: 2 },
   previewCol: { minWidth: 360, position: "relative", zIndex: 1 },
 
-  statusBox: {
-    marginTop: 8,
-    fontSize: 14,
-    color: T.textMuted,
-    background: T.surface,
-    padding: "6px 8px",
-    borderRadius: 8,
-    border: `1px solid ${T.border}`,
-    minHeight: 30,
-  },
+  statusBox: { marginTop: 8, fontSize: 14, color: T.textMuted, background: T.surface, padding: "6px 8px", borderRadius: 8, border: `1px solid ${T.border}`, minHeight: 30 },
 
-  actionBtn: {
-    marginTop: 12,
-    backgroundColor: T.primary,
-    color: "#fff",
-    border: "none",
-    padding: "12px",
-    borderRadius: 8,
-    fontSize: 16,
-    cursor: "pointer",
-    width: "100%",
-    boxShadow: T.shadowSm,
-  },
+  actionBtn: { marginTop: 12, backgroundColor: T.primary, color: T.white, border: "none", padding: "12px", borderRadius: 8, fontSize: 16, cursor: "pointer", width: "100%", boxShadow: T.shadowSm },
 
-  /* Modals */
-  modalOverlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.35)",
-    display: "grid",
-    placeItems: "center",
-    zIndex: 9999,
-    padding: 12,
-  },
+  modalOverlay: { position: "fixed", inset: 0, background: T.overlay, display: "grid", placeItems: "center", zIndex: 9999, padding: 12 },
 };
 
 export default App;
