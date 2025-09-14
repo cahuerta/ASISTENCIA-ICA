@@ -1,21 +1,21 @@
 {
-  "primary": "#0056A6",
-  "primaryDark": "#003B73",
+  "primary": "#0B4A8F",
+  "primaryDark": "#063466",
   "onPrimary": "#FFFFFF",
 
-  "accentAlpha": "rgba(0, 86, 166, 0.25)",
+  "accentAlpha": "rgba(11, 74, 143, 0.22)",
 
   "bg": "#F3F5F8",
   "surface": "#FFFFFF",
   "border": "#D5DBE3",
 
-  "text": "#1F2937",
-  "textMuted": "#6B7280",
+  "text": "#0F172A",
+  "textMuted": "#475569",
 
   "muted": "#4B5563",
 
   "shadowSm": "0 2px 10px rgba(0,0,0,0.08)",
   "shadowMd": "0 6px 18px rgba(0,0,0,0.12)",
 
-  "overlay": "rgba(0,0,0,0.35)"
+  "overlay": "rgba(2, 12, 27, 0.45)"
 }
