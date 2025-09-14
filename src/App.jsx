@@ -111,7 +111,7 @@ function App() {
     setMostrarComorbilidades(false);
   };
 
-  // ====== Restauración de estado ======
+  // ====== Restauración de estado en montaje ======
   useEffect(() => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
     if (saved) {
@@ -257,8 +257,7 @@ function App() {
           : esResonanciaTexto(j?.texto || j?.orden || "");
       sessionStorage.setItem("solicitaResonancia", flag ? "1" : "0");
       return !!flag;
-    } catch (e) {
-      console.warn("No se pudo detectar RM en backend:", e);
+    } catch {
       sessionStorage.setItem("solicitaResonancia", "0");
       return false;
     }
@@ -331,8 +330,7 @@ function App() {
         alert("No se pudo descargar el PDF.");
         break;
       }
-    } catch (error) {
-      console.error(error);
+    } catch {
       alert("No se pudo descargar el PDF.");
     } finally {
       setDescargando(false);
@@ -364,7 +362,6 @@ function App() {
         JSON.stringify({ ...datosPaciente, edad: edadNum })
       );
 
-      // Preguntar al backend si incluye RM:
       let extras = {};
       const solicitarRM = await detectarResonanciaEnBackend({
         ...datosPaciente,
@@ -401,7 +398,6 @@ function App() {
         { idPago: idPagoTmp, modulo: "trauma" }
       );
     } catch (err) {
-      console.error("No se pudo generar el link de pago:", err);
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
     }
   };
@@ -419,6 +415,10 @@ function App() {
             { key: "ia", label: "ANÁLISIS MEDIANTE IA" },
           ].map((b) => {
             const active = modulo === b.key;
+            const styleBtn = {
+              ...styles.topBtn,
+              ...(active ? styles.topBtnActive : styles.topBtnIdle),
+            };
             return (
               <button
                 key={b.key}
@@ -427,10 +427,7 @@ function App() {
                   setModulo(b.key);
                   sessionStorage.setItem("modulo", b.key);
                 }}
-                style={{
-                  ...styles.topBtn,
-                  ...(active ? styles.topBtnActive : styles.topBtnIdle),
-                }}
+                style={styleBtn}
               >
                 {b.label}
               </button>
@@ -490,14 +487,14 @@ function App() {
                 <>
                   <button
                     type="button"
-                    style={{ ...styles.actionBtn, backgroundColor: T.primary, color: T.onPrimary }}
+                    style={styles.actionBtn}
                     onClick={handlePagarAhora}
                   >
                     Pagar ahora
                   </button>
                   <button
                     type="button"
-                    style={{ ...styles.actionBtn, backgroundColor: T.muted, color: T.onPrimary }}
+                    style={{ ...styles.actionBtn, backgroundColor: T.muted }}
                     onClick={async () => {
                       const idPago = "guest_test_pago";
                       const datosGuest = {
@@ -542,7 +539,7 @@ function App() {
               {mostrarVistaPrevia && pagoRealizado && (
                 <button
                   type="button"
-                  style={{ ...styles.actionBtn, backgroundColor: T.primary, color: T.onPrimary }}
+                  style={styles.actionBtn}
                   onClick={handleDescargarPDF}
                   disabled={descargando}
                   title={mensajeDescarga || "Verificar y descargar"}
@@ -603,7 +600,7 @@ function App() {
   );
 }
 
-/* ================== Styles (solo tokens de theme.json) ================== */
+/* ================== Styles (solo variables del theme.json) ================== */
 const styles = {
   page: {
     fontFamily: "Arial, sans-serif",
@@ -616,9 +613,11 @@ const styles = {
     position: "sticky",
     top: 0,
     zIndex: 50,
-    background: T.bg,
-    borderBottom: `1px solid ${T.border}`,
-    boxShadow: T.shadowSm,
+    background: T.headerBg || T.bg,
+    borderBottomWidth: 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: T.headerBorder ?? T.border,
+    boxShadow: T.headerShadow ?? T.shadowSm,
   },
   topBar: {
     maxWidth: 1200,
@@ -634,9 +633,10 @@ const styles = {
     fontSize: 14,
     fontWeight: 700,
     cursor: "pointer",
-    border: "2px solid",
     transition: "all .18s ease",
     lineHeight: 1.2,
+    borderWidth: 2,
+    borderStyle: "solid",
   },
   topBtnActive: {
     backgroundColor: T.primary,
@@ -671,7 +671,9 @@ const styles = {
     background: T.surface,
     padding: "6px 8px",
     borderRadius: 8,
-    border: `1px solid ${T.border}`,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: T.border,
     minHeight: 30,
   },
 
@@ -692,7 +694,7 @@ const styles = {
   modalOverlay: {
     position: "fixed",
     inset: 0,
-    background: (T.overlay || "rgba(0,0,0,0.35)"),
+    background: T.overlay, // del theme.json (ej: rgba(0,0,0,0.35))
     display: "grid",
     placeItems: "center",
     zIndex: 9999,
