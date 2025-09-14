@@ -13,13 +13,13 @@ import PreopModulo from "./modules/PreopModulo.jsx";
 import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import IAModulo from "./modules/IAModulo.jsx";
 
-/* Utilidades */
+/* Utilidades existentes */
 import { irAPagoKhipu } from "./PagoKhipu.jsx";
 import AvisoLegal from "./components/AvisoLegal.jsx";
 import FormularioResonancia from "./components/FormularioResonancia.jsx";
 import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx";
 
-/* Tema */
+/* Tema (JSON + helper) */
 import { getTheme } from "./theme.js";
 const T = getTheme();
 
@@ -35,7 +35,7 @@ function App() {
     lado: "",
   });
 
-  // Módulo activo
+  // Módulo activo: 'trauma' | 'preop' | 'generales' | 'ia'
   const [modulo, setModulo] = useState("trauma");
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
@@ -45,10 +45,10 @@ function App() {
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
-  // Vista esquema
+  // Vista esquema (frontal/posterior)
   const [vista, setVista] = useState("anterior");
 
-  // ===== Aviso Legal =====
+  // ====== Aviso Legal ======
   const [mostrarAviso, setMostrarAviso] = useState(false);
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
@@ -58,30 +58,52 @@ function App() {
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
-    try { window.close(); } catch {}
-    setTimeout(() => { if (!window.closed) window.location.href = "about:blank"; }, 0);
+    try {
+      window.close();
+    } catch {}
+    setTimeout(() => {
+      if (!window.closed) window.location.href = "about:blank";
+    }, 0);
   };
 
-  // ===== RNM (checklist) =====
+  // ====== RNM (checklist) ======
   const [showReso, setShowReso] = useState(false);
   const [resolverReso, setResolverReso] = useState(null);
-  const RED_FLAGS = new Set(["marcapasos","coclear_o_neuro","clips_aneurisma","valvula_cardiaca_metal","fragmentos_metalicos"]);
+  const RED_FLAGS = new Set([
+    "marcapasos",
+    "coclear_o_neuro",
+    "clips_aneurisma",
+    "valvula_cardiaca_metal",
+    "fragmentos_metalicos",
+  ]);
   const pedirChecklistResonancia = () =>
-    new Promise((resolve) => { setResolverReso(() => resolve); setShowReso(true); });
+    new Promise((resolve) => {
+      setResolverReso(() => resolve);
+      setShowReso(true);
+    });
   const hasRedFlags = (data) =>
     Object.entries(data || {}).some(([k, v]) => RED_FLAGS.has(k) && v === true);
   const resumenResoTexto = (data) => {
-    const si = Object.entries(data || {}).filter(([_,v])=>v===true).map(([k])=>k).join(", ") || "—";
-    const no = Object.entries(data || {}).filter(([_,v])=>v===false).map(([k])=>k).join(", ") || "—";
+    const si =
+      Object.entries(data || {})
+        .filter(([_, v]) => v === true)
+        .map(([k]) => k)
+        .join(", ") || "—";
+    const no =
+      Object.entries(data || {})
+        .filter(([_, v]) => v === false)
+        .map(([k]) => k)
+        .join(", ") || "—";
     return [
       "FORMULARIO DE SEGURIDAD PARA RESONANCIA MAGNÉTICA",
-      `Sí: ${si}`, `No: ${no}`,
+      `Sí: ${si}`,
+      `No: ${no}`,
       "Declaro que la información es veraz y autorizo la realización del examen.",
       "Firma Paciente: ______________________     RUT: _______________     Fecha: ____/____/______",
     ].join("\n");
   };
 
-  // ===== Comorbilidades (modal) =====
+  // ====== Comorbilidades (modal suelto) ======
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(null);
   const handleSaveComorbilidades = (payload) => {
@@ -89,13 +111,19 @@ function App() {
     setMostrarComorbilidades(false);
   };
 
-  // ===== Restauración de estado =====
+  // ====== Restauración de estado ======
   useEffect(() => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
-    if (saved) { try { setDatosPaciente(JSON.parse(saved)); } catch {} }
+    if (saved) {
+      try {
+        setDatosPaciente(JSON.parse(saved));
+      } catch {}
+    }
 
     const moduloSS = sessionStorage.getItem("modulo");
-    if (["trauma","preop","generales","ia"].includes(moduloSS)) setModulo(moduloSS);
+    if (["trauma", "preop", "generales", "ia"].includes(moduloSS)) {
+      setModulo(moduloSS);
+    }
 
     const vistaSS = sessionStorage.getItem("vistaEsquema");
     if (vistaSS === "anterior" || vistaSS === "posterior") setVista(vistaSS);
@@ -106,81 +134,131 @@ function App() {
     const idPagoSS = sessionStorage.getItem("idPago");
     const idFinal = idPagoURL || idPagoSS || "";
 
-    if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; }
+    if (pollerRef.current) {
+      clearInterval(pollerRef.current);
+      pollerRef.current = null;
+    }
 
     if (pago === "ok" && idFinal) {
       sessionStorage.setItem("idPago", idFinal);
-      setMostrarPago(false); setMostrarVistaPrevia(true); setPagoRealizado(true);
+      setMostrarPago(false);
+      setMostrarVistaPrevia(true);
+      setPagoRealizado(true);
 
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
-        try { await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`); } catch {}
-        if (intentos >= 30) { clearInterval(pollerRef.current); pollerRef.current = null; }
+        try {
+          await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`);
+        } catch {}
+        if (intentos >= 30) {
+          clearInterval(pollerRef.current);
+          pollerRef.current = null;
+        }
       }, 2000);
     } else if (!pago && idFinal) {
-      setMostrarPago(false); setMostrarVistaPrevia(true); setPagoRealizado(true);
+      setMostrarPago(false);
+      setMostrarVistaPrevia(true);
+      setPagoRealizado(true);
     } else if (pago === "ok" && !idFinal) {
       alert("No recibimos idPago en el retorno. Intenta nuevamente.");
     } else if (pago === "cancelado") {
-      alert("Pago cancelado."); setMostrarPago(false); setMostrarVistaPrevia(false); setPagoRealizado(false);
+      alert("Pago cancelado.");
+      setMostrarPago(false);
+      setMostrarVistaPrevia(false);
+      setPagoRealizado(false);
     }
 
-    return () => { if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; } };
+    return () => {
+      if (pollerRef.current) {
+        clearInterval(pollerRef.current);
+        pollerRef.current = null;
+      }
+    };
   }, []);
 
-  // Persistir vista esquema
-  useEffect(() => { try { sessionStorage.setItem("vistaEsquema", vista); } catch {} }, [vista]);
+  // Persistir vista de esquema
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("vistaEsquema", vista);
+    } catch {}
+  }, [vista]);
 
   const handleCambiarDato = (campo, valor) => {
     setDatosPaciente((prev) => {
       const next = { ...prev, [campo]: valor };
-      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
+      try {
+        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
+      } catch {}
       return next;
     });
   };
 
   const onSeleccionZona = (zona) => {
-    let dolor = "", lado = "";
-    if (zona.includes("Columna")) { dolor = "Columna lumbar"; lado = ""; }
-    else if (zona.includes("Cadera")) { dolor = "Cadera"; lado = zona.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zona.includes("Rodilla")) { dolor = "Rodilla"; lado = zona.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    let dolor = "";
+    let lado = "";
+    if (zona.includes("Columna")) {
+      dolor = "Columna lumbar";
+      lado = "";
+    } else if (zona.includes("Cadera")) {
+      dolor = "Cadera";
+      lado = zona.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zona.includes("Rodilla")) {
+      dolor = "Rodilla";
+      lado = zona.includes("izquierda") ? "Izquierda" : "Derecha";
+    }
 
     setDatosPaciente((prev) => {
       const next = { ...prev, dolor, lado };
-      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
+      try {
+        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
+      } catch {}
       return next;
     });
   };
 
-  // Submit principal
+  // ====== Submit del formulario principal ======
   const handleSubmit = (e) => {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
-    if (!datosPaciente.nombre?.trim() || !datosPaciente.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0 || !datosPaciente.dolor?.trim()) {
+    if (
+      !datosPaciente.nombre?.trim() ||
+      !datosPaciente.rut?.trim() ||
+      !Number.isFinite(edadNum) ||
+      edadNum <= 0 ||
+      !datosPaciente.dolor?.trim()
+    ) {
       alert("Por favor complete todos los campos obligatorios.");
       return;
     }
     setMostrarAviso(true);
   };
 
-  // Detección RM
+  // ====== Detección de RM en backend ======
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const esResonanciaTexto = (t="") => {
+
+  const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
   };
+
   const detectarResonanciaEnBackend = async (datos) => {
     try {
       const r = await fetch(`${BACKEND_BASE}/detectar-resonancia`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ datosPaciente: datos })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datosPaciente: datos }),
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
-      const flag = typeof j?.resonancia === "boolean" ? j.resonancia : esResonanciaTexto(j?.texto || j?.orden || "");
+      const flag =
+        typeof j?.resonancia === "boolean"
+          ? j.resonancia
+          : esResonanciaTexto(j?.texto || j?.orden || "");
       sessionStorage.setItem("solicitaResonancia", flag ? "1" : "0");
       return !!flag;
-    } catch {
+    } catch (e) {
+      console.warn("No se pudo detectar RM en backend:", e);
       sessionStorage.setItem("solicitaResonancia", "0");
       return false;
     }
@@ -188,7 +266,10 @@ function App() {
 
   const handleDescargarPDF = async () => {
     const idPago = sessionStorage.getItem("idPago");
-    if (!idPago) { alert("ID de pago no encontrado"); return; }
+    if (!idPago) {
+      alert("ID de pago no encontrado");
+      return;
+    }
 
     const intentaDescarga = async () => {
       const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
@@ -200,12 +281,16 @@ function App() {
       const a = document.createElement("a");
       a.href = url;
       a.download = `orden_${(datosPaciente.nombre || "paciente").replace(/ /g, "_")}.pdf`;
-      document.body.appendChild(a); a.click(); a.remove();
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       window.URL.revokeObjectURL(url);
       return { ok: true };
     };
 
-    setDescargando(true); setMensajeDescarga("Verificando pago…");
+    setDescargando(true);
+    setMensajeDescarga("Verificando pago…");
+
     let reinyectado = false;
     try {
       const maxIntentos = 30;
@@ -216,7 +301,9 @@ function App() {
         if (r.status === 402) {
           setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
-          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
+          if (i === maxIntentos) {
+            alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
+          }
           continue;
         }
 
@@ -227,7 +314,8 @@ function App() {
             const datosReinyectar = respaldo ? JSON.parse(respaldo) : datosPaciente;
 
             await fetch(`${BACKEND_BASE}/guardar-datos`, {
-              method: "POST", headers: { "Content-Type": "application/json" },
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ idPago, datosPaciente: datosReinyectar }),
             });
 
@@ -254,43 +342,71 @@ function App() {
 
   const handlePagarAhora = async () => {
     const edadNum = Number(datosPaciente.edad);
-    if (!datosPaciente.nombre?.trim() || !datosPaciente.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0 || !datosPaciente.dolor?.trim()) {
+    if (
+      !datosPaciente.nombre?.trim() ||
+      !datosPaciente.rut?.trim() ||
+      !Number.isFinite(edadNum) ||
+      edadNum <= 0 ||
+      !datosPaciente.dolor?.trim()
+    ) {
       alert("Complete nombre, RUT, edad (>0) y dolor antes de pagar.");
       return;
     }
 
     try {
-      const idPagoTmp = sessionStorage.getItem("idPago") || "pago_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-      sessionStorage.setItem("idPago", idPagoTmp);
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datosPaciente, edad: edadNum }));
+      const idPagoTmp =
+        sessionStorage.getItem("idPago") ||
+        "pago_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
 
+      sessionStorage.setItem("idPago", idPagoTmp);
+      sessionStorage.setItem(
+        "datosPacienteJSON",
+        JSON.stringify({ ...datosPaciente, edad: edadNum })
+      );
+
+      // Preguntar al backend si incluye RM:
       let extras = {};
-      const solicitarRM = await detectarResonanciaEnBackend({ ...datosPaciente, edad: edadNum });
+      const solicitarRM = await detectarResonanciaEnBackend({
+        ...datosPaciente,
+        edad: edadNum,
+      });
+
       if (solicitarRM) {
         const res = await pedirChecklistResonancia();
         if (res?.canceled) return;
+
         if (res.bloquea) {
           alert("Por seguridad, cambiaremos la resonancia por otro examen.");
-          extras.ordenAlternativa = "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
+          extras.ordenAlternativa =
+            "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
         } else {
           extras.resonanciaChecklist = res.data || {};
-          extras.resonanciaResumenTexto = res.resumen || resumenResoTexto(res.data || {});
+          extras.resonanciaResumenTexto =
+            res.resumen || resumenResoTexto(res.data || {});
         }
       }
 
       await fetch(`${BACKEND_BASE}/guardar-datos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idPago: idPagoTmp, datosPaciente: { ...datosPaciente, edad: edadNum }, ...extras }),
+        body: JSON.stringify({
+          idPago: idPagoTmp,
+          datosPaciente: { ...datosPaciente, edad: edadNum },
+          ...extras,
+        }),
       });
 
-      await irAPagoKhipu({ ...datosPaciente, edad: edadNum }, { idPago: idPagoTmp, modulo: "trauma" });
+      await irAPagoKhipu(
+        { ...datosPaciente, edad: edadNum },
+        { idPago: idPagoTmp, modulo: "trauma" }
+      );
     } catch (err) {
       console.error("No se pudo generar el link de pago:", err);
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
     }
   };
 
+  // ====== UI ======
   return (
     <div style={styles.page}>
       {/* Barra superior fija */}
@@ -307,7 +423,10 @@ function App() {
               <button
                 key={b.key}
                 type="button"
-                onClick={() => { setModulo(b.key); sessionStorage.setItem("modulo", b.key); }}
+                onClick={() => {
+                  setModulo(b.key);
+                  sessionStorage.setItem("modulo", b.key);
+                }}
                 style={{
                   ...styles.topBtn,
                   ...(active ? styles.topBtnActive : styles.topBtnIdle),
@@ -321,26 +440,45 @@ function App() {
       </div>
 
       {/* Modal Aviso Legal */}
-      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
+      <AvisoLegal
+        visible={mostrarAviso}
+        persist={false}
+        onAccept={continuarTrasAviso}
+        onReject={rechazarAviso}
+      />
 
       <div style={styles.content}>
         {/* Columna 1 - Esquema */}
         <div style={styles.esquemaCol}>
           <EsquemaToggleTabs vista={vista} onChange={setVista} />
-          {vista === "anterior"
-            ? <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
-            : <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
-          }
+          {vista === "anterior" ? (
+            <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
+          ) : (
+            <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
+          )}
+
           <div aria-live="polite" role="status" style={styles.statusBox}>
-            {datosPaciente?.dolor
-              ? <>Zona seleccionada: <strong>{datosPaciente.dolor}{datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}</strong></>
-              : "Seleccione una zona en el esquema"}
+            {datosPaciente?.dolor ? (
+              <>
+                Zona seleccionada:{" "}
+                <strong>
+                  {datosPaciente.dolor}
+                  {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
+                </strong>
+              </>
+            ) : (
+              "Seleccione una zona en el esquema"
+            )}
           </div>
         </div>
 
-        {/* Columna 2 - Formulario */}
+        {/* Columna 2 - Formulario Paciente */}
         <div style={styles.formCol}>
-          <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
+          <FormularioPaciente
+            datos={datosPaciente}
+            onCambiarDato={handleCambiarDato}
+            onSubmit={handleSubmit}
+          />
         </div>
 
         {/* Columna 3 - Previews / Acciones */}
@@ -350,7 +488,11 @@ function App() {
               <PreviewOrden datos={datosPaciente} />
               {!pagoRealizado && !mostrarPago && (
                 <>
-                  <button type="button" style={{ ...styles.actionBtn, backgroundColor: T.primary, color: T.onPrimary }} onClick={handlePagarAhora}>
+                  <button
+                    type="button"
+                    style={{ ...styles.actionBtn, backgroundColor: T.primary, color: T.onPrimary }}
+                    onClick={handlePagarAhora}
+                  >
                     Pagar ahora
                   </button>
                   <button
@@ -358,17 +500,38 @@ function App() {
                     style={{ ...styles.actionBtn, backgroundColor: T.muted, color: T.onPrimary }}
                     onClick={async () => {
                       const idPago = "guest_test_pago";
-                      const datosGuest = { nombre: "Guest", rut: "99999999-9", edad: 30, genero: "Hombre", dolor: "Rodilla", lado: "Izquierda" };
+                      const datosGuest = {
+                        nombre: "Guest",
+                        rut: "99999999-9",
+                        edad: 30,
+                        genero: "Hombre",
+                        dolor: "Rodilla",
+                        lado: "Izquierda",
+                      };
                       sessionStorage.setItem("idPago", idPago);
-                      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
-                      const resp = await fetch(`${BACKEND_BASE}/crear-pago-khipu`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ idPago, modoGuest: true, datosPaciente: datosGuest }),
-                      });
+                      sessionStorage.setItem(
+                        "datosPacienteJSON",
+                        JSON.stringify(datosGuest)
+                      );
+
+                      const resp = await fetch(
+                        `${BACKEND_BASE}/crear-pago-khipu`,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            idPago,
+                            modoGuest: true,
+                            datosPaciente: datosGuest,
+                          }),
+                        }
+                      );
                       const j = await resp.json();
-                      if (j?.ok && j?.url) window.location.href = j.url;
-                      else alert("Guest no disponible. Ver backend.");
+                      if (j?.ok && j?.url) {
+                        window.location.href = j.url;
+                      } else {
+                        alert("Guest no disponible. Ver backend.");
+                      }
                     }}
                   >
                     Simular Pago como Guest
@@ -384,15 +547,23 @@ function App() {
                   disabled={descargando}
                   title={mensajeDescarga || "Verificar y descargar"}
                 >
-                  {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
+                  {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
                 </button>
               )}
             </>
           )}
 
-          {mostrarVistaPrevia && modulo === "preop" && <PreopModulo initialDatos={datosPaciente} />}
-          {mostrarVistaPrevia && modulo === "generales" && <GeneralesModulo initialDatos={datosPaciente} />}
-          {mostrarVistaPrevia && modulo === "ia" && <IAModulo key={`ia-${modulo}`} initialDatos={datosPaciente} />}
+          {mostrarVistaPrevia && modulo === "preop" && (
+            <PreopModulo initialDatos={datosPaciente} />
+          )}
+
+          {mostrarVistaPrevia && modulo === "generales" && (
+            <GeneralesModulo initialDatos={datosPaciente} />
+          )}
+
+          {mostrarVistaPrevia && modulo === "ia" && (
+            <IAModulo key={`ia-${modulo}`} initialDatos={datosPaciente} />
+          )}
         </div>
       </div>
 
@@ -401,7 +572,10 @@ function App() {
         <div style={styles.modalOverlay}>
           <div style={{ width: "min(900px, 96vw)" }}>
             <FormularioResonancia
-              onCancel={() => { setShowReso(false); resolverReso?.({ canceled: true }); }}
+              onCancel={() => {
+                setShowReso(false);
+                resolverReso?.({ canceled: true });
+              }}
               onSave={(data, { riesgos }) => {
                 setShowReso(false);
                 const resumen = resumenResoTexto(data);
@@ -429,13 +603,12 @@ function App() {
   );
 }
 
-/* ================== Estilos con theme.json ================== */
+/* ================== Styles (solo tokens de theme.json) ================== */
 const styles = {
   page: {
     fontFamily: "Arial, sans-serif",
     backgroundColor: T.bg,
     minHeight: "100vh",
-    color: T.text,
   },
 
   /* Top bar */
@@ -515,11 +688,11 @@ const styles = {
     boxShadow: T.shadowSm,
   },
 
-  /* Modal overlay (si quieres, podemos mover esto también al theme como `backdrop`) */
+  /* Modals */
   modalOverlay: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.35)",
+    background: (T.overlay || "rgba(0,0,0,0.35)"),
     display: "grid",
     placeItems: "center",
     zIndex: 9999,
