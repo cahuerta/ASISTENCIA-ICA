@@ -50,14 +50,20 @@ function App() {
 
   // ====== Aviso Legal ======
   const [mostrarAviso, setMostrarAviso] = useState(false);
+  const [pendingPreview, setPendingPreview] = useState(false); // ← preview sólo tras IA + aceptar aviso
+
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
-    setMostrarVistaPrevia(true);
-    setPagoRealizado(false);
-    setMostrarPago(false);
+    if (pendingPreview) {
+      setMostrarVistaPrevia(true);
+      setPagoRealizado(false);
+      setMostrarPago(false);
+      setPendingPreview(false);
+    }
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
+    setPendingPreview(false);
     try {
       window.close();
     } catch {}
@@ -106,9 +112,50 @@ function App() {
   // ====== Comorbilidades (modal suelto) ======
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(null);
-  const handleSaveComorbilidades = (payload) => {
+
+  // Guardar comorbilidades → llamar IA backend → abrir Aviso (y luego preview)
+  const handleSaveComorbilidades = async (payload) => {
     setComorbilidades(payload);
     setMostrarComorbilidades(false);
+
+    // Datos adicionales de Preop desde sessionStorage
+    let tipoCirugia = "";
+    let tipoCirugiaOtro = "";
+    try {
+      tipoCirugia = sessionStorage.getItem("preop_tipoCirugia") || "";
+      tipoCirugiaOtro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+    } catch {}
+
+    try {
+      const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
+      const resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          datosPaciente: { ...datosPaciente, edad: edadNum },
+          comorbilidades: payload,
+          tipoCirugia,
+          tipoCirugiaOtro,
+        }),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const j = await resp.json();
+
+      const examenes = j?.examenes || j?.lista || j?.items || [];
+      const resumen = j?.resumen || j?.texto || j?.informe || "";
+
+      try {
+        sessionStorage.setItem("preop_ia_examenes", JSON.stringify(examenes));
+        sessionStorage.setItem("preop_ia_resumen", resumen || "");
+      } catch {}
+
+      // IA lista → marcar preview pendiente y pedir aceptación del aviso
+      setPendingPreview(true);
+      setMostrarAviso(true);
+    } catch (err) {
+      alert("No fue posible obtener la información de IA desde el backend. Intenta nuevamente.");
+      setPendingPreview(false);
+    }
   };
 
   // ====== Restauración de estado en montaje ======
@@ -231,7 +278,8 @@ function App() {
       alert("Por favor complete todos los campos obligatorios.");
       return;
     }
-    setMostrarAviso(true);
+    // Primero Comorbilidades; luego IA; recién después Aviso/Preview
+    setMostrarComorbilidades(true);
   };
 
   // ====== Detección de RM en backend ======
@@ -240,7 +288,7 @@ function App() {
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
-    };
+  };
 
   const detectarResonanciaEnBackend = async (datos) => {
     try {
@@ -426,6 +474,9 @@ function App() {
                 onClick={() => {
                   setModulo(b.key);
                   sessionStorage.setItem("modulo", b.key);
+                  // Mostrar Aviso Legal al cambiar de módulo (sin abrir preview)
+                  setPendingPreview(false);
+                  setMostrarAviso(true);
                 }}
                 style={styleBtn}
               >
@@ -664,17 +715,17 @@ const styles = {
   },
   esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
 
-  /* >>> Cambios mínimos de stacking para evitar que tape el modal <<< */
+  /* Stacking */
   formCol: {
     flex: "0 0 400px",
     maxWidth: 400,
     position: "relative",
-    zIndex: 0,          // antes 2: lo bajamos para que nunca quede sobre el modal
+    zIndex: 0, // ← para que el modal quede encima
   },
   previewCol: {
     minWidth: 360,
     position: "relative",
-    zIndex: 0,          // antes 1
+    zIndex: 0, // ← para que el modal quede encima
     overflow: "hidden",
   },
 
@@ -711,7 +762,7 @@ const styles = {
     background: T.overlay,
     display: "grid",
     placeItems: "center",
-    zIndex: 2147483000,  // antes 9999: garantizado por encima de todo
+    zIndex: 2147483000,
     padding: 12,
     pointerEvents: "auto",
   },
