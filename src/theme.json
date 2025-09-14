@@ -1,0 +1,15 @@
+{
+  "name": "icarticular",
+  "colors": {
+    "primary": "#0B2C5E",
+    "primaryHover": "#0E3770",
+    "primaryActive": "#072046",
+    "accent": "#C2A86A",
+    "bg": "#F5F7FA",
+    "text": "#0B2C5E",
+    "mutedBg": "#F3F4F6",
+    "mutedBorder": "#E5E7EB",
+    "danger": "#B00020",
+    "success": "#0E7C3A"
+  }
+}
