@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
-import { getTheme } from "../theme.js"; // ← colores desde theme.json
+import { getTheme } from "../theme.js"; // colores desde theme.json
 const T = getTheme();
 
 /* ===== Utilidades RUT (Chile) ===== */
@@ -16,8 +16,7 @@ function partirRut(limpio) {
   return { cuerpo, dv };
 }
 function calcularDV(cuerpo = "") {
-  let suma = 0,
-    multa = 2;
+  let suma = 0, multa = 2;
   for (let i = cuerpo.length - 1; i >= 0; i--) {
     suma += Number(cuerpo[i]) * multa;
     multa = multa === 7 ? 2 : multa + 1;
@@ -56,35 +55,48 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
   const [rutMsg, setRutMsg] = useState("");
   const [rutValido, setRutValido] = useState(true);
 
-  // ===== Detectar si el módulo activo es PREOP (sin tocar App.jsx)
-  const [isPreop, setIsPreop] = useState(false);
-  useEffect(() => {
-    try {
-      setIsPreop(sessionStorage.getItem("modulo") === "preop");
-    } catch {}
-  }, []);
+  // PREOP: leo el módulo actual directamente de sessionStorage en cada render
+  const isPreop = (() => {
+    try { return sessionStorage.getItem("modulo") === "preop"; } catch { return false; }
+  })();
 
-  // ===== Campos extra para PREOP: tipo de cirugía
+  // Campos extra para PREOP: tipo de cirugía
   const [tipoCirugia, setTipoCirugia] = useState("");
   const [tipoCirugiaLibre, setTipoCirugiaLibre] = useState("");
 
-  // Restaurar preferencia si existiera
+  // Inicializar desde sessionStorage o desde props si existe
   useEffect(() => {
     try {
-      const t = sessionStorage.getItem("preop_tipoCirugia") || "";
+      const t = sessionStorage.getItem("preop_tipoCirugia") || datos?.tipoCirugia || "";
       const o = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
-      setTipoCirugia(t);
+      setTipoCirugia(t.startsWith("Otro") && !o ? "Otro (especificar)" : t);
       setTipoCirugiaLibre(o);
     } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Guardar en sessionStorage cuando cambien
+  // Guardar preferencia del usuario y sincronizar con el padre
   useEffect(() => {
     try {
       sessionStorage.setItem("preop_tipoCirugia", tipoCirugia || "");
       sessionStorage.setItem("preop_tipoCirugia_otro", tipoCirugiaLibre || "");
     } catch {}
   }, [tipoCirugia, tipoCirugiaLibre]);
+
+  // Mostrar bloque cirugías solo si: PREOP + dolor rodilla/cadera
+  const dolorLower = String(datos?.dolor || "").toLowerCase();
+  const showCirugia = isPreop && (dolorLower.includes("rodilla") || dolorLower.includes("cadera"));
+
+  // Empujar el valor final al padre (para backend)
+  useEffect(() => {
+    const finalTipo =
+      showCirugia
+        ? (tipoCirugia?.startsWith("Otro") ? (tipoCirugiaLibre || "").trim() : (tipoCirugia || "").trim())
+        : "";
+
+    onCambiarDato("tipoCirugia", finalTipo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCirugia, tipoCirugia, tipoCirugiaLibre]);
 
   // Lógicas RUT
   const rutLimpio = useMemo(() => limpiarRut(datos?.rut || ""), [datos?.rut]);
@@ -147,29 +159,18 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
     }
 
     // Si estamos en PREOP y Dolor es Rodilla/Cadera, exigir tipo de cirugía
-    const dolor = (datos?.dolor || "").toLowerCase();
-    const requiereCirugia = isPreop && (dolor.includes("rodilla") || dolor.includes("cadera"));
-    if (requiereCirugia) {
-      if (!tipoCirugia) {
+    if (showCirugia) {
+      const finalTipo =
+        tipoCirugia?.startsWith("Otro") ? (tipoCirugiaLibre || "").trim() : (tipoCirugia || "").trim();
+      if (!finalTipo) {
         e.preventDefault();
-        alert("Seleccione el tipo de cirugía.");
-        return;
-      }
-      if (tipoCirugia.startsWith("Otro") && !tipoCirugiaLibre.trim()) {
-        e.preventDefault();
-        alert("Especifique el tipo de cirugía.");
+        alert("Seleccione o especifique el tipo de cirugía.");
         return;
       }
     }
 
     onSubmit(e);
   };
-
-  // Mostrar bloque cirugías solo si: PREOP + dolor rodilla/cadera
-  const showCirugia =
-    isPreop &&
-    (String(datos?.dolor || "").toLowerCase().includes("rodilla") ||
-      String(datos?.dolor || "").toLowerCase().includes("cadera"));
 
   return (
     <form onSubmit={handleSubmit} style={styles.form}>
@@ -202,10 +203,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         aria-invalid={!rutValido}
         aria-describedby="rut-help"
       />
-      <div
-        id="rut-help"
-        style={{ ...styles.help, color: rutValido ? T.textMuted : T.primaryDark }}
-      >
+      <div id="rut-help" style={{ ...styles.help, color: rutValido ? T.textMuted : T.primaryDark }}>
         {rutMsg}
       </div>
 
@@ -246,7 +244,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         <option value="Columna lumbar">Columna lumbar</option>
       </select>
 
-      {/* Bloque PREOP: Tipo de cirugía */}
+      {/* Bloque PREOP: Tipo de cirugía (solo si corresponde) */}
       {showCirugia && (
         <>
           <label style={styles.label}>Tipo de cirugía:</label>
