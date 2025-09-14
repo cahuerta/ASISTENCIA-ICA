@@ -1,25 +1,30 @@
 {
-  "primary": "#0B3B6E",
-  "primaryDark": "#072C52",
-  "onPrimary": "#FFFFFF",
+  "/* --- Barra superior estilo icarticular --- */": "",
+  "navBg": "#0E1115",
+  "navBorder": "#1A2028",
+  "navText": "#FFFFFF",
 
-  "accentAlpha": "rgba(11, 59, 110, 0.28)",
+  "/* --- Paleta metálica (acero) --- */": "",
+  "primary": "#2F3A45",
+  "primaryDark": "#1E262E",
+  "onPrimary": "#F1F5F9",
 
-  "bg": "#F5F6F7",
+  "accentAlpha": "rgba(47,58,69,0.28)",
+
+  "/* --- Fondo y superficies --- */": "",
+  "bg": "#F2F4F7",
   "surface": "#FFFFFF",
-  "border": "#D4DAE2",
+  "border": "#D1D6DE",
 
+  "/* --- Texto --- */": "",
   "text": "#111827",
   "textMuted": "#4B5563",
 
-  "muted": "#2B3442",
+  "/* --- Controles secundarios / contornos --- */": "",
+  "muted": "#3B4754",
 
+  "/* --- Sombras y overlay --- */": "",
   "shadowSm": "0 2px 10px rgba(0,0,0,0.08)",
   "shadowMd": "0 6px 18px rgba(0,0,0,0.12)",
-
-  "overlay": "rgba(0,0,0,0.55)",
-
-  "headerBg": "#0F0F0F",
-  "headerBorder": "#232323",
-  "headerShadow": "0 2px 12px rgba(0,0,0,0.35)"
+  "overlay": "rgba(0,0,0,0.50)"
 }
