@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
-import { getTheme } from "./theme.js"; // <- colores desde theme.json (ruta correcta si el archivo está en src/)
+import { getTheme } from "./theme.js"; // <- colores desde theme.json
 const T = getTheme();
 
 /* ================= Utilidades RUT (Chile) ================= */
@@ -65,19 +65,16 @@ function cirugiasParaZona(dolor = "") {
   return [];
 }
 
-function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
+function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual }) {
   const [rutMsg, setRutMsg] = useState("");
   const [rutValido, setRutValido] = useState(true);
 
-  // Detectar si estamos en el módulo PREOP (para mostrar tipo de cirugía)
-  const [isPreop, setIsPreop] = useState(false);
-  useEffect(() => {
-    try {
-      setIsPreop(sessionStorage.getItem("modulo") === "preop");
-    } catch {}
-  }, []);
+  // === Mostrar "Tipo de cirugía" SOLO en PREOP (sin depender de "Dolor")
+  const isPreop =
+    moduloActual === "preop" ||
+    (typeof window !== "undefined" && sessionStorage.getItem("modulo") === "preop");
 
-  // Tipo de cirugía (persistido en sessionStorage para que lo tome PreopModulo)
+  // Tipo de cirugía (persistido)
   const [tipoCirugia, setTipoCirugia] = useState(() => {
     try {
       return sessionStorage.getItem("preop_tipoCirugia") || "";
@@ -93,13 +90,13 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
     }
   });
 
-  // Opciones según dolor actual
+  // Opciones según dolor actual (si no hay dolor, luego mostramos al menos "OTRO")
   const opcionesCirugia = useMemo(
     () => cirugiasParaZona(datos?.dolor || ""),
     [datos?.dolor]
   );
 
-  // Si cambia el dolor y la opción ya no aplica, la limpiamos (salvo "OTRO (ESPECIFICAR)")
+  // Si cambia el dolor y la opción ya no aplica, limpiar (salvo "OTRO (ESPECIFICAR)")
   useEffect(() => {
     if (!opcionesCirugia.length) return;
     const valido =
@@ -109,7 +106,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
     if (!valido) setTipoCirugia("");
   }, [opcionesCirugia, tipoCirugia]);
 
-  // Persistir selección/“otro” en sessionStorage
+  // Persistir selección
   useEffect(() => {
     try {
       sessionStorage.setItem("preop_tipoCirugia", tipoCirugia || "");
@@ -168,7 +165,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
     setRutMsg("RUT formateado.");
   };
 
-  /* ======= Submit (valida RUT y, si aplica, tipo de cirugía) ======= */
+  /* ======= Submit (valida RUT y, si PREOP, exige tipo de cirugía) ======= */
   const handleSubmit = (e) => {
     const v = validarRut(datos?.rut || "");
     if (!v.valido) {
@@ -178,11 +175,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
       return;
     }
 
-    const dolor = String(datos?.dolor || "").toLowerCase();
-    const requiereCirugia =
-      isPreop && (dolor.includes("rodilla") || dolor.includes("cadera"));
-
-    if (requiereCirugia) {
+    if (isPreop) {
       if (!tipoCirugia) {
         e.preventDefault();
         alert("Seleccione el TIPO DE CIRUGÍA.");
@@ -198,10 +191,12 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
     onSubmit(e);
   };
 
-  const showCirugia =
-    isPreop &&
-    (String(datos?.dolor || "").toLowerCase().includes("rodilla") ||
-      String(datos?.dolor || "").toLowerCase().includes("cadera"));
+  // Campo visible apenas entras a PREOP
+  const showCirugia = isPreop;
+
+  // Lista a mostrar en el select (si no hay dolor seleccionado, al menos "OTRO")
+  const listaOpciones =
+    opcionesCirugia.length > 0 ? opcionesCirugia : ["OTRO (ESPECIFICAR)"];
 
   return (
     <form onSubmit={handleSubmit} style={styles.form}>
@@ -276,7 +271,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         <option value="Columna lumbar">Columna lumbar</option>
       </select>
 
-      {/* TIPO DE CIRUGÍA (solo PREOP y zona válida) */}
+      {/* TIPO DE CIRUGÍA (SIEMPRE visible en PREOP) */}
       {showCirugia && (
         <>
           <label style={styles.label}>TIPO DE CIRUGÍA:</label>
@@ -286,7 +281,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
             onChange={(e) => setTipoCirugia(e.target.value)}
           >
             <option value="">Seleccione…</option>
-            {opcionesCirugia.map((t) => (
+            {listaOpciones.map((t) => (
               <option key={t} value={t}>
                 {t}
               </option>
