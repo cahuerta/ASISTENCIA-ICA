@@ -240,7 +240,7 @@ function App() {
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
-  };
+    };
 
   const detectarResonanciaEnBackend = async (datos) => {
     try {
@@ -663,8 +663,20 @@ const styles = {
     padding: "0 16px 24px",
   },
   esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
-  formCol: { flex: "0 0 400px", maxWidth: 400, position: "relative", zIndex: 2 },
-  previewCol: { minWidth: 360, position: "relative", zIndex: 1 },
+
+  /* >>> Cambios mínimos de stacking para evitar que tape el modal <<< */
+  formCol: {
+    flex: "0 0 400px",
+    maxWidth: 400,
+    position: "relative",
+    zIndex: 0,          // antes 2: lo bajamos para que nunca quede sobre el modal
+  },
+  previewCol: {
+    minWidth: 360,
+    position: "relative",
+    zIndex: 0,          // antes 1
+    overflow: "hidden",
+  },
 
   statusBox: {
     marginTop: 8,
@@ -699,8 +711,9 @@ const styles = {
     background: T.overlay,
     display: "grid",
     placeItems: "center",
-    zIndex: 9999,
+    zIndex: 2147483000,  // antes 9999: garantizado por encima de todo
     padding: 12,
+    pointerEvents: "auto",
   },
 };
 
