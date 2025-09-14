@@ -33,7 +33,6 @@ function App() {
     genero: "",
     dolor: "",
     lado: "",
-    tipoCirugia: "", // <- NUEVO: lo usará PreOp e IA
   });
 
   // Módulo activo: 'trauma' | 'preop' | 'generales' | 'ia'
@@ -59,7 +58,9 @@ function App() {
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
-    try { window.close(); } catch {}
+    try {
+      window.close();
+    } catch {}
     setTimeout(() => {
       if (!window.closed) window.location.href = "about:blank";
     }, 0);
@@ -76,12 +77,23 @@ function App() {
     "fragmentos_metalicos",
   ]);
   const pedirChecklistResonancia = () =>
-    new Promise((resolve) => { setResolverReso(() => resolve); setShowReso(true); });
+    new Promise((resolve) => {
+      setResolverReso(() => resolve);
+      setShowReso(true);
+    });
   const hasRedFlags = (data) =>
     Object.entries(data || {}).some(([k, v]) => RED_FLAGS.has(k) && v === true);
   const resumenResoTexto = (data) => {
-    const si = Object.entries(data || {}).filter(([_, v]) => v === true).map(([k]) => k).join(", ") || "—";
-    const no = Object.entries(data || {}).filter(([_, v]) => v === false).map(([k]) => k).join(", ") || "—";
+    const si =
+      Object.entries(data || {})
+        .filter(([_, v]) => v === true)
+        .map(([k]) => k)
+        .join(", ") || "—";
+    const no =
+      Object.entries(data || {})
+        .filter(([_, v]) => v === false)
+        .map(([k]) => k)
+        .join(", ") || "—";
     return [
       "FORMULARIO DE SEGURIDAD PARA RESONANCIA MAGNÉTICA",
       `Sí: ${si}`,
@@ -99,22 +111,13 @@ function App() {
     setMostrarComorbilidades(false);
   };
 
-  // ====== PreOp como MODAL (nuevo) ======
-  const [mostrarPreop, setMostrarPreop] = useState(false);
-  useEffect(() => {
-    // Cuando el usuario entra a PREOP y ya está la vista previa, abrimos modal
-    if (mostrarVistaPrevia && modulo === "preop") {
-      setMostrarPreop(true);
-    } else {
-      setMostrarPreop(false);
-    }
-  }, [modulo, mostrarVistaPrevia]);
-
-  // ====== Restauración de estado ======
+  // ====== Restauración de estado en montaje ======
   useEffect(() => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
     if (saved) {
-      try { setDatosPaciente(JSON.parse(saved)); } catch {}
+      try {
+        setDatosPaciente(JSON.parse(saved));
+      } catch {}
     }
 
     const moduloSS = sessionStorage.getItem("modulo");
@@ -131,7 +134,10 @@ function App() {
     const idPagoSS = sessionStorage.getItem("idPago");
     const idFinal = idPagoURL || idPagoSS || "";
 
-    if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; }
+    if (pollerRef.current) {
+      clearInterval(pollerRef.current);
+      pollerRef.current = null;
+    }
 
     if (pago === "ok" && idFinal) {
       sessionStorage.setItem("idPago", idFinal);
@@ -142,7 +148,9 @@ function App() {
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
-        try { await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`); } catch {}
+        try {
+          await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`);
+        } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
           pollerRef.current = null;
@@ -162,19 +170,26 @@ function App() {
     }
 
     return () => {
-      if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; }
+      if (pollerRef.current) {
+        clearInterval(pollerRef.current);
+        pollerRef.current = null;
+      }
     };
   }, []);
 
   // Persistir vista de esquema
   useEffect(() => {
-    try { sessionStorage.setItem("vistaEsquema", vista); } catch {}
+    try {
+      sessionStorage.setItem("vistaEsquema", vista);
+    } catch {}
   }, [vista]);
 
   const handleCambiarDato = (campo, valor) => {
     setDatosPaciente((prev) => {
       const next = { ...prev, [campo]: valor };
-      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
+      try {
+        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
+      } catch {}
       return next;
     });
   };
@@ -182,13 +197,22 @@ function App() {
   const onSeleccionZona = (zona) => {
     let dolor = "";
     let lado = "";
-    if (zona.includes("Columna")) { dolor = "Columna lumbar"; lado = ""; }
-    else if (zona.includes("Cadera")) { dolor = "Cadera"; lado = zona.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zona.includes("Rodilla")) { dolor = "Rodilla"; lado = zona.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    if (zona.includes("Columna")) {
+      dolor = "Columna lumbar";
+      lado = "";
+    } else if (zona.includes("Cadera")) {
+      dolor = "Cadera";
+      lado = zona.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zona.includes("Rodilla")) {
+      dolor = "Rodilla";
+      lado = zona.includes("izquierda") ? "Izquierda" : "Derecha";
+    }
 
     setDatosPaciente((prev) => {
       const next = { ...prev, dolor, lado };
-      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
+      try {
+        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
+      } catch {}
       return next;
     });
   };
@@ -200,7 +224,8 @@ function App() {
     if (
       !datosPaciente.nombre?.trim() ||
       !datosPaciente.rut?.trim() ||
-      !Number.isFinite(edadNum) || edadNum <= 0 ||
+      !Number.isFinite(edadNum) ||
+      edadNum <= 0 ||
       !datosPaciente.dolor?.trim()
     ) {
       alert("Por favor complete todos los campos obligatorios.");
@@ -211,10 +236,12 @@ function App() {
 
   // ====== Detección de RM en backend ======
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
   };
+
   const detectarResonanciaEnBackend = async (datos) => {
     try {
       const r = await fetch(`${BACKEND_BASE}/detectar-resonancia`, {
@@ -224,7 +251,10 @@ function App() {
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
-      const flag = typeof j?.resonancia === "boolean" ? j.resonancia : esResonanciaTexto(j?.texto || j?.orden || "");
+      const flag =
+        typeof j?.resonancia === "boolean"
+          ? j.resonancia
+          : esResonanciaTexto(j?.texto || j?.orden || "");
       sessionStorage.setItem("solicitaResonancia", flag ? "1" : "0");
       return !!flag;
     } catch {
@@ -235,7 +265,10 @@ function App() {
 
   const handleDescargarPDF = async () => {
     const idPago = sessionStorage.getItem("idPago");
-    if (!idPago) { alert("ID de pago no encontrado"); return; }
+    if (!idPago) {
+      alert("ID de pago no encontrado");
+      return;
+    }
 
     const intentaDescarga = async () => {
       const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
@@ -267,7 +300,9 @@ function App() {
         if (r.status === 402) {
           setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
-          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
+          if (i === maxIntentos) {
+            alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
+          }
           continue;
         }
 
@@ -308,7 +343,8 @@ function App() {
     if (
       !datosPaciente.nombre?.trim() ||
       !datosPaciente.rut?.trim() ||
-      !Number.isFinite(edadNum) || edadNum <= 0 ||
+      !Number.isFinite(edadNum) ||
+      edadNum <= 0 ||
       !datosPaciente.dolor?.trim()
     ) {
       alert("Complete nombre, RUT, edad (>0) y dolor antes de pagar.");
@@ -316,12 +352,21 @@ function App() {
     }
 
     try {
-      const idPagoTmp = sessionStorage.getItem("idPago") || ("pago_" + Date.now() + "_" + Math.floor(Math.random() * 10000));
+      const idPagoTmp =
+        sessionStorage.getItem("idPago") ||
+        "pago_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+
       sessionStorage.setItem("idPago", idPagoTmp);
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datosPaciente, edad: edadNum }));
+      sessionStorage.setItem(
+        "datosPacienteJSON",
+        JSON.stringify({ ...datosPaciente, edad: edadNum })
+      );
 
       let extras = {};
-      const solicitarRM = await detectarResonanciaEnBackend({ ...datosPaciente, edad: edadNum });
+      const solicitarRM = await detectarResonanciaEnBackend({
+        ...datosPaciente,
+        edad: edadNum,
+      });
 
       if (solicitarRM) {
         const res = await pedirChecklistResonancia();
@@ -329,20 +374,29 @@ function App() {
 
         if (res.bloquea) {
           alert("Por seguridad, cambiaremos la resonancia por otro examen.");
-          extras.ordenAlternativa = "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
+          extras.ordenAlternativa =
+            "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
         } else {
           extras.resonanciaChecklist = res.data || {};
-          extras.resonanciaResumenTexto = res.resumen || resumenResoTexto(res.data || {});
+          extras.resonanciaResumenTexto =
+            res.resumen || resumenResoTexto(res.data || {});
         }
       }
 
       await fetch(`${BACKEND_BASE}/guardar-datos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idPago: idPagoTmp, datosPaciente: { ...datosPaciente, edad: edadNum }, ...extras }),
+        body: JSON.stringify({
+          idPago: idPagoTmp,
+          datosPaciente: { ...datosPaciente, edad: edadNum },
+          ...extras,
+        }),
       });
 
-      await irAPagoKhipu({ ...datosPaciente, edad: edadNum }, { idPago: idPagoTmp, modulo: "trauma" });
+      await irAPagoKhipu(
+        { ...datosPaciente, edad: edadNum },
+        { idPago: idPagoTmp, modulo: "trauma" }
+      );
     } catch (err) {
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
     }
@@ -361,12 +415,18 @@ function App() {
             { key: "ia", label: "ANÁLISIS MEDIANTE IA" },
           ].map((b) => {
             const active = modulo === b.key;
-            const styleBtn = { ...styles.topBtn, ...(active ? styles.topBtnActive : styles.topBtnIdle) };
+            const styleBtn = {
+              ...styles.topBtn,
+              ...(active ? styles.topBtnActive : styles.topBtnIdle),
+            };
             return (
               <button
                 key={b.key}
                 type="button"
-                onClick={() => { setModulo(b.key); sessionStorage.setItem("modulo", b.key); }}
+                onClick={() => {
+                  setModulo(b.key);
+                  sessionStorage.setItem("modulo", b.key);
+                }}
                 style={styleBtn}
               >
                 {b.label}
@@ -377,7 +437,12 @@ function App() {
       </div>
 
       {/* Modal Aviso Legal */}
-      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
+      <AvisoLegal
+        visible={mostrarAviso}
+        persist={false}
+        onAccept={continuarTrasAviso}
+        onReject={rechazarAviso}
+      />
 
       <div style={styles.content}>
         {/* Columna 1 - Esquema */}
@@ -391,8 +456,16 @@ function App() {
 
           <div aria-live="polite" role="status" style={styles.statusBox}>
             {datosPaciente?.dolor ? (
-              <>Zona seleccionada: <strong>{datosPaciente.dolor}{datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}</strong></>
-            ) : ("Seleccione una zona en el esquema")}
+              <>
+                Zona seleccionada:{" "}
+                <strong>
+                  {datosPaciente.dolor}
+                  {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
+                </strong>
+              </>
+            ) : (
+              "Seleccione una zona en el esquema"
+            )}
           </div>
         </div>
 
@@ -402,6 +475,8 @@ function App() {
             datos={datosPaciente}
             onCambiarDato={handleCambiarDato}
             onSubmit={handleSubmit}
+            /* >>>> modificación clave para PREOP */
+            moduloActual={modulo}
           />
         </div>
 
@@ -412,7 +487,11 @@ function App() {
               <PreviewOrden datos={datosPaciente} />
               {!pagoRealizado && !mostrarPago && (
                 <>
-                  <button type="button" style={styles.actionBtn} onClick={handlePagarAhora}>
+                  <button
+                    type="button"
+                    style={styles.actionBtn}
+                    onClick={handlePagarAhora}
+                  >
                     Pagar ahora
                   </button>
                   <button
@@ -420,17 +499,38 @@ function App() {
                     style={{ ...styles.actionBtn, backgroundColor: T.muted }}
                     onClick={async () => {
                       const idPago = "guest_test_pago";
-                      const datosGuest = { nombre: "Guest", rut: "99999999-9", edad: 30, genero: "Hombre", dolor: "Rodilla", lado: "Izquierda" };
+                      const datosGuest = {
+                        nombre: "Guest",
+                        rut: "99999999-9",
+                        edad: 30,
+                        genero: "Hombre",
+                        dolor: "Rodilla",
+                        lado: "Izquierda",
+                      };
                       sessionStorage.setItem("idPago", idPago);
-                      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
-                      const resp = await fetch(`${BACKEND_BASE}/crear-pago-khipu`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ idPago, modoGuest: true, datosPaciente: datosGuest }),
-                      });
+                      sessionStorage.setItem(
+                        "datosPacienteJSON",
+                        JSON.stringify(datosGuest)
+                      );
+
+                      const resp = await fetch(
+                        `${BACKEND_BASE}/crear-pago-khipu`,
+                        {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            idPago,
+                            modoGuest: true,
+                            datosPaciente: datosGuest,
+                          }),
+                        }
+                      );
                       const j = await resp.json();
-                      if (j?.ok && j?.url) window.location.href = j.url;
-                      else alert("Guest no disponible. Ver backend.");
+                      if (j?.ok && j?.url) {
+                        window.location.href = j.url;
+                      } else {
+                        alert("Guest no disponible. Ver backend.");
+                      }
                     }}
                   >
                     Simular Pago como Guest
@@ -452,38 +552,29 @@ function App() {
             </>
           )}
 
-          {/* GENERALES inline */}
+          {mostrarVistaPrevia && modulo === "preop" && (
+            <PreopModulo initialDatos={datosPaciente} />
+          )}
+
           {mostrarVistaPrevia && modulo === "generales" && (
             <GeneralesModulo initialDatos={datosPaciente} />
           )}
 
-          {/* IA inline */}
           {mostrarVistaPrevia && modulo === "ia" && (
             <IAModulo key={`ia-${modulo}`} initialDatos={datosPaciente} />
           )}
         </div>
       </div>
 
-      {/* ===== MODALES ===== */}
-
-      {/* Preoperatorio como MODAL (encima) */}
-      {mostrarVistaPrevia && mostrarPreop && (
-        <div style={styles.modalOverlay}>
-          <div style={{ width: "min(900px, 96vw)" }}>
-            <PreopModulo
-              initialDatos={datosPaciente}
-              onClose={() => setMostrarPreop(false)}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* RNM */}
+      {/* ===== Modal RNM ===== */}
       {showReso && (
         <div style={styles.modalOverlay}>
           <div style={{ width: "min(900px, 96vw)" }}>
             <FormularioResonancia
-              onCancel={() => { setShowReso(false); resolverReso?.({ canceled: true }); }}
+              onCancel={() => {
+                setShowReso(false);
+                resolverReso?.({ canceled: true });
+              }}
               onSave={(data, { riesgos }) => {
                 setShowReso(false);
                 const resumen = resumenResoTexto(data);
@@ -495,7 +586,7 @@ function App() {
         </div>
       )}
 
-      {/* Comorbilidades */}
+      {/* ===== Modal Comorbilidades ===== */}
       {mostrarComorbilidades && (
         <div style={styles.modalOverlay}>
           <div style={{ width: "min(900px, 96vw)" }}>
@@ -525,7 +616,9 @@ const styles = {
     top: 0,
     zIndex: 50,
     background: T.headerBg || T.bg,
-    borderBottom: `1px solid ${T.headerBorder ?? T.border}`,
+    borderBottomWidth: 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: T.headerBorder ?? T.border,
     boxShadow: T.headerShadow ?? T.shadowSm,
   },
   topBar: {
@@ -580,7 +673,9 @@ const styles = {
     background: T.surface,
     padding: "6px 8px",
     borderRadius: 8,
-    border: `1px solid ${T.border}`,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: T.border,
     minHeight: 30,
   },
 
@@ -601,7 +696,7 @@ const styles = {
   modalOverlay: {
     position: "fixed",
     inset: 0,
-    background: T.overlay, // del theme.json (ej: rgba(0,0,0,0.50))
+    background: T.overlay,
     display: "grid",
     placeItems: "center",
     zIndex: 9999,
