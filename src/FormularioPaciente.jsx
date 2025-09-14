@@ -1,64 +1,98 @@
-import React, { useMemo, useState } from 'react';
+"use client";
+import React, { useMemo, useState, useEffect } from "react";
+import { getTheme } from "../theme.js"; // ← colores desde theme.json
+const T = getTheme();
 
 /* ===== Utilidades RUT (Chile) ===== */
-function limpiarRut(str = '') {
-  return String(str).replace(/[^0-9kK]/g, '').toUpperCase();
+function limpiarRut(str = "") {
+  return String(str).replace(/[^0-9kK]/g, "").toUpperCase();
 }
 function partirRut(limpio) {
-  // Retorna { cuerpo, dv } donde dv puede ser undefined si no viene aún
   const s = limpiarRut(limpio);
-  if (!s) return { cuerpo: '', dv: undefined };
+  if (!s) return { cuerpo: "", dv: undefined };
   if (s.length <= 1) return { cuerpo: s, dv: undefined };
   const cuerpo = s.slice(0, -1);
   const dv = s.slice(-1);
   return { cuerpo, dv };
 }
-function calcularDV(cuerpo = '') {
-  // Algoritmo módulo 11
-  let suma = 0, multa = 2;
+function calcularDV(cuerpo = "") {
+  let suma = 0,
+    multa = 2;
   for (let i = cuerpo.length - 1; i >= 0; i--) {
     suma += Number(cuerpo[i]) * multa;
     multa = multa === 7 ? 2 : multa + 1;
   }
   const resto = 11 - (suma % 11);
-  if (resto === 11) return '0';
-  if (resto === 10) return 'K';
+  if (resto === 11) return "0";
+  if (resto === 10) return "K";
   return String(resto);
 }
-function formatearRut(cuerpo = '', dv) {
-  // Inserta puntos de miles y guión
-  if (!cuerpo) return '';
-  const cuerpoFmt = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+function formatearRut(cuerpo = "", dv) {
+  if (!cuerpo) return "";
+  const cuerpoFmt = cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   return dv ? `${cuerpoFmt}-${dv}` : cuerpoFmt;
 }
-function validarRut(str = '') {
+function validarRut(str = "") {
   const s = limpiarRut(str);
-  // Debe tener al menos 2 caracteres (cuerpo + dv)
-  if (s.length < 2) return { valido: false, motivo: 'incompleto' };
+  if (s.length < 2) return { valido: false, motivo: "incompleto" };
   const { cuerpo, dv } = partirRut(s);
-  if (!/^\d{1,8}$/.test(cuerpo)) return { valido: false, motivo: 'cuerpo inválido' };
+  if (!/^\d{1,8}$/.test(cuerpo)) return { valido: false, motivo: "cuerpo inválido" };
   const dvOk = calcularDV(cuerpo);
   const valido = dv === dvOk;
-  return { valido, motivo: valido ? '' : `DV incorrecto, debería ser ${dvOk}` };
+  return { valido, motivo: valido ? "" : `DV incorrecto, debería ser ${dvOk}` };
 }
 
-/* ================================== */
+/* ===== Catálogo de tipos de cirugía para PREOP ===== */
+const TIPOS_CIRUGIA = [
+  "Artroplastia total de cadera (ATC)",
+  "Artroplastia total de rodilla (ATR)",
+  "Artroscopia de rodilla",
+  "Osteotomía (cadera/rodilla)",
+  "Cirugía menor de partes blandas",
+  "Otro (especificar)",
+];
 
 function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
-  const [rutMsg, setRutMsg] = useState('');
+  const [rutMsg, setRutMsg] = useState("");
   const [rutValido, setRutValido] = useState(true);
 
-  const rutLimpio = useMemo(() => limpiarRut(datos?.rut || ''), [datos?.rut]);
-  const { cuerpo: cuerpoActual, dv: dvActual } = useMemo(() => partirRut(rutLimpio), [rutLimpio]);
+  // ===== Detectar si el módulo activo es PREOP (sin tocar App.jsx)
+  const [isPreop, setIsPreop] = useState(false);
+  useEffect(() => {
+    try {
+      setIsPreop(sessionStorage.getItem("modulo") === "preop");
+    } catch {}
+  }, []);
+
+  // ===== Campos extra para PREOP: tipo de cirugía
+  const [tipoCirugia, setTipoCirugia] = useState("");
+  const [tipoCirugiaLibre, setTipoCirugiaLibre] = useState("");
+
+  // Restaurar preferencia si existiera
+  useEffect(() => {
+    try {
+      const t = sessionStorage.getItem("preop_tipoCirugia") || "";
+      const o = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+      setTipoCirugia(t);
+      setTipoCirugiaLibre(o);
+    } catch {}
+  }, []);
+
+  // Guardar en sessionStorage cuando cambien
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("preop_tipoCirugia", tipoCirugia || "");
+      sessionStorage.setItem("preop_tipoCirugia_otro", tipoCirugiaLibre || "");
+    } catch {}
+  }, [tipoCirugia, tipoCirugiaLibre]);
+
+  // Lógicas RUT
+  const rutLimpio = useMemo(() => limpiarRut(datos?.rut || ""), [datos?.rut]);
 
   const handleRutChange = (e) => {
-    // Permite escribir libre, pero limpiando caracteres no válidos
     let s = limpiarRut(e.target.value);
-
-    // Limitar largo máximo (8 dígitos + 1 DV)
     if (s.length > 9) s = s.slice(0, 9);
 
-    // Feedback mientras escribe: si ya tiene DV, validamos; si no, sugerimos DV
     const { cuerpo, dv } = partirRut(s);
     if (cuerpo && cuerpo.length >= 7) {
       const dvCalc = calcularDV(cuerpo);
@@ -68,7 +102,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
           setRutMsg(`DV esperado: ${dvCalc}. Se corregirá al salir del campo.`);
         } else {
           setRutValido(true);
-          setRutMsg('RUT válido.');
+          setRutMsg("RUT válido.");
         }
       } else {
         setRutValido(false);
@@ -76,51 +110,66 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
       }
     } else {
       setRutValido(true);
-      setRutMsg('');
+      setRutMsg("");
     }
-
-    // No formateamos en vivo para no mover el cursor; guardamos "limpio"
-    onCambiarDato('rut', s);
+    onCambiarDato("rut", s);
   };
 
   const handleRutBlur = () => {
-    const s = limpiarRut(datos?.rut || '');
+    const s = limpiarRut(datos?.rut || "");
     if (!s) {
       setRutValido(false);
-      setRutMsg('Ingrese un RUT.');
+      setRutMsg("Ingrese un RUT.");
       return;
     }
-    const { cuerpo, dv } = partirRut(s);
-
-    // Si no hay cuerpo suficiente
+    const { cuerpo } = partirRut(s);
     if (!/^\d{1,8}$/.test(cuerpo)) {
       setRutValido(false);
-      setRutMsg('RUT incompleto.');
+      setRutMsg("RUT incompleto.");
       return;
     }
-
-    // Si no hay DV, lo calculamos; si está mal, lo corregimos
     const dvCalc = calcularDV(cuerpo);
-    const dvFinal = dv ? dvCalc : dvCalc; // siempre normalizamos al correcto
-    const rutFormateado = formatearRut(cuerpo, dvFinal);
-
-    onCambiarDato('rut', rutFormateado);
+    const rutFormateado = formatearRut(cuerpo, dvCalc);
+    onCambiarDato("rut", rutFormateado);
     setRutValido(true);
-    setRutMsg(dv && dv !== dvCalc ? 'DV corregido automáticamente.' : 'RUT formateado.');
+    setRutMsg("RUT formateado.");
   };
 
+  // Validación adicional para PREOP
   const handleSubmit = (e) => {
-    // Validamos RUT antes de pasar el submit al padre
-    const v = validarRut(datos?.rut || '');
+    // Valida RUT primero
+    const v = validarRut(datos?.rut || "");
     if (!v.valido) {
       e.preventDefault();
       setRutValido(false);
-      setRutMsg(v.motivo ? `RUT inválido: ${v.motivo}.` : 'RUT inválido.');
+      setRutMsg(v.motivo ? `RUT inválido: ${v.motivo}.` : "RUT inválido.");
       return;
     }
-    // Si está todo OK, dejamos que el padre maneje el submit
+
+    // Si estamos en PREOP y Dolor es Rodilla/Cadera, exigir tipo de cirugía
+    const dolor = (datos?.dolor || "").toLowerCase();
+    const requiereCirugia = isPreop && (dolor.includes("rodilla") || dolor.includes("cadera"));
+    if (requiereCirugia) {
+      if (!tipoCirugia) {
+        e.preventDefault();
+        alert("Seleccione el tipo de cirugía.");
+        return;
+      }
+      if (tipoCirugia.startsWith("Otro") && !tipoCirugiaLibre.trim()) {
+        e.preventDefault();
+        alert("Especifique el tipo de cirugía.");
+        return;
+      }
+    }
+
     onSubmit(e);
   };
+
+  // Mostrar bloque cirugías solo si: PREOP + dolor rodilla/cadera
+  const showCirugia =
+    isPreop &&
+    (String(datos?.dolor || "").toLowerCase().includes("rodilla") ||
+      String(datos?.dolor || "").toLowerCase().includes("cadera"));
 
   return (
     <form onSubmit={handleSubmit} style={styles.form}>
@@ -131,7 +180,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         style={styles.input}
         type="text"
         value={datos.nombre}
-        onChange={(e) => onCambiarDato('nombre', e.target.value)}
+        onChange={(e) => onCambiarDato("nombre", e.target.value)}
         required
       />
 
@@ -139,8 +188,8 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
       <input
         style={{
           ...styles.input,
-          borderColor: rutValido ? '#ccc' : '#d33',
-          outline: rutValido ? 'none' : '1px solid #d33'
+          borderColor: rutValido ? T.border : T.primaryDark,
+          outline: rutValido ? "none" : `1px solid ${T.primaryDark}`,
         }}
         type="text"
         value={datos.rut}
@@ -153,7 +202,10 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         aria-invalid={!rutValido}
         aria-describedby="rut-help"
       />
-      <div id="rut-help" style={{ ...styles.help, color: rutValido ? '#555' : '#d33' }}>
+      <div
+        id="rut-help"
+        style={{ ...styles.help, color: rutValido ? T.textMuted : T.primaryDark }}
+      >
         {rutMsg}
       </div>
 
@@ -164,27 +216,28 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         min="10"
         max="110"
         value={datos.edad}
-        onChange={(e) => onCambiarDato('edad', e.target.value)}
+        onChange={(e) => onCambiarDato("edad", e.target.value)}
         required
       />
 
-      {/* 👇 Género (no requerido para no bloquear otros módulos) */}
+      {/* Género (opcional) */}
       <label style={styles.label}>Género:</label>
       <select
         style={styles.input}
-        value={datos.genero || ''}
-        onChange={(e) => onCambiarDato('genero', e.target.value)}
+        value={datos.genero || ""}
+        onChange={(e) => onCambiarDato("genero", e.target.value)}
       >
         <option value="">Seleccione…</option>
         <option value="MASCULINO">MASCULINO</option>
         <option value="FEMENINO">FEMENINO</option>
       </select>
 
+      {/* Dolor siempre */}
       <label style={styles.label}>Dolor:</label>
       <select
         style={styles.input}
         value={datos.dolor}
-        onChange={(e) => onCambiarDato('dolor', e.target.value)}
+        onChange={(e) => onCambiarDato("dolor", e.target.value)}
         required
       >
         <option value="">Seleccione...</option>
@@ -193,11 +246,39 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
         <option value="Columna lumbar">Columna lumbar</option>
       </select>
 
+      {/* Bloque PREOP: Tipo de cirugía */}
+      {showCirugia && (
+        <>
+          <label style={styles.label}>Tipo de cirugía:</label>
+          <select
+            style={styles.input}
+            value={tipoCirugia}
+            onChange={(e) => setTipoCirugia(e.target.value)}
+          >
+            <option value="">Seleccione…</option>
+            {TIPOS_CIRUGIA.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+
+          {tipoCirugia.startsWith("Otro") && (
+            <input
+              style={styles.input}
+              placeholder="Especifique el tipo de cirugía"
+              value={tipoCirugiaLibre}
+              onChange={(e) => setTipoCirugiaLibre(e.target.value)}
+            />
+          )}
+        </>
+      )}
+
       <label style={styles.label}>Lado:</label>
       <select
         style={styles.input}
         value={datos.lado}
-        onChange={(e) => onCambiarDato('lado', e.target.value)}
+        onChange={(e) => onCambiarDato("lado", e.target.value)}
         required
       >
         <option value="">Seleccione...</option>
@@ -212,35 +293,39 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit }) {
   );
 }
 
+/* ================= Estilos (100% desde theme.json) ================= */
 const styles = {
   form: {
-    backgroundColor: 'white',
-    padding: '30px 40px',
-    borderRadius: '10px',
-    boxShadow: '0 8px 16px rgba(0,0,0,0.2)',
-    width: '100%',
-    boxSizing: 'border-box',
+    backgroundColor: T.surface,
+    padding: "30px 40px",
+    borderRadius: "10px",
+    boxShadow: T.shadowMd,
+    width: "100%",
+    boxSizing: "border-box",
+    border: `1px solid ${T.border}`,
   },
   title: {
-    marginBottom: '20px',
-    color: '#0072CE',
-    textAlign: 'center',
+    marginBottom: "20px",
+    color: T.primary,
+    textAlign: "center",
   },
   label: {
-    display: 'block',
-    marginTop: '15px',
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'left',
+    display: "block",
+    marginTop: "15px",
+    fontWeight: "bold",
+    color: T.text,
+    textAlign: "left",
   },
   input: {
-    width: '100%',
-    padding: '8px 10px',
-    marginTop: '5px',
-    border: '1px solid #ccc',
-    borderRadius: '5px',
-    boxSizing: 'border-box',
-    fontSize: '14px',
+    width: "100%",
+    padding: "8px 10px",
+    marginTop: "5px",
+    border: `1px solid ${T.border}`,
+    borderRadius: "5px",
+    boxSizing: "border-box",
+    fontSize: "14px",
+    background: T.surface,
+    color: T.text,
   },
   help: {
     fontSize: 12,
@@ -248,16 +333,17 @@ const styles = {
     minHeight: 16,
   },
   button: {
-    marginTop: '25px',
-    backgroundColor: '#0072CE',
-    color: 'white',
-    border: 'none',
-    padding: '12px',
-    fontSize: '16px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    width: '100%',
-    transition: 'background 0.3s ease',
+    marginTop: "25px",
+    backgroundColor: T.primary,
+    color: T.onPrimary || "#fff",
+    border: "none",
+    padding: "12px",
+    fontSize: "16px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    width: "100%",
+    transition: "background 0.3s ease",
+    boxShadow: T.shadowSm,
   },
 };
 
