@@ -7,15 +7,41 @@ import { getTheme } from "../theme.js";
 const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-// Opciones de cirugía (mantenemos nombres para compatibilidad)
-const TIPOS_CIRUGIA = [
-  "Artroplastia total de cadera (ATC)",
-  "Artroplastia total de rodilla (ATR)",
-  "Artroscopia de rodilla",
-  "Osteotomía (cadera/rodilla)",
-  "Cirugía menor de partes blandas",
-  "Otro (especificar)",
+/* ===== Catálogos por ZONA (MAYÚSCULAS) ===== */
+const CIRUGIAS_CADERA = [
+  "ARTROPLASTIA TOTAL DE CADERA (ATC)",
+  "ARTROSCOPIA DE CADERA",
+  "OSTEOTOMÍA DE CADERA",
+  "CIRUGÍA MENOR DE PARTES BLANDAS (CADERA)",
+  "OTRO (ESPECIFICAR)",
 ];
+const CIRUGIAS_RODILLA = [
+  "ARTROPLASTIA TOTAL DE RODILLA (ATR)",
+  "ARTROSCOPIA DE RODILLA",
+  "OSTEOTOMÍA DE RODILLA",
+  "CIRUGÍA MENOR DE PARTES BLANDAS (RODILLA)",
+  "OTRO (ESPECIFICAR)",
+];
+
+function zonaDesdeDolor(d = "") {
+  const s = (d || "").toLowerCase();
+  if (s.includes("cadera")) return "cadera";
+  if (s.includes("rodilla")) return "rodilla";
+  return "";
+}
+function opcionesPorZona(zona) {
+  if (zona === "cadera") return CIRUGIAS_CADERA;
+  if (zona === "rodilla") return CIRUGIAS_RODILLA;
+  return []; // si no es cadera/rodilla, no mostramos catálogo
+}
+function esCompatibleConZona(zona, tipo = "") {
+  const up = (tipo || "").toUpperCase();
+  if (!zona) return true;
+  if (up.startsWith("OTRO")) return true; // "OTRO" es genérico
+  if (zona === "cadera") return up.includes("CADERA");
+  if (zona === "rodilla") return up.includes("RODILLA");
+  return true;
+}
 
 export default function PreopModulo({ initialDatos }) {
   // ===== Estados base
@@ -43,12 +69,12 @@ export default function PreopModulo({ initialDatos }) {
   const [tipoCirugia, setTipoCirugia] = useState(() => {
     try {
       const fromParent = String(initialDatos?.tipoCirugia || "").trim();
-      if (fromParent) return fromParent;
+      if (fromParent) return fromParent.toUpperCase();
 
-      const preset = sessionStorage.getItem("preop_tipoCirugia") || "";
-      const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
-      if (preset && preset.startsWith("Otro")) {
-        return otro.trim() || ""; // no usar "Otro..." como valor final
+      const preset = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
+      const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
+      if (preset && preset.startsWith("OTRO")) {
+        return (otro || "").trim(); // no usar "OTRO..." como valor final
       }
       return preset || "";
     } catch {
@@ -75,6 +101,23 @@ export default function PreopModulo({ initialDatos }) {
       return "";
     }
   });
+
+  // ===== Derivados de zona/lado
+  const zona = zonaDesdeDolor(datos?.dolor);
+  const opcionesZona = opcionesPorZona(zona);
+  const etiquetaZonaLado = [zona && zona.toUpperCase(), (datos?.lado || "").toUpperCase()]
+    .filter(Boolean)
+    .join(" ");
+
+  // Si la selección guardada no es compatible con la zona actual, se pide de nuevo
+  useEffect(() => {
+    if (!zona) return;
+    if (tipoCirugia && !esCompatibleConZona(zona, tipoCirugia)) {
+      setTipoCirugia("");
+      if (paso !== "comorbilidades") setPaso("cirugia");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zona]);
 
   // ===== Montaje: sincroniza datos y detecta retorno de pago
   useEffect(() => {
@@ -146,7 +189,7 @@ export default function PreopModulo({ initialDatos }) {
     setPaso("comorbilidades");
   };
 
-  // ========= Paso 1: Recibir Comorbilidades (tu componente, modal arriba)
+  // ========= Paso 1: Recibir Comorbilidades
   const handleEnviarComorbilidades = async (formData) => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
@@ -155,17 +198,22 @@ export default function PreopModulo({ initialDatos }) {
     setComorbilidades(limpio);
     sessionStorage.setItem(`preop_comorbilidades_${idPago}`, JSON.stringify(limpio));
 
-    // Determinar tipo de cirugía “efectivo” desde sessionStorage si ya existe
-    const presetRaw = (sessionStorage.getItem("preop_tipoCirugia") || "").trim();
-    const otroRaw = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").trim();
+    // Determinar tipo de cirugía desde sessionStorage si ya existe
+    const presetRaw = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase().trim();
+    const otroRaw = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase().trim();
 
     let seleccion = "";
     if (presetRaw) {
-      if (presetRaw.startsWith("Otro")) {
-        if (otroRaw) seleccion = otroRaw; // solo si el "Otro" fue especificado
+      if (presetRaw.startsWith("OTRO")) {
+        if (otroRaw) seleccion = otroRaw; // solo si el "OTRO" fue especificado
       } else {
         seleccion = presetRaw;
       }
+    }
+
+    // Si hay selección previa pero no es compatible con la zona, la descartamos
+    if (seleccion && !esCompatibleConZona(zona, seleccion)) {
+      seleccion = "";
     }
 
     try {
@@ -185,21 +233,26 @@ export default function PreopModulo({ initialDatos }) {
       setTipoCirugia(seleccion);
       await llamarIAyConstruirPreview(seleccion, limpio);
     } else {
-      setPaso("cirugia"); // pedir tipo de cirugía en modal arriba si aún no lo tenemos
+      setPaso("cirugia"); // pedir tipo de cirugía (filtrado por zona) si aún no lo tenemos
     }
   };
 
-  // ========= Paso 2: Confirmar tipo de cirugía
+  // ========= Paso 2: Confirmar tipo de cirugía (modal)
   const handleConfirmarCirugia = async () => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
 
-    let seleccion = tipoCirugia;
+    let seleccion = (tipoCirugia || "").toUpperCase().trim();
     if (!seleccion) return alert("Seleccione el tipo de cirugía.");
-    if (seleccion.startsWith("Otro") && !tipoCirugiaLibre.trim())
-      return alert("Especifique el tipo de cirugía en 'Otro'.");
+    if (seleccion.startsWith("OTRO") && !tipoCirugiaLibre.trim())
+      return alert("Especifique el tipo de cirugía en 'OTRO'.");
 
-    if (seleccion.startsWith("Otro")) seleccion = tipoCirugiaLibre.trim();
+    if (seleccion.startsWith("OTRO")) seleccion = tipoCirugiaLibre.toUpperCase().trim();
+
+    // Compatibilidad final con zona
+    if (!esCompatibleConZona(zona, seleccion) && !seleccion.startsWith("OTRO")) {
+      return alert("La cirugía seleccionada no corresponde a la zona actual.");
+    }
 
     setTipoCirugia(seleccion);
     sessionStorage.setItem(`preop_tipoCirugia_${idPago}`, seleccion);
@@ -220,7 +273,7 @@ export default function PreopModulo({ initialDatos }) {
     await llamarIAyConstruirPreview(seleccion, comorbilidades);
   };
 
-  // ========= Paso 3: IA → examenes/informe → PREVIEW (sin catálogo fijo)
+  // ========= Paso 3: IA → examenes/informe → PREVIEW
   const llamarIAyConstruirPreview = async (tipoSel, comorb) => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
@@ -284,7 +337,7 @@ export default function PreopModulo({ initialDatos }) {
     }
   };
 
-  // ========= Paso 4: Pago (solo desde PREVIEW)
+  // ========= Paso 4: Pago (desde PREVIEW)
   const handlePagarDesdePreview = async () => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
@@ -515,29 +568,38 @@ export default function PreopModulo({ initialDatos }) {
           {paso === "cirugia" && (
             <div style={styles.modal}>
               <div style={styles.modalCard}>
-                <h4 style={{ marginTop: 0, color: T.primary }}>Seleccione tipo de cirugía</h4>
-                <div style={{ display: "grid", gap: 8 }}>
-                  {TIPOS_CIRUGIA.map((t) => (
-                    <label key={t} style={styles.radioRow}>
+                <h4 style={{ marginTop: 0, color: T.primary }}>
+                  Seleccione tipo de cirugía{etiquetaZonaLado ? ` — ${etiquetaZonaLado}` : ""}
+                </h4>
+
+                {opcionesZona.length ? (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {opcionesZona.map((t) => (
+                      <label key={t} style={styles.radioRow}>
+                        <input
+                          type="radio"
+                          name="tipoCirugia"
+                          value={t}
+                          checked={tipoCirugia === t}
+                          onChange={(e) => setTipoCirugia(e.target.value)}
+                        />
+                        <span style={{ marginLeft: 8 }}>{t}</span>
+                      </label>
+                    ))}
+                    {tipoCirugia?.startsWith("OTRO") && (
                       <input
-                        type="radio"
-                        name="tipoCirugia"
-                        value={t}
-                        checked={tipoCirugia === t}
-                        onChange={(e) => setTipoCirugia(e.target.value)}
+                        placeholder="ESPECIFIQUE EL TIPO DE CIRUGÍA"
+                        value={tipoCirugiaLibre}
+                        onChange={(e) => setTipoCirugiaLibre(e.target.value)}
+                        style={styles.input}
                       />
-                      <span style={{ marginLeft: 8 }}>{t}</span>
-                    </label>
-                  ))}
-                  {tipoCirugia?.startsWith("Otro") && (
-                    <input
-                      placeholder="Especifique el tipo de cirugía"
-                      value={tipoCirugiaLibre}
-                      onChange={(e) => setTipoCirugiaLibre(e.target.value)}
-                      style={styles.input}
-                    />
-                  )}
-                </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ color: T.textMuted }}>
+                    Seleccione primero una zona compatible (Cadera o Rodilla).
+                  </div>
+                )}
 
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                   <button style={{ ...styles.btn, background: T.muted }} onClick={() => setPaso("comorbilidades")}>
@@ -596,7 +658,7 @@ function normalizarComorbilidades(c) {
           }
         : (c.alergias || "").toString(),
 
-    // Anticoagulantes (objeto con usa/detalle) para que el backend pueda incluir el detalle en el informe
+    // Anticoagulantes (objeto con usa/detalle)
     anticoagulantes: {
       usa: !!c.anticoagulantes,
       detalle: (c.anticoagulantes_detalle || "").toString(),
