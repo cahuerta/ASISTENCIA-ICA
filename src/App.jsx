@@ -20,7 +20,7 @@ import FormularioResonancia from "./components/FormularioResonancia.jsx";
 import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx";
 
 /* Tema (JSON + helper) */
-import { getTheme, cx } from "./theme.js";
+import { getTheme } from "./theme.js"; // <-- quitamos cx
 const T = getTheme();
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
@@ -35,7 +35,7 @@ function App() {
     lado: "",
   });
 
-  // Módulo activo: 'trauma' | 'preop' | 'generales' | 'ia'
+  // Módulo activo
   const [modulo, setModulo] = useState("trauma");
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
@@ -55,7 +55,6 @@ function App() {
     setMostrarVistaPrevia(true);
     setPagoRealizado(false);
     setMostrarPago(false);
-    // deja el módulo como esté seleccionado en la barra superior
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
@@ -104,18 +103,16 @@ function App() {
     ].join("\n");
   };
 
-  // ====== Comorbilidades (modal suelto, lo siguen usando tus módulos) ======
+  // ====== Comorbilidades (modal suelto) ======
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(null);
   const handleSaveComorbilidades = (payload) => {
     setComorbilidades(payload);
     setMostrarComorbilidades(false);
-    // No forzamos cambio de módulo aquí; lo controlas desde Preop/Generales
   };
 
-  // ====== Restauración de estado en montaje ======
+  // ====== Restauración de estado ======
   useEffect(() => {
-    // Datos guardados
     const saved = sessionStorage.getItem("datosPacienteJSON");
     if (saved) {
       try {
@@ -123,17 +120,14 @@ function App() {
       } catch {}
     }
 
-    // Módulo guardado
     const moduloSS = sessionStorage.getItem("modulo");
     if (["trauma", "preop", "generales", "ia"].includes(moduloSS)) {
       setModulo(moduloSS);
     }
 
-    // Vista esquema guardada
     const vistaSS = sessionStorage.getItem("vistaEsquema");
     if (vistaSS === "anterior" || vistaSS === "posterior") setVista(vistaSS);
 
-    // Manejo de retorno de pago
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
     const idPagoURL = params.get("idPago");
@@ -183,7 +177,7 @@ function App() {
     };
   }, []);
 
-  // Persistir vista de esquema
+  // Persistir vista
   useEffect(() => {
     try {
       sessionStorage.setItem("vistaEsquema", vista);
@@ -223,7 +217,7 @@ function App() {
     });
   };
 
-  // ====== Submit del formulario principal ======
+  // Submit del formulario principal
   const handleSubmit = (e) => {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
@@ -237,17 +231,15 @@ function App() {
       alert("Por favor complete todos los campos obligatorios.");
       return;
     }
-    setMostrarAviso(true); // luego de aceptar: mostrarVistaPrevia = true
+    setMostrarAviso(true);
   };
 
-  // ====== Detección de RM en backend ======
+  // Detección de RM
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
   };
-
   const detectarResonanciaEnBackend = async (datos) => {
     try {
       const r = await fetch(`${BACKEND_BASE}/detectar-resonancia`, {
@@ -370,7 +362,6 @@ function App() {
         JSON.stringify({ ...datosPaciente, edad: edadNum })
       );
 
-      // Preguntar al backend si incluye RM:
       let extras = {};
       const solicitarRM = await detectarResonanciaEnBackend({
         ...datosPaciente,
@@ -412,7 +403,6 @@ function App() {
     }
   };
 
-  // ====== UI ======
   return (
     <div style={styles.page}>
       {/* Barra superior fija */}
@@ -433,11 +423,11 @@ function App() {
                   setModulo(b.key);
                   sessionStorage.setItem("modulo", b.key);
                 }}
-                className={cx(active && "active")}
                 style={{
                   ...styles.topBtn,
                   ...(active ? styles.topBtnActive : styles.topBtnIdle),
                 }}
+                aria-current={active ? "page" : undefined}
               >
                 {b.label}
               </button>
@@ -464,11 +454,7 @@ function App() {
             <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
           )}
 
-          <div
-            aria-live="polite"
-            role="status"
-            style={styles.statusBox}
-          >
+          <div aria-live="polite" role="status" style={styles.statusBox}>
             {datosPaciente?.dolor ? (
               <>
                 Zona seleccionada:{" "}
