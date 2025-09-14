@@ -475,8 +475,6 @@ function App() {
             datos={datosPaciente}
             onCambiarDato={handleCambiarDato}
             onSubmit={handleSubmit}
-            /* >>>> modificación clave para PREOP */
-            moduloActual={modulo}
           />
         </div>
 
@@ -663,8 +661,9 @@ const styles = {
     padding: "0 16px 24px",
   },
   esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
-  formCol: { flex: "0 0 400px", maxWidth: 400, position: "relative", zIndex: 2 },
-  previewCol: { minWidth: 360, position: "relative", zIndex: 1 },
+  // ↓↓↓ Ajuste de z-index: preview por encima del form
+  formCol: { flex: "0 0 400px", maxWidth: 400, position: "relative", zIndex: 1 },
+  previewCol: { minWidth: 360, position: "relative", zIndex: 100 },
 
   statusBox: {
     marginTop: 8,
