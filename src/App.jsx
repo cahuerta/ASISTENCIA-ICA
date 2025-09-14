@@ -69,8 +69,15 @@ function App() {
     setMostrarVistaPrevia(true);
     setPagoRealizado(false);
     setMostrarPago(false);
-    setModulo(null);
-    sessionStorage.removeItem('modulo');
+
+    // Mantener módulo activo; si no hay, usar 'trauma' por defecto y persistir
+    setModulo((prev) => {
+      const ss = sessionStorage.getItem('modulo');
+      const valid = ss === 'trauma' || ss === 'preop' || ss === 'generales' || ss === 'ia' ? ss : null;
+      const next = valid || prev || 'trauma';
+      try { sessionStorage.setItem('modulo', next); } catch {}
+      return next;
+    });
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
@@ -89,6 +96,7 @@ function App() {
     setMostrarVistaPrevia(true);
     setModulo('preop');               // enfoca Preop siempre
     setMostrarComorbilidades(false);  // cierre desde el padre (como RNM)
+    try { sessionStorage.setItem('modulo', 'preop'); } catch {}
   };
 
   useEffect(() => {
@@ -376,6 +384,49 @@ function App() {
         onReject={rechazarAviso}
       />
 
+      {/* ======= HEADER: barra fija de módulos ======= */}
+      <div style={styles.headerBar}>
+        <div style={styles.toolbarGrid}>
+          <button
+            type="button"
+            style={{ ...styles.toolbarButton, backgroundColor: modulo === 'trauma' ? '#004B94' : '#0072CE' }}
+            onClick={() => { setModulo('trauma'); sessionStorage.setItem('modulo', 'trauma'); }}
+          >
+            ASISTENTE TRAUMATOLÓGICO
+          </button>
+          <button
+            type="button"
+            style={{ ...styles.toolbarButton, backgroundColor: modulo === 'preop' ? '#004B94' : '#0072CE' }}
+            onClick={() => {
+              setModulo('preop');
+              sessionStorage.setItem('modulo', 'preop');
+              try { document.querySelector('[data-preview-col]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
+            }}
+          >
+            EXÁMENES PREQUIRÚRGICOS
+          </button>
+          <button
+            type="button"
+            style={{ ...styles.toolbarButton, backgroundColor: modulo === 'generales' ? '#004B94' : '#0072CE' }}
+            onClick={() => { setModulo('generales'); sessionStorage.setItem('modulo', 'generales'); }}
+          >
+            REVISIÓN GENERAL
+          </button>
+          <button
+            type="button"
+            style={{ ...styles.toolbarButton, backgroundColor: modulo === 'ia' ? '#004B94' : '#0072CE' }}
+            onClick={() => {
+              setModulo('ia');
+              sessionStorage.setItem('modulo', 'ia');
+              try { document.querySelector('[data-preview-col]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
+            }}
+          >
+            ANÁLISIS MEDIANTE IA
+          </button>
+        </div>
+      </div>
+      {/* ============================================ */}
+
       <div style={styles.esquemaContainer}>
         {/* Tabs + esquema anterior/posterior */}
         <EsquemaToggleTabs vista={vista} onChange={setVista} />
@@ -413,55 +464,8 @@ function App() {
         <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
       </div>
 
-      {/* Columna derecha: toolbar + previews y acciones */}
+      {/* Columna derecha: previews y acciones */}
       <div style={styles.previewContainer} data-preview-col>
-        {mostrarVistaPrevia && (
-          <div style={styles.toolbarSticky}>
-            <div style={styles.toolbarGrid}>
-              <button
-                type="button"
-                style={{ ...styles.toolbarButton, backgroundColor: modulo === 'trauma' ? '#004B94' : '#0072CE' }}
-                onClick={() => { setModulo('trauma'); sessionStorage.setItem('modulo', 'trauma'); }}
-              >
-                ASISTENTE TRAUMATOLÓGICO
-              </button>
-              <button
-                type="button"
-                style={{ ...styles.toolbarButton, backgroundColor: modulo === 'preop' ? '#004B94' : '#0072CE' }}
-                onClick={() => {
-                  setModulo('preop');
-                  sessionStorage.setItem('modulo', 'preop');
-                  try {
-                    document.querySelector('[data-preview-col]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  } catch {}
-                }}
-              >
-                EXÁMENES PREQUIRÚRGICOS
-              </button>
-              <button
-                type="button"
-                style={{ ...styles.toolbarButton, backgroundColor: modulo === 'generales' ? '#004B94' : '#0072CE' }}
-                onClick={() => { setModulo('generales'); sessionStorage.setItem('modulo', 'generales'); }}
-              >
-                REVISIÓN GENERAL
-              </button>
-              <button
-                type="button"
-                style={{ ...styles.toolbarButton, backgroundColor: modulo === 'ia' ? '#004B94' : '#0072CE' }}
-                onClick={() => {
-                  setModulo('ia');
-                  sessionStorage.setItem('modulo', 'ia');
-                  try {
-                    document.querySelector('[data-preview-col]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  } catch {}
-                }}
-              >
-                ANÁLISIS MEDIANTE IA
-              </button>
-            </div>
-          </div>
-        )}
-
         {mostrarVistaPrevia && modulo === 'trauma' && (
           <>
             <PreviewOrden datos={datosPaciente} />
@@ -607,6 +611,23 @@ const styles = {
     backgroundColor: '#f0f4f8',
     minHeight: '100vh',
   },
+
+  // Header fijo de módulos
+  headerBar: {
+    position: 'sticky',
+    top: 0,
+    left: 0,
+    right: 0,
+    background: '#f0f4f8',
+    paddingTop: 4,
+    paddingBottom: 8,
+    zIndex: 10,
+    borderBottom: '1px solid #dcdcdc',
+    // extiende a todo el ancho disponible arriba de las columnas
+    gridColumn: '1 / -1',
+    marginBottom: 8,
+  },
+
   esquemaContainer: {
     flex: '0 0 400px',
     maxWidth: '400px',
@@ -624,16 +645,6 @@ const styles = {
     zIndex: 1,
   },
 
-  /* ===== Toolbar (botones de módulo) en la columna derecha ===== */
-  toolbarSticky: {
-    position: 'sticky',
-    top: 0,
-    background: '#f0f4f8',
-    paddingTop: 4,
-    paddingBottom: 8,
-    zIndex: 5,
-    borderBottom: '1px solid #dcdcdc',
-  },
   toolbarGrid: {
     display: 'grid',
     gap: '8px',
