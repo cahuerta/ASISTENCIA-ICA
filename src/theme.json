@@ -1,15 +1,19 @@
 {
-  "name": "icarticular",
-  "colors": {
-    "primary": "#0B2C5E",
-    "primaryHover": "#0E3770",
-    "primaryActive": "#072046",
-    "accent": "#C2A86A",
-    "bg": "#F5F7FA",
-    "text": "#0B2C5E",
-    "mutedBg": "#F3F4F6",
-    "mutedBorder": "#E5E7EB",
-    "danger": "#B00020",
-    "success": "#0E7C3A"
-  }
+  "primary": "#0056A6",
+  "primaryDark": "#003B73",
+  "onPrimary": "#FFFFFF",
+
+  "accentAlpha": "rgba(0, 86, 166, 0.25)",
+
+  "bg": "#F3F5F8",
+  "surface": "#FFFFFF",
+  "border": "#D5DBE3",
+
+  "text": "#1F2937",
+  "textMuted": "#6B7280",
+
+  "muted": "#4B5563",
+
+  "shadowSm": "0 2px 10px rgba(0,0,0,0.08)",
+  "shadowMd": "0 6px 18px rgba(0,0,0,0.12)"
 }
