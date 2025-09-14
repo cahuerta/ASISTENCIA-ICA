@@ -1,23 +1,37 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
-/* REEMPLAZO DE IMPORT DEL ESQUEMA */
+
+/* ESQUEMA */
 import EsquemaAnterior from './EsquemaAnterior.jsx';
 import EsquemaPosterior from './EsquemaPosterior.jsx';
 import EsquemaToggleTabs from './EsquemaToggleTabs.jsx';
 
+/* FORM + PREVIEW */
 import FormularioPaciente from './FormularioPaciente.jsx';
 import PreviewOrden from './PreviewOrden.jsx';
+
+/* PAGO + MÓDULOS */
 import { irAPagoKhipu } from './PagoKhipu.jsx';
 import PreopModulo from './modules/PreopModulo.jsx';
 import GeneralesModulo from './modules/GeneralesModulo.jsx';
-import IAModulo from './modules/IAModulo.jsx'; // <-- NUEVO
-import AvisoLegal from './components/AvisoLegal.jsx'; // <-- AVISO LEGAL
-import FormularioResonancia from './components/FormularioResonancia.jsx'; // <-- checklist RNM
+import IAModulo from './modules/IAModulo.jsx';
 
-// >>> Modal de Comorbilidades
+/* AVISOS + MODALES */
+import AvisoLegal from './components/AvisoLegal.jsx';
+import FormularioResonancia from './components/FormularioResonancia.jsx';
 import FormularioComorbilidades from './components/FormularioComorbilidades.jsx';
 
 const BACKEND_BASE = 'https://asistencia-ica-backend.onrender.com';
+
+/* ===== Paleta ICA ===== */
+const ICA = {
+  primary: '#0B2C5E',        // azul marino
+  primaryHover: '#0E3770',
+  primaryActive: '#072046',
+  accent: '#C2A86A',         // dorado
+  bg: '#F5F7FA',             // fondo
+  text: '#0B2C5E',
+};
 
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
@@ -36,12 +50,12 @@ function App() {
   const [mensajeDescarga, setMensajeDescarga] = useState('');
   const pollerRef = useRef(null);
 
-  const [modulo, setModulo] = useState(null); // null | 'trauma' | 'preop' | 'generales' | 'ia'
+  const [modulo, setModulo] = useState('trauma'); // default visible arriba
 
-  // (1) Persistencia de vista (anterior/posterior)
+  // Vista esquema
   const [vista, setVista] = useState('anterior'); // 'anterior' | 'posterior'
 
-  // ==== Modal reutilizable de RNM ====
+  // ===== Modal RNM =====
   const [showReso, setShowReso] = useState(false);
   const [resolverReso, setResolverReso] = useState(null);
   const RED_FLAGS = new Set(["marcapasos","coclear_o_neuro","clips_aneurisma","valvula_cardiaca_metal","fragmentos_metalicos"]);
@@ -60,24 +74,14 @@ function App() {
       'Firma Paciente: ______________________     RUT: _______________     Fecha: ____/____/______',
     ].join('\n');
   };
-  // ===============================================================
 
-  // ---- AVISO LEGAL ----
+  // ===== Aviso Legal =====
   const [mostrarAviso, setMostrarAviso] = useState(false);
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
-    setMostrarVistaPrevia(true);
+    setMostrarVistaPrevia(true);   // solo abre el área de preview; la barra ya está arriba
     setPagoRealizado(false);
     setMostrarPago(false);
-
-    // Mantener módulo activo; si no hay, usar 'trauma' por defecto y persistir
-    setModulo((prev) => {
-      const ss = sessionStorage.getItem('modulo');
-      const valid = ss === 'trauma' || ss === 'preop' || ss === 'generales' || ss === 'ia' ? ss : null;
-      const next = valid || prev || 'trauma';
-      try { sessionStorage.setItem('modulo', next); } catch {}
-      return next;
-    });
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
@@ -86,38 +90,33 @@ function App() {
       if (!window.closed) window.location.href = 'about:blank';
     }, 0);
   };
-  // ----------------------
 
-  // >>> Estado para Comorbilidades (igual mecánica que RNM)
+  // ===== Comorbilidades (modal) =====
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(null);
   const handleSaveComorbilidades = (payload) => {
     setComorbilidades(payload);
     setMostrarVistaPrevia(true);
-    setModulo('preop');               // enfoca Preop siempre
-    setMostrarComorbilidades(false);  // cierre desde el padre (como RNM)
-    try { sessionStorage.setItem('modulo', 'preop'); } catch {}
+    setModulo('preop');
+    setMostrarComorbilidades(false);
   };
 
   useEffect(() => {
-    // Restaurar datos del paciente si existen
+    // Restaurar datos
     const saved = sessionStorage.getItem('datosPacienteJSON');
     if (saved) {
       try { setDatosPaciente(JSON.parse(saved)); } catch {}
     }
-
-    // Restaurar modulo si existe
+    // Restaurar módulo
     const moduloSS = sessionStorage.getItem('modulo');
-    if (moduloSS === 'trauma' || moduloSS === 'preop' || moduloSS === 'generales' || moduloSS === 'ia') {
+    if (['trauma','preop','generales','ia'].includes(moduloSS)) {
       setModulo(moduloSS);
     }
-
-    // (1) Restaurar vista si existe
+    // Restaurar vista
     const vistaSS = sessionStorage.getItem('vistaEsquema');
-    if (vistaSS === 'anterior' || vistaSS === 'posterior') {
-      setVista(vistaSS);
-    }
+    if (vistaSS === 'anterior' || vistaSS === 'posterior') setVista(vistaSS);
 
+    // Pago return
     const params = new URLSearchParams(window.location.search);
     const pago = params.get('pago');
     const idPagoURL = params.get('idPago');
@@ -165,11 +164,9 @@ function App() {
     };
   }, []);
 
-  // (1) Guardar vista cuando cambie
+  // Persistir vista
   useEffect(() => {
-    try {
-      sessionStorage.setItem('vistaEsquema', vista);
-    } catch {}
+    try { sessionStorage.setItem('vistaEsquema', vista); } catch {}
   }, [vista]);
 
   const handleCambiarDato = (campo, valor) => {
@@ -180,7 +177,6 @@ function App() {
     });
   };
 
-  // (2) Persistir selección tras onSeleccionZona
   const onSeleccionZona = (zona) => {
     let dolor = '';
     let lado = '';
@@ -208,22 +204,17 @@ function App() {
       alert('Por favor complete todos los campos obligatorios.');
       return;
     }
-    // Mostrar aviso legal como paso adicional
+    // ABRE aviso legal; la barra ya está arriba y NO aparece/ desaparece
     setMostrarAviso(true);
   };
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  // ========= Helpers para consultar al backend si hay RM =========
+  // ===== Detectar RM en backend =====
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
-    return (
-      s.includes("resonancia") ||
-      s.includes("resonancia magn") ||
-      /\brm\b/i.test(t)
-    );
+    return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
   };
-
   const detectarResonanciaEnBackend = async (datos) => {
     try {
       const r = await fetch(`${BACKEND_BASE}/detectar-resonancia`, {
@@ -244,14 +235,11 @@ function App() {
       return false;
     }
   };
-  // =====================================================================
 
+  // ===== Descargar PDF (Trauma)
   const handleDescargarPDF = async () => {
     const idPago = sessionStorage.getItem('idPago');
-    if (!idPago) {
-      alert('ID de pago no encontrado');
-      return;
-    }
+    if (!idPago) return alert('ID de pago no encontrado');
 
     const intentaDescarga = async () => {
       const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: 'no-store' });
@@ -283,9 +271,7 @@ function App() {
         if (r.status === 402) {
           setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
-          if (i === maxIntentos) {
-            alert('El pago aún no se confirma. Intenta nuevamente en unos segundos.');
-          }
+          if (i === maxIntentos) alert('El pago aún no se confirma. Intenta nuevamente en unos segundos.');
           continue;
         }
 
@@ -322,6 +308,7 @@ function App() {
     }
   };
 
+  // ===== Pagar (Trauma)
   const handlePagarAhora = async () => {
     const edadNum = Number(datosPaciente.edad);
     if (
@@ -341,7 +328,7 @@ function App() {
       sessionStorage.setItem('idPago', idPagoTmp);
       sessionStorage.setItem('datosPacienteJSON', JSON.stringify({ ...datosPaciente, edad: edadNum }));
 
-      // Preguntamos al backend si la orden incluye RM
+      // Check RM
       let extras = {};
       const solicitarRM = await detectarResonanciaEnBackend({ ...datosPaciente, edad: edadNum });
 
@@ -374,8 +361,59 @@ function App() {
     }
   };
 
+  /* ==== Render ==== */
   return (
-    <div style={styles.container}>
+    <div style={styles.page}>
+      {/* Barra superior fija (siempre visible) */}
+      <div style={styles.topbar}>
+        <div style={styles.topbarGrid}>
+          <button
+            type="button"
+            style={{
+              ...styles.topBtn,
+              backgroundColor: modulo === 'trauma' ? ICA.primaryActive : ICA.primary,
+              borderColor: ICA.accent,
+            }}
+            onClick={() => { setModulo('trauma'); sessionStorage.setItem('modulo', 'trauma'); }}
+          >
+            ASISTENTE TRAUMATOLÓGICO
+          </button>
+          <button
+            type="button"
+            style={{
+              ...styles.topBtn,
+              backgroundColor: modulo === 'preop' ? ICA.primaryActive : ICA.primary,
+              borderColor: ICA.accent,
+            }}
+            onClick={() => { setModulo('preop'); sessionStorage.setItem('modulo', 'preop'); }}
+          >
+            EXÁMENES PREQUIRÚRGICOS
+          </button>
+          <button
+            type="button"
+            style={{
+              ...styles.topBtn,
+              backgroundColor: modulo === 'generales' ? ICA.primaryActive : ICA.primary,
+              borderColor: ICA.accent,
+            }}
+            onClick={() => { setModulo('generales'); sessionStorage.setItem('modulo', 'generales'); }}
+          >
+            REVISIÓN GENERAL
+          </button>
+          <button
+            type="button"
+            style={{
+              ...styles.topBtn,
+              backgroundColor: modulo === 'ia' ? ICA.primaryActive : ICA.primary,
+              borderColor: ICA.accent,
+            }}
+            onClick={() => { setModulo('ia'); sessionStorage.setItem('modulo', 'ia'); }}
+          >
+            ANÁLISIS MEDIANTE IA
+          </button>
+        </div>
+      </div>
+
       {/* Modal Aviso Legal */}
       <AvisoLegal
         visible={mostrarAviso}
@@ -384,192 +422,137 @@ function App() {
         onReject={rechazarAviso}
       />
 
-      {/* ======= HEADER: barra fija de módulos ======= */}
-      <div style={styles.headerBar}>
-        <div style={styles.toolbarGrid}>
-          <button
-            type="button"
-            style={{ ...styles.toolbarButton, backgroundColor: modulo === 'trauma' ? '#004B94' : '#0072CE' }}
-            onClick={() => { setModulo('trauma'); sessionStorage.setItem('modulo', 'trauma'); }}
+      {/* Cuerpo: esquema + formulario + preview */}
+      <div style={styles.main}>
+        {/* Columna: esquema */}
+        <div style={styles.esquemaContainer}>
+          <EsquemaToggleTabs vista={vista} onChange={setVista} />
+          {vista === 'anterior'
+            ? <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
+            : <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
+          }
+
+          <div
+            aria-live="polite"
+            role="status"
+            style={styles.status}
           >
-            ASISTENTE TRAUMATOLÓGICO
-          </button>
-          <button
-            type="button"
-            style={{ ...styles.toolbarButton, backgroundColor: modulo === 'preop' ? '#004B94' : '#0072CE' }}
-            onClick={() => {
-              setModulo('preop');
-              sessionStorage.setItem('modulo', 'preop');
-              try { document.querySelector('[data-preview-col]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
-            }}
-          >
-            EXÁMENES PREQUIRÚRGICOS
-          </button>
-          <button
-            type="button"
-            style={{ ...styles.toolbarButton, backgroundColor: modulo === 'generales' ? '#004B94' : '#0072CE' }}
-            onClick={() => { setModulo('generales'); sessionStorage.setItem('modulo', 'generales'); }}
-          >
-            REVISIÓN GENERAL
-          </button>
-          <button
-            type="button"
-            style={{ ...styles.toolbarButton, backgroundColor: modulo === 'ia' ? '#004B94' : '#0072CE' }}
-            onClick={() => {
-              setModulo('ia');
-              sessionStorage.setItem('modulo', 'ia');
-              try { document.querySelector('[data-preview-col]')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
-            }}
-          >
-            ANÁLISIS MEDIANTE IA
-          </button>
+            {datosPaciente?.dolor
+              ? <>Zona seleccionada: <strong>{datosPaciente.dolor}{datosPaciente.lado ? ` — ${datosPaciente.lado}` : ''}</strong></>
+              : 'Seleccione una zona en el esquema'}
+          </div>
         </div>
-      </div>
-      {/* ============================================ */}
 
-      <div style={styles.esquemaContainer}>
-        {/* Tabs + esquema anterior/posterior */}
-        <EsquemaToggleTabs vista={vista} onChange={setVista} />
-
-        {/* Alineación/proporción: ancho 400px */}
-        {vista === 'anterior' ? (
-          <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
-        ) : (
-          <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
-        )}
-
-        {/* Mensajería accesible */}
-        <div
-          aria-live="polite"
-          role="status"
-          style={{
-            marginTop: 8,
-            fontSize: 14,
-            color: '#374151',
-            background: '#F3F4F6',
-            padding: '6px 8px',
-            borderRadius: 8,
-            border: '1px solid #E5E7EB',
-            minHeight: 30,
-          }}
-        >
-          {datosPaciente?.dolor
-            ? <>Zona seleccionada: <strong>{datosPaciente.dolor}{datosPaciente.lado ? ` — ${datosPaciente.lado}` : ''}</strong></>
-            : 'Seleccione una zona en el esquema'}
+        {/* Columna: formulario */}
+        <div style={styles.formularioContainer}>
+          <FormularioPaciente
+            datos={datosPaciente}
+            onCambiarDato={handleCambiarDato}
+            onSubmit={handleSubmit}
+          />
         </div>
-      </div>
 
-      {/* Columna izquierda: formulario */}
-      <div style={styles.formularioContainer}>
-        <FormularioPaciente datos={datosPaciente} onCambiarDato={handleCambiarDato} onSubmit={handleSubmit} />
-      </div>
+        {/* Columna: preview/acciones */}
+        <div style={styles.previewContainer} data-preview-col>
+          {mostrarVistaPrevia && modulo === 'trauma' && (
+            <>
+              <PreviewOrden datos={datosPaciente} />
+              {!pagoRealizado && !mostrarPago && (
+                <>
+                  <button
+                    type="button"
+                    style={{ ...styles.downloadButton, backgroundColor: ICA.primaryActive }}
+                    onClick={handlePagarAhora}
+                  >
+                    Pagar ahora
+                  </button>
+                  <button
+                    type="button"
+                    style={{ ...styles.downloadButton, backgroundColor: '#777' }}
+                    onClick={async () => {
+                      const idPago = 'guest_test_pago';
+                      const datosGuest = {
+                        nombre: 'Guest',
+                        rut: '99999999-9',
+                        edad: 30,
+                        genero: 'Hombre',
+                        dolor: 'Rodilla',
+                        lado: 'Izquierda',
+                      };
+                      sessionStorage.setItem('idPago', idPago);
+                      sessionStorage.setItem('datosPacienteJSON', JSON.stringify(datosGuest));
 
-      {/* Columna derecha: previews y acciones */}
-      <div style={styles.previewContainer} data-preview-col>
-        {mostrarVistaPrevia && modulo === 'trauma' && (
-          <>
-            <PreviewOrden datos={datosPaciente} />
+                      const resp = await fetch(`${BACKEND_BASE}/crear-pago-khipu`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ idPago, modoGuest: true, datosPaciente: datosGuest }),
+                      });
+                      const j = await resp.json();
+                      if (j?.ok && j?.url) {
+                        window.location.href = j.url;
+                      } else {
+                        alert('Guest no disponible. Ver backend.');
+                      }
+                    }}
+                  >
+                    Simular Pago como Guest
+                  </button>
+                </>
+              )}
 
-            {/* Botones de pago/descarga del módulo traumatológico: DEBAJO del preview */}
-            {!pagoRealizado && !mostrarPago && (
-              <>
+              {mostrarVistaPrevia && pagoRealizado && (
                 <button
                   type="button"
-                  style={{ ...styles.downloadButton, backgroundColor: '#004B94', marginTop: '10px' }}
-                  onClick={handlePagarAhora}
+                  style={{ ...styles.downloadButton, backgroundColor: ICA.primary }}
+                  onClick={handleDescargarPDF}
+                  disabled={descargando}
+                  title={mensajeDescarga || 'Verificar y descargar'}
                 >
-                  Pagar ahora
+                  {descargando ? (mensajeDescarga || 'Verificando…') : 'Descargar Documento'}
                 </button>
+              )}
+            </>
+          )}
+
+          {mostrarVistaPrevia && modulo === 'preop' && (
+            <>
+              <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
                 <button
                   type="button"
-                  style={{ ...styles.downloadButton, backgroundColor: '#777', marginTop: '10px' }}
-                  onClick={async () => {
-                    const idPago = 'guest_test_pago';
-                    const datosGuest = {
-                      nombre: 'Guest',
-                      rut: '99999999-9',
-                      edad: 30,
-                      genero: 'Hombre',
-                      dolor: 'Rodilla',
-                      lado: 'Izquierda',
-                    };
-                    sessionStorage.setItem('idPago', idPago);
-                    sessionStorage.setItem('datosPacienteJSON', JSON.stringify(datosGuest));
-
-                    const resp = await fetch(`${BACKEND_BASE}/crear-pago-khipu`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ idPago, modoGuest: true, datosPaciente: datosGuest }),
-                    });
-                    const j = await resp.json();
-                    if (j?.ok && j?.url) {
-                      window.location.href = j.url;
-                    } else {
-                      alert('Guest no disponible. Ver backend.');
-                    }
-                  }}
+                  onClick={() => setMostrarComorbilidades(true)}
+                  style={{ ...styles.pillBtn }}
                 >
-                  Simular Pago como Guest
+                  COMORBILIDADES
                 </button>
-              </>
-            )}
+              </div>
+              <PreopModulo initialDatos={datosPaciente} />
+            </>
+          )}
 
-            {mostrarVistaPrevia && pagoRealizado && (
-              <button
-                type="button"
-                style={{ ...styles.downloadButton, marginTop: '10px' }}
-                onClick={handleDescargarPDF}
-                disabled={descargando}
-                title={mensajeDescarga || 'Verificar y descargar'}
-              >
-                {descargando ? (mensajeDescarga || 'Verificando…') : 'Descargar Documento'}
-              </button>
-            )}
-          </>
-        )}
+          {mostrarVistaPrevia && modulo === 'generales' && (
+            <>
+              <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+                <button
+                  type="button"
+                  onClick={() => setMostrarComorbilidades(true)}
+                  style={{ ...styles.pillBtn }}
+                >
+                  COMORBILIDADES
+                </button>
+              </div>
+              <GeneralesModulo initialDatos={datosPaciente} />
+            </>
+          )}
 
-        {mostrarVistaPrevia && modulo === 'preop' && (
-          <>
-            {/* Botón para abrir Comorbilidades en PREOP */}
-            <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
-              <button
-                type="button"
-                onClick={() => setMostrarComorbilidades(true)}
-                style={{ ...styles.toolbarButton, maxWidth: 260 }}
-              >
-                COMORBILIDADES
-              </button>
-            </div>
-
-            <PreopModulo initialDatos={datosPaciente} />
-          </>
-        )}
-
-        {mostrarVistaPrevia && modulo === 'generales' && (
-          <>
-            {/* Botón para abrir Comorbilidades en GENERALES */}
-            <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
-              <button
-                type="button"
-                onClick={() => setMostrarComorbilidades(true)}
-                style={{ ...styles.toolbarButton, maxWidth: 260 }}
-              >
-                COMORBILIDADES
-              </button>
-            </div>
-
-            <GeneralesModulo initialDatos={datosPaciente} />
-          </>
-        )}
-
-        {mostrarVistaPrevia && modulo === 'ia' && (
-          <IAModulo key={`ia-${modulo}`} initialDatos={datosPaciente} />
-        )}
+          {mostrarVistaPrevia && modulo === 'ia' && (
+            <IAModulo key={`ia-${modulo}`} initialDatos={datosPaciente} />
+          )}
+        </div>
       </div>
 
-      {/* ===== Modal RNM ===== */}
+      {/* Modal RNM */}
       {showReso && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.35)', display:'grid', placeItems:'center', zIndex:9999 }}>
+        <div style={styles.overlay}>
           <div style={{ width:'min(900px, 96vw)' }}>
             <FormularioResonancia
               onCancel={() => { setShowReso(false); resolverReso?.({ canceled:true }); }}
@@ -584,9 +567,9 @@ function App() {
         </div>
       )}
 
-      {/* ===== Modal Comorbilidades (mismo overlay que RNM) ===== */}
+      {/* Modal Comorbilidades */}
       {mostrarComorbilidades && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.35)', display:'grid', placeItems:'center', zIndex:9999 }}>
+        <div style={styles.overlay}>
           <div style={{ width:'min(900px, 96vw)' }}>
             <FormularioComorbilidades
               initial={comorbilidades || {}}
@@ -596,48 +579,77 @@ function App() {
           </div>
         </div>
       )}
-      {/* ========================================= */}
     </div>
   );
 }
 
+/* ===== Estilos ===== */
 const styles = {
-  container: {
+  page: {
     display: 'flex',
-    flexDirection: 'row',
-    gap: '40px',
-    padding: '20px',
+    flexDirection: 'column',
+    gap: 16,
+    padding: 16,
     fontFamily: 'Arial, sans-serif',
-    backgroundColor: '#f0f4f8',
+    backgroundColor: ICA.bg,
     minHeight: '100vh',
   },
 
-  // Header fijo de módulos
-  headerBar: {
+  topbar: {
     position: 'sticky',
     top: 0,
-    left: 0,
-    right: 0,
-    background: '#f0f4f8',
-    paddingTop: 4,
-    paddingBottom: 8,
-    zIndex: 10,
-    borderBottom: '1px solid #dcdcdc',
-    // extiende a todo el ancho disponible arriba de las columnas
-    gridColumn: '1 / -1',
-    marginBottom: 8,
+    zIndex: 50,
+    background: ICA.bg,
+    padding: '8px 0 4px',
+    borderBottom: `2px solid ${ICA.accent}`,
+  },
+  topbarGrid: {
+    display: 'grid',
+    gap: 8,
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  },
+  topBtn: {
+    color: '#fff',
+    border: `1px solid ${ICA.accent}`,
+    borderRadius: 10,
+    padding: '12px',
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: 'pointer',
+    width: '100%',
+    lineHeight: 1.2,
+    minHeight: 44,
+    boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+  },
+
+  main: {
+    display: 'flex',
+    flexDirection: 'row',
+    gap: 40,
   },
 
   esquemaContainer: {
     flex: '0 0 400px',
     maxWidth: '400px',
   },
+  status: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#374151',
+    background: '#F3F4F6',
+    padding: '6px 8px',
+    borderRadius: 8,
+    border: '1px solid #E5E7EB',
+    minHeight: 30,
+  },
+
   formularioContainer: {
     flex: '0 0 400px',
     maxWidth: '400px',
     position: 'relative',
     zIndex: 2,
   },
+
   previewContainer: {
     flex: 1,
     minWidth: '360px',
@@ -645,37 +657,36 @@ const styles = {
     zIndex: 1,
   },
 
-  toolbarGrid: {
-    display: 'grid',
-    gap: '8px',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    alignItems: 'stretch',
-  },
-  toolbarButton: {
-    backgroundColor: '#0072CE',
+  downloadButton: {
+    marginTop: 12,
     color: 'white',
     border: 'none',
     padding: '12px',
-    borderRadius: '8px',
-    fontSize: '14px',
+    borderRadius: 10,
+    fontSize: 16,
     cursor: 'pointer',
     width: '100%',
-    whiteSpace: 'normal',
-    lineHeight: 1.2,
-    minHeight: 44,
   },
 
-  /* ===== Botones de pago/descarga ===== */
-  downloadButton: {
-    marginTop: '15px',
-    backgroundColor: '#0072CE',
-    color: 'white',
-    border: 'none',
-    padding: '12px',
-    borderRadius: '8px',
-    fontSize: '16px',
+  pillBtn: {
+    background: ICA.primary,
+    color: '#fff',
+    border: `1px solid ${ICA.accent}`,
+    padding: '10px 14px',
+    borderRadius: 999,
+    fontSize: 13,
+    fontWeight: 700,
     cursor: 'pointer',
-    width: '100%',
+  },
+
+  overlay: {
+    position:'fixed',
+    inset:0,
+    background:'rgba(0,0,0,0.35)',
+    display:'grid',
+    placeItems:'center',
+    zIndex:9999,
+    padding: 12,
   },
 };
 
