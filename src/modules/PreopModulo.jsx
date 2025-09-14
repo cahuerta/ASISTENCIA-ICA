@@ -2,29 +2,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import FormularioComorbilidades from "../components/FormularioComorbilidades.jsx";
+import { getTheme } from "../theme.js";
 
+const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-// Catálogo base (nombres EXACTOS)
-const EXAMENES_FIJOS = [
-  "HEMOGRAMA MAS VHS",
-  "PCR",
-  "ELECTROLITOS PLASMATICOS",
-  "PERFIL BIOQUIMICO",
-  "PERFIL LIPIDICO",
-  "PERFIL HEPATICO",
-  "CREATININA",
-  "TTPK",
-  "HEMOGLOBINA GLICOSILADA",
-  "VITAMINA D",
-  "GRUPO Y RH",
-  "VIH",
-  "ORINA",
-  "UROCULTIVO",
-  "ECG DE REPOSO",
-];
-
-// Opciones de cirugía
+// Opciones de cirugía (mantenemos nombres para compatibilidad)
 const TIPOS_CIRUGIA = [
   "Artroplastia total de cadera (ATC)",
   "Artroplastia total de rodilla (ATR)",
@@ -42,7 +25,7 @@ export default function PreopModulo({ initialDatos }) {
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
-  // ===== Estados nuevos del flujo
+  // ===== Estados del flujo
   // pasos: 'idle' | 'comorbilidades' | 'cirugia' | 'ia_cargando' | 'preview'
   const [paso, setPaso] = useState("idle");
 
@@ -51,37 +34,33 @@ export default function PreopModulo({ initialDatos }) {
       const idPago = sessionStorage.getItem("idPago") || "";
       const raw = idPago ? sessionStorage.getItem(`preop_comorbilidades_${idPago}`) : null;
       return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
+    } catch { return {}; }
   });
 
+  // Tipo de cirugía (lee preferencia guardada por FormularioPaciente)
   const [tipoCirugia, setTipoCirugia] = useState(() => {
     try {
-      const idPago = sessionStorage.getItem("idPago") || "";
-      return idPago ? sessionStorage.getItem(`preop_tipoCirugia_${idPago}`) || "" : "";
-    } catch {
-      return "";
-    }
+      const preset = sessionStorage.getItem("preop_tipoCirugia") || "";
+      const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+      if (preset && preset.startsWith("Otro") && otro.trim()) return otro.trim();
+      return preset || "";
+    } catch { return ""; }
   });
   const [tipoCirugiaLibre, setTipoCirugiaLibre] = useState("");
 
+  // Salida IA (solo lo que venga del backend)
   const [examenesIA, setExamenesIA] = useState(() => {
     try {
       const idPago = sessionStorage.getItem("idPago") || "";
       const raw = idPago ? sessionStorage.getItem(`preop_examenes_IA_${idPago}`) : null;
       return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   });
   const [informeIA, setInformeIA] = useState(() => {
     try {
       const idPago = sessionStorage.getItem("idPago") || "";
       return idPago ? sessionStorage.getItem(`preop_informe_IA_${idPago}`) || "" : "";
-    } catch {
-      return "";
-    }
+    } catch { return ""; }
   });
 
   // ===== Montaje: sincroniza datos y detecta retorno de pago
@@ -101,9 +80,7 @@ export default function PreopModulo({ initialDatos }) {
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
-        try {
-          await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`);
-        } catch {}
+        try { await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`); } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
           pollerRef.current = null;
@@ -127,8 +104,7 @@ export default function PreopModulo({ initialDatos }) {
     if (
       !datos.nombre?.trim() ||
       !datos.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0 ||
+      !Number.isFinite(edadNum) || edadNum <= 0 ||
       !datos.dolor?.trim()
     ) {
       alert("Complete nombre, RUT, edad (>0) y dolor antes de continuar.");
@@ -137,7 +113,7 @@ export default function PreopModulo({ initialDatos }) {
 
     const idPago =
       sessionStorage.getItem("idPago") ||
-      "preop_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+      ("preop_" + Date.now() + "_" + Math.floor(Math.random() * 10000));
 
     sessionStorage.setItem("idPago", idPago);
     sessionStorage.setItem("modulo", "preop");
@@ -154,24 +130,39 @@ export default function PreopModulo({ initialDatos }) {
     setPaso("comorbilidades");
   };
 
-  // ========= Paso 1: Recibir Comorbilidades
+  // ========= Paso 1: Recibir Comorbilidades (tu formulario)
   const handleEnviarComorbilidades = async (formData) => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
 
-    const limpio = normalizarComorbilidades(formData); // ← alineado a preopIA.js
+    const limpio = normalizarComorbilidades(formData);
     setComorbilidades(limpio);
     sessionStorage.setItem(`preop_comorbilidades_${idPago}`, JSON.stringify(limpio));
+
+    // Determinar tipo de cirugía “efectivo” desde sessionStorage si ya existe
+    const preset = (sessionStorage.getItem("preop_tipoCirugia") || "").trim();
+    const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").trim();
+    const seleccion = preset && preset.startsWith("Otro") ? (otro || preset) : preset;
 
     try {
       await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idPago, datosPaciente: { ...datos }, comorbilidades: limpio }),
+        body: JSON.stringify({
+          idPago,
+          datosPaciente: { ...datos },
+          comorbilidades: limpio,
+          ...(seleccion ? { tipoCirugia: seleccion } : {}),
+        }),
       });
     } catch {}
 
-    setPaso("cirugia");
+    if (seleccion) {
+      setTipoCirugia(seleccion);
+      await llamarIAyConstruirPreview(seleccion, limpio);
+    } else {
+      setPaso("cirugia");
+    }
   };
 
   // ========= Paso 2: Confirmar tipo de cirugía
@@ -201,11 +192,11 @@ export default function PreopModulo({ initialDatos }) {
       });
     } catch {}
 
-    await llamarIAyConstruirPreview();
+    await llamarIAyConstruirPreview(seleccion, comorbilidades);
   };
 
-  // ========= Paso 3: IA → examenes/informe → PREVIEW
-  const llamarIAyConstruirPreview = async () => {
+  // ========= Paso 3: IA → examenes/informe → PREVIEW (sin fallback)
+  const llamarIAyConstruirPreview = async (tipoSel, comorb) => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
 
@@ -220,9 +211,9 @@ export default function PreopModulo({ initialDatos }) {
           dolor: datos?.dolor || "",
           lado: datos?.lado || "",
         },
-        comorbilidades,
-        tipoCirugia,
-        catalogoExamenes: EXAMENES_FIJOS, // mantén nombres exactos
+        comorbilidades: comorb || comorbilidades || {},
+        tipoCirugia: tipoSel || tipoCirugia || "",
+        // ❌ sin catálogo fijo: dejamos que el backend IA decida
       };
 
       const res = await fetch(`${BACKEND_BASE}/ia-preop`, {
@@ -231,22 +222,19 @@ export default function PreopModulo({ initialDatos }) {
         body: JSON.stringify(payload),
       });
 
-      let examenes = null;
+      let examenes = [];
       let informe = "";
       if (res.ok) {
         const data = await res.json();
-        examenes = limpiarListaExamenesContraCatalogo(data?.examenes, EXAMENES_FIJOS);
+        if (Array.isArray(data?.examenes)) examenes = data.examenes;
         informe = (data?.informeIA || "").toString();
       }
 
-      const finalExamenes = examenes && examenes.length ? examenes : EXAMENES_FIJOS;
-      const finalInforme = informe || "Informe IA no disponible por el momento.";
+      setExamenesIA(examenes);
+      setInformeIA(informe);
 
-      setExamenesIA(finalExamenes);
-      setInformeIA(finalInforme);
-
-      sessionStorage.setItem(`preop_examenes_IA_${idPago}`, JSON.stringify(finalExamenes));
-      sessionStorage.setItem(`preop_informe_IA_${idPago}`, finalInforme);
+      sessionStorage.setItem(`preop_examenes_IA_${idPago}`, JSON.stringify(examenes));
+      sessionStorage.setItem(`preop_informe_IA_${idPago}`, informe);
 
       try {
         await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
@@ -255,10 +243,10 @@ export default function PreopModulo({ initialDatos }) {
           body: JSON.stringify({
             idPago,
             datosPaciente: { ...datos },
-            comorbilidades,
-            tipoCirugia,
-            examenesIA: finalExamenes,
-            informeIA: finalInforme,
+            comorbilidades: comorb || comorbilidades || {},
+            tipoCirugia: tipoSel || tipoCirugia || "",
+            examenesIA: examenes,
+            informeIA: informe,
           }),
         });
       } catch {}
@@ -266,8 +254,8 @@ export default function PreopModulo({ initialDatos }) {
       setPaso("preview");
     } catch (e) {
       console.error("Fallo IA-Preop:", e);
-      setExamenesIA(EXAMENES_FIJOS);
-      setInformeIA("Informe IA no disponible por el momento.");
+      setExamenesIA([]);
+      setInformeIA("No fue posible obtener el informe de IA en este momento.");
       setPaso("preview");
     }
   };
@@ -286,7 +274,7 @@ export default function PreopModulo({ initialDatos }) {
           datosPaciente: { ...datos },
           comorbilidades,
           tipoCirugia,
-          examenesIA: examenesIA || EXAMENES_FIJOS,
+          examenesIA: Array.isArray(examenesIA) ? examenesIA : [],
           informeIA: informeIA || "",
         }),
       });
@@ -352,7 +340,7 @@ export default function PreopModulo({ initialDatos }) {
                 datosPaciente: datosReinyectar,
                 comorbilidades,
                 tipoCirugia,
-                examenesIA: examenesIA || EXAMENES_FIJOS,
+                examenesIA: Array.isArray(examenesIA) ? examenesIA : [],
                 informeIA: informeIA || "",
               }),
             });
@@ -408,43 +396,46 @@ export default function PreopModulo({ initialDatos }) {
   // ================= UI =================
   return (
     <div style={styles.card}>
-      <h3 style={{ marginTop: 0 }}>Vista previa — Exámenes preoperatorios</h3>
+      <h3 style={{ marginTop: 0, color: T.primary }}>Vista previa — Exámenes preoperatorios</h3>
 
       {/* Datos Paciente */}
-      <div style={{ marginBottom: 10 }}>
-        <div>
-          <strong>Paciente:</strong> {datos?.nombre || "—"}
-        </div>
-        <div>
-          <strong>RUT:</strong> {datos?.rut || "—"}
-        </div>
-        <div>
-          <strong>Edad:</strong> {datos?.edad || "—"}
-        </div>
+      <div style={{ marginBottom: 10, color: T.text }}>
+        <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
+        <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
+        <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
         <div>
           <strong>Clínica:</strong>{" "}
           {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
         </div>
+        {tipoCirugia ? (
+          <div><strong>Tipo de cirugía:</strong> {tipoCirugia}</div>
+        ) : null}
       </div>
 
-      {/* PREVIEW */}
-      {(paso === "preview" || examenesIA) && (
+      {/* PREVIEW (solo lo devuelto por IA) */}
+      {(paso === "preview" || (Array.isArray(examenesIA) && (examenesIA.length || informeIA))) && (
         <>
-          <div>
-            <strong>Exámenes a solicitar:</strong>
-            <ul style={{ marginTop: 6 }}>
-              {(examenesIA || EXAMENES_FIJOS).map((e) => (
-                <li key={e}>{e}</li>
-              ))}
-            </ul>
-          </div>
+          {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
+            <div>
+              <strong>Exámenes a solicitar (IA):</strong>
+              <ul style={{ marginTop: 6 }}>
+                {examenesIA.map((e, idx) => (
+                  <li key={`${e}-${idx}`}>{typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div style={{ marginTop: 6, color: T.textMuted }}>
+              (La IA no devolvió una lista de exámenes en esta ocasión.)
+            </div>
+          )}
 
-          {!!informeIA && (
+          {informeIA ? (
             <div style={{ marginTop: 8 }}>
               <strong>Informe IA (resumen):</strong>
               <div style={styles.informeBox}>{informeIA}</div>
             </div>
-          )}
+          ) : null}
         </>
       )}
 
@@ -456,21 +447,21 @@ export default function PreopModulo({ initialDatos }) {
           disabled={descargando}
           title={mensajeDescarga || "Verificar y descargar"}
         >
-          {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
+          {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
         </button>
       ) : (
         <>
           {paso === "idle" && (
             <>
               <button
-                style={{ ...styles.btn, backgroundColor: "#004B94", marginTop: 12 }}
+                style={{ ...styles.btn, backgroundColor: T.primary, marginTop: 12 }}
                 onClick={handleContinuarPreop}
-                title="Comorbilidades → Tipo de cirugía → IA → Preview → Pago"
+                title="Comorbilidades → (Tipo de cirugía si falta) → IA → Preview → Pago"
               >
                 Continuar (Pre Op)
               </button>
               <button
-                style={{ ...styles.btn, backgroundColor: "#777", marginTop: 8 }}
+                style={{ ...styles.btn, backgroundColor: T.muted, marginTop: 8 }}
                 onClick={handleSimularPagoGuest}
                 title="Simular retorno pagado (solo pruebas)"
               >
@@ -482,16 +473,14 @@ export default function PreopModulo({ initialDatos }) {
           {paso === "comorbilidades" && (
             <div style={styles.modal}>
               <div style={styles.modalCard}>
-                <h4 style={{ marginTop: 0 }}>Formulario de Comorbilidades</h4>
-
+                <h4 style={{ marginTop: 0, color: T.primary }}>Formulario de Comorbilidades</h4>
                 <FormularioComorbilidades
                   initial={comorbilidades || {}}
                   onSave={handleEnviarComorbilidades}
                   onCancel={() => setPaso("idle")}
                 />
-
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                  <button style={{ ...styles.btn, background: "#777" }} onClick={() => setPaso("idle")}>
+                  <button style={{ ...styles.btn, background: T.muted }} onClick={() => setPaso("idle")}>
                     Cerrar
                   </button>
                 </div>
@@ -502,7 +491,7 @@ export default function PreopModulo({ initialDatos }) {
           {paso === "cirugia" && (
             <div style={styles.modal}>
               <div style={styles.modalCard}>
-                <h4 style={{ marginTop: 0 }}>Seleccione tipo de cirugía</h4>
+                <h4 style={{ marginTop: 0, color: T.primary }}>Seleccione tipo de cirugía</h4>
                 <div style={{ display: "grid", gap: 8 }}>
                   {TIPOS_CIRUGIA.map((t) => (
                     <label key={t} style={styles.radioRow}>
@@ -527,10 +516,10 @@ export default function PreopModulo({ initialDatos }) {
                 </div>
 
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                  <button style={{ ...styles.btn, background: "#777" }} onClick={() => setPaso("comorbilidades")}>
+                  <button style={{ ...styles.btn, background: T.muted }} onClick={() => setPaso("comorbilidades")}>
                     Volver
                   </button>
-                  <button style={{ ...styles.btn, background: "#004B94" }} onClick={handleConfirmarCirugia}>
+                  <button style={{ ...styles.btn, background: T.primary }} onClick={handleConfirmarCirugia}>
                     Confirmar
                   </button>
                 </div>
@@ -539,14 +528,14 @@ export default function PreopModulo({ initialDatos }) {
           )}
 
           {paso === "ia_cargando" && (
-            <div style={{ marginTop: 12, fontStyle: "italic" }}>
+            <div style={{ marginTop: 12, fontStyle: "italic", color: T.textMuted }}>
               Generando resumen e indicación de exámenes con IA…
             </div>
           )}
 
           {paso === "preview" && (
             <button
-              style={{ ...styles.btn, backgroundColor: "#004B94", marginTop: 12 }}
+              style={{ ...styles.btn, backgroundColor: T.primary, marginTop: 12 }}
               onClick={handlePagarDesdePreview}
             >
               Pagar ahora (Pre Op)
@@ -560,33 +549,10 @@ export default function PreopModulo({ initialDatos }) {
 
 /* ================= Helpers ================= */
 
-/**
- * Normaliza el payload del formulario para que coincida con lo que espera el backend (preopIA.js):
- * - Booleans planos para comorbilidades (hta, dm2, …, anticoagulantes, artritis_reumatoide)
- * - Strings para: alergias, medicamentos, cirugiasPrevias, tabaco, alcohol, observaciones, otras
- * - Campo adicional 'anticoagulantes_detalle' (string)
- */
-function normalizarComorbilidades(c = {}) {
-  // permitir tanto objetos {alergias:{tiene,detalle}} como strings
-  const alergiaStr =
-    typeof c.alergias === "string"
-      ? c.alergias
-      : c.alergias_flag
-      ? String(c.alergias_detalle || "").trim()
-      : "";
-
-  const anticoagulantesBool =
-    typeof c.anticoagulantes === "boolean"
-      ? c.anticoagulantes
-      : !!c?.anticoagulantes?.usa;
-
-  const anticoagulantesDetalle =
-    typeof c.anticoagulantes_detalle === "string"
-      ? c.anticoagulantes_detalle
-      : (c?.anticoagulantes?.detalle || "").toString();
-
+function normalizarComorbilidades(c) {
+  if (!c) return {};
+  // Mapeo compatible con tu backend preopIA.js (booleans + textos)
   return {
-    // booleans principales
     hta: !!c.hta,
     dm2: !!c.dm2,
     dislipidemia: !!c.dislipidemia,
@@ -598,92 +564,83 @@ function normalizarComorbilidades(c = {}) {
     hipotiroidismo: !!c.hipotiroidismo,
     artritis_reumatoide: !!c.artritis_reumatoide,
 
-    // anticoagulantes como espera el backend
-    anticoagulantes: anticoagulantesBool,
-    anticoagulantes_detalle: anticoagulantesDetalle,
-
-    // textos libres esperados por el backend
-    alergias: alergiaStr,
-    medicamentos: (c.medicamentos || c.meds || "").toString(),
-    cirugiasPrevias: (c.cirugiasPrevias || c.cirugias_previas || c.cirugias || "").toString(),
-    tabaco: (c.tabaco || (c.tabaquismo ? "Sí" : "")).toString(),
+    alergias: (c.alergias || "").toString(),
+    medicamentos: (c.medicamentos || "").toString(),
+    cirugiasPrevias: (c.cirugiasPrevias || "").toString(),
+    anticoagulantes: !!c.anticoagulantes,
+    anticoagulantes_detalle: (c.anticoagulantes_detalle || "").toString(),
+    tabaco: (c.tabaco || "").toString(),
     alcohol: (c.alcohol || "").toString(),
-    observaciones: (c.observaciones || "").toString(),
     otras: (c.otras || "").toString(),
+    observaciones: (c.observaciones || "").toString(),
   };
 }
 
-function limpiarListaExamenesContraCatalogo(lista, catalogo) {
-  if (!Array.isArray(lista)) return null;
-  const setCat = new Set(catalogo.map((s) => s.trim().toUpperCase()));
-  const clean = [];
-  for (const item of lista) {
-    const nombre = (typeof item === "string" ? item : item?.nombre || "")
-      .toString()
-      .trim()
-      .toUpperCase();
-    if (setCat.has(nombre)) {
-      const original = catalogo.find((c) => c.toUpperCase() === nombre);
-      clean.push(original);
-    }
-  }
-  return clean.length ? clean : null;
-}
-
-/* ================= Estilos ================= */
+/* ================= Estilos (theme.json) ================= */
 const styles = {
   card: {
-    background: "#fff",
+    background: T.surface,
     borderRadius: 8,
     padding: 16,
-    boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
+    boxShadow: T.shadowSm,
+    border: `1px solid ${T.border}`,
+    color: T.text,
   },
   btn: {
-    backgroundColor: "#0072CE",
-    color: "white",
+    backgroundColor: T.primary,
+    color: T.onPrimary || "#fff",
     border: "none",
     padding: "12px",
     borderRadius: "8px",
     fontSize: "16px",
     cursor: "pointer",
     width: "100%",
+    boxShadow: T.shadowSm,
   },
   informeBox: {
-    background: "#F7F9FC",
-    border: "1px solid #E3E9F2",
+    background: T.bg,
+    border: `1px solid ${T.border}`,
     borderRadius: 8,
     padding: 12,
     marginTop: 6,
     whiteSpace: "pre-wrap",
+    color: T.text,
   },
   modal: {
     position: "fixed",
     inset: 0,
-    background: "rgba(0,0,0,0.35)",
+    background: T.overlay || "rgba(0,0,0,0.35)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 9999,
+    padding: 12,
   },
   modalCard: {
-    background: "#fff",
+    background: T.surface,
     borderRadius: 10,
     padding: 16,
     width: "min(720px, 92vw)",
-    boxShadow: "0 8px 30px rgba(0,0,0,0.15)",
+    boxShadow: T.shadowMd,
+    border: `1px solid ${T.border}`,
+    color: T.text,
   },
   input: {
     width: "100%",
     padding: "10px",
-    border: "1px solid #D8DFEA",
+    border: `1px solid ${T.border}`,
     borderRadius: 8,
     fontSize: 14,
+    background: T.surface,
+    color: T.text,
   },
   radioRow: {
     display: "flex",
     alignItems: "center",
     padding: "6px 8px",
-    border: "1px solid #E3E9F2",
+    border: `1px solid ${T.border}`,
     borderRadius: 8,
+    background: T.surface,
+    color: T.text,
   },
 };
