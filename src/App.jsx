@@ -50,7 +50,7 @@ function App() {
 
   // ====== Aviso Legal ======
   const [mostrarAviso, setMostrarAviso] = useState(false);
-  const [pendingPreview, setPendingPreview] = useState(false); // ← preview sólo tras IA + aceptar aviso
+  const [pendingPreview, setPendingPreview] = useState(false); // preview sólo tras IA + aceptar
 
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
@@ -113,36 +113,50 @@ function App() {
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(null);
 
-  // Guardar comorbilidades → llamar IA backend → abrir Aviso (y luego preview)
+  // Guardar comorbilidades → llamar IA backend (con idPago & paciente) → abrir Aviso (y luego preview)
   const handleSaveComorbilidades = async (payload) => {
     setComorbilidades(payload);
     setMostrarComorbilidades(false);
 
-    // Datos adicionales de Preop desde sessionStorage
-    let tipoCirugia = "";
-    let tipoCirugiaOtro = "";
+    // Asegurar idPago (tu backend lo requiere)
+    let idPago = "";
     try {
-      tipoCirugia = sessionStorage.getItem("preop_tipoCirugia") || "";
-      tipoCirugiaOtro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+      idPago = sessionStorage.getItem("idPago") || "";
+      if (!idPago) {
+        idPago = `preop_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+        sessionStorage.setItem("idPago", idPago);
+      }
+    } catch {}
+
+    // Tipo de cirugía desde sessionStorage (elige fijo u "otro")
+    let tipoCirugia = "";
+    try {
+      const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
+      const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+      tipoCirugia = fijo || otro || "";
     } catch {}
 
     try {
       const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
+
+      // *** IMPORTANTE: tu backend espera { idPago, paciente, comorbilidades, tipoCirugia } ***
       const resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          datosPaciente: { ...datosPaciente, edad: edadNum },
+          idPago,
+          paciente: { ...datosPaciente, edad: edadNum },
           comorbilidades: payload,
           tipoCirugia,
-          tipoCirugiaOtro,
         }),
       });
+
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const j = await resp.json();
 
-      const examenes = j?.examenes || j?.lista || j?.items || [];
-      const resumen = j?.resumen || j?.texto || j?.informe || "";
+      // Nombres según tu preopIA.js
+      const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
+      const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
 
       try {
         sessionStorage.setItem("preop_ia_examenes", JSON.stringify(examenes));
@@ -474,7 +488,7 @@ function App() {
                 onClick={() => {
                   setModulo(b.key);
                   sessionStorage.setItem("modulo", b.key);
-                  // Mostrar Aviso Legal al cambiar de módulo (sin abrir preview)
+                  // Aviso Legal al cambiar de módulo (sin abrir preview)
                   setPendingPreview(false);
                   setMostrarAviso(true);
                 }}
@@ -715,17 +729,17 @@ const styles = {
   },
   esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
 
-  /* Stacking */
+  /* Stacking para que los modales siempre queden arriba */
   formCol: {
     flex: "0 0 400px",
     maxWidth: 400,
     position: "relative",
-    zIndex: 0, // ← para que el modal quede encima
+    zIndex: 0,
   },
   previewCol: {
     minWidth: 360,
     position: "relative",
-    zIndex: 0, // ← para que el modal quede encima
+    zIndex: 0,
     overflow: "hidden",
   },
 
