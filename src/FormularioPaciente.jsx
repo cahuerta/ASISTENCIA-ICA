@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from "react";
-import { getTheme } from "../theme.js"; // colores desde theme.json
+import { getTheme } from "./theme.js"; // colores desde theme.json
 const T = getTheme();
 
 /* ===== Utilidades RUT (Chile) ===== */
