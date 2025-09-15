@@ -10,23 +10,15 @@ const BACKEND_BASE =
 
 /**
  * PreviewOrden — PRIMER PREVIEW (RESUMEN)
- * Muestra:
- *  - Datos del paciente
- *  - Comorbilidades positivas (chips)
- *  - Botón "Continuar" (dispara onContinuar para que el padre llame a la IA y cambie de etapa)
- *
- * Props aceptadas (compat):
- *  - scope: "trauma" | "preop" | "generales" | "ia"   (no cambia render; solo se usa para la key de comorbilidades)
- *  - datos: { nombre, rut, edad, genero, dolor, lado }
- *  - onContinuar?: () => void
- *  - onPagar?: () => void                      (IGNORADO en este primer preview)
- *  - seccionesExtra?: [{ title, lines: string[] }]  (opcional; se renderiza al final si se entrega)
+ * - Datos del paciente
+ * - Mensaje de solicitud (Generales / Preop) usando formulario + sessionStorage
+ * - Comorbilidades positivas (oculta negativas)
+ * - Botón "Continuar" (el padre llama a la IA y cambia a segundo preview)
  */
 export default function PreviewOrden({
-  scope = "preop",
+  scope = "preop",           // "preop" | "generales" | (trauma/ia no se usan aquí)
   datos = {},
   onContinuar,
-  // onPagar // <- intencionalmente NO usado en primer preview
   seccionesExtra = [],
 }) {
   const T = getTheme();
@@ -40,16 +32,14 @@ export default function PreviewOrden({
     lado = "",
   } = datos || {};
 
-  // Solo leeremos comorbilidades desde sessionStorage (o podrías pasarlas por props si prefieres)
-  const [comorb, setComorb] = useState(null);
-
-  // Keys para comorbilidades según scope (compat con tu app)
+  // === Cargar comorbilidades del scope para chips ===
   const keyComorb =
     scope === "generales"
       ? "generales_comorbilidades_data"
       : "preop_comorbilidades_data";
 
-  // Cargar comorbilidades positivas
+  const [comorb, setComorb] = useState(null);
+
   useEffect(() => {
     try {
       const rc = sessionStorage.getItem(keyComorb);
@@ -59,30 +49,68 @@ export default function PreviewOrden({
     }
   }, [keyComorb]);
 
-  // Normaliza chips de comorbilidades
+  // === SOLO POSITIVAS (oculta negativas) ===
   const chipsComorb = useMemo(() => {
     const obj = comorb;
     if (!obj) return [];
-    if (Array.isArray(obj)) return obj.map(String);
-    if (typeof obj === "string")
-      return obj
-        .split(/[,;]+/)
-        .map((s) => s.trim())
-        .filter(Boolean);
+
+    const isAffirmative = (val) => {
+      if (val === true) return true;
+      if (Array.isArray(val)) return val.length > 0;
+      if (typeof val === "number") return val === 1;
+      if (typeof val === "string") {
+        const s = val.trim().toLowerCase();
+        if (!s) return false;
+        const negativos = ["no", "negativo", "ausente", "ninguna", "ninguno", "false", "0"];
+        if (negativos.includes(s)) return false;
+        // Si no es claramente negativo, lo consideramos afirmativo (p.ej. "controlada")
+        return true;
+      }
+      return false;
+    };
+
+    if (Array.isArray(obj)) return obj.filter(isAffirmative).map(String);
 
     const out = [];
     for (const [k, v] of Object.entries(obj)) {
+      if (!isAffirmative(v)) continue;
       if (v === true) out.push(k);
-      else if (typeof v === "string" && v.trim()) out.push(`${k}: ${v.trim()}`);
-      else if (Array.isArray(v) && v.length) out.push(`${k}: ${v.join(", ")}`);
+      else if (typeof v === "string") out.push(`${k}: ${v.trim()}`);
+      else if (Array.isArray(v)) out.push(`${k}: ${v.join(", ")}`);
+      else if (typeof v === "number" && v === 1) out.push(k);
     }
     return out;
   }, [comorb]);
 
-  // Título fijo para PRIMER PREVIEW
-  const titulo = "Vista previa — Resumen";
+  // === Mensaje de solicitud por módulo ===
+  const [tipoCirugia, setTipoCirugia] = useState("");
 
-  // Estilos usando el tema
+  useEffect(() => {
+    if (scope !== "preop") return;
+    try {
+      const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
+      const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+      setTipoCirugia(fijo || otro || "");
+    } catch {
+      setTipoCirugia("");
+    }
+  }, [scope]);
+
+  const solicitudMsg = useMemo(() => {
+    if (scope === "generales") {
+      return "Usted solicitó una evaluación con exámenes para chequeo general preventivo.";
+    }
+    if (scope === "preop") {
+      const z = dolor ? `Zona: ${dolor}` : "";
+      const l = lado ? ` ${lado}` : "";
+      const cir = tipoCirugia ? ` para cirugía de ${tipoCirugia}` : "";
+      const suf = (z || l) ? ` — ${z}${l}` : "";
+      return `Usted solicitó evaluación preoperatoria${cir}.${suf}`;
+    }
+    return "";
+  }, [scope, tipoCirugia, dolor, lado]);
+
+  const titulo = "Vista previa — Resumen";
   const styles = makeStyles(T);
 
   return (
@@ -95,30 +123,23 @@ export default function PreviewOrden({
 
       <h3 style={styles.title}>{titulo}</h3>
 
+      {/* MENSAJE DE SOLICITUD */}
+      {solicitudMsg ? (
+        <div style={styles.noticeBox}>
+          <p style={{ margin: 0 }}>{solicitudMsg}</p>
+        </div>
+      ) : null}
+
       {/* Datos del paciente */}
       <div style={styles.info}>
-        <p>
-          <strong>Nombre:</strong> {nombre || "—"}
-        </p>
-        <p>
-          <strong>RUT:</strong> {rut || "—"}
-        </p>
-        <p>
-          <strong>Edad:</strong> {edad ? `${edad} años` : "—"}
-        </p>
-        {genero ? (
-          <p>
-            <strong>Género:</strong> {genero}
-          </p>
-        ) : null}
-        {dolor ? (
-          <p>
-            <strong>Motivo / Diagnóstico:</strong> Dolor de {dolor} {lado || ""}
-          </p>
-        ) : null}
+        <p><strong>Nombre:</strong> {nombre || "—"}</p>
+        <p><strong>RUT:</strong> {rut || "—"}</p>
+        <p><strong>Edad:</strong> {edad ? `${edad} años` : "—"}</p>
+        {genero ? <p><strong>Género:</strong> {genero}</p> : null}
+        {dolor ? <p><strong>Motivo / Diagnóstico:</strong> Dolor de {dolor} {lado || ""}</p> : null}
       </div>
 
-      {/* Comorbilidades (positivas) */}
+      {/* Comorbilidades positivas */}
       <div style={styles.chipsWrap}>
         <div style={{ marginBottom: 6, fontWeight: 700, color: T.text }}>
           Comorbilidades (positivas):
@@ -126,9 +147,7 @@ export default function PreviewOrden({
         {chipsComorb.length > 0 ? (
           <div style={styles.chips}>
             {chipsComorb.map((c, i) => (
-              <span key={i} style={styles.chip}>
-                {c}
-              </span>
+              <span key={i} style={styles.chip}>{c}</span>
             ))}
           </div>
         ) : (
@@ -138,7 +157,7 @@ export default function PreviewOrden({
         )}
       </div>
 
-      {/* Secciones extra opcionales (si tu app las inyecta en este primer preview) */}
+      {/* Secciones extra opcionales */}
       {Array.isArray(seccionesExtra) &&
         seccionesExtra.map((sec, idx) => (
           <div key={idx} style={styles.section}>
@@ -155,23 +174,19 @@ export default function PreviewOrden({
           </div>
         ))}
 
-      {/* Botón Continuar: el padre hará el llamado a la IA y cambiará de módulo */}
+      {/* Botón Continuar → IA */}
       <button
         type="button"
         style={styles.primaryBtn}
         onClick={() => {
-          try {
-            onContinuar?.();
-          } catch {}
+          try { onContinuar?.(); } catch {}
         }}
       >
         Continuar → Analizar con IA
       </button>
 
       <div style={styles.firma}>
-        <hr
-          style={{ width: "60%", margin: "20px auto", borderColor: T.border }}
-        />
+        <hr style={{ width: "60%", margin: "20px auto", borderColor: T.border }} />
         <p style={{ textAlign: "center", margin: 0, color: T.textMuted }}>
           Firma médico tratante
         </p>
@@ -188,26 +203,26 @@ function makeStyles(T) {
       borderRadius: 12,
       padding: 20,
       backgroundColor: T.surfaceAlt || "#f9fbff",
-      fontFamily:
-        T.font || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+      fontFamily: T.font || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
       color: T.text || "#002663",
       boxShadow: T.shadowSm,
     },
-    logo: {
-      textAlign: "center",
-      marginBottom: 12,
-    },
+    logo: { textAlign: "center", marginBottom: 12 },
     title: {
       textAlign: "center",
       color: T.primaryDark || T.primary,
       marginBottom: 16,
       fontWeight: 800,
     },
-    info: {
-      fontSize: 16,
-      lineHeight: 1.5,
+    noticeBox: {
       marginBottom: 12,
+      background: T.infoBg || T.accentAlpha || "#eef4ff",
+      border: `1px solid ${T.border}`,
+      borderRadius: 10,
+      padding: 12,
+      fontSize: 14,
     },
+    info: { fontSize: 16, lineHeight: 1.5, marginBottom: 12 },
     section: {
       fontSize: 16,
       backgroundColor: T.card || T.surface,
@@ -216,16 +231,8 @@ function makeStyles(T) {
       border: `1px solid ${T.border}`,
       marginTop: 10,
     },
-    sectionTitle: {
-      display: "block",
-      color: T.primary,
-      marginBottom: 6,
-    },
-    ul: {
-      marginTop: 6,
-      marginBottom: 0,
-      paddingLeft: 20,
-    },
+    sectionTitle: { display: "block", color: T.primary, marginBottom: 6 },
+    ul: { marginTop: 6, marginBottom: 0, paddingLeft: 20 },
     chipsWrap: {
       marginTop: 10,
       background: T.surface,
@@ -233,11 +240,7 @@ function makeStyles(T) {
       borderRadius: 10,
       padding: 10,
     },
-    chips: {
-      display: "flex",
-      flexWrap: "wrap",
-      gap: 8,
-    },
+    chips: { display: "flex", flexWrap: "wrap", gap: 8 },
     chip: {
       background: T.chipBg || T.accentAlpha || "rgba(0,0,0,0.05)",
       color: T.chipText || T.text,
@@ -259,8 +262,6 @@ function makeStyles(T) {
       boxShadow: T.shadowSm,
       transition: "transform .12s ease",
     },
-    firma: {
-      marginTop: 24,
-    },
+    firma: { marginTop: 24 },
   };
-}
+            }
