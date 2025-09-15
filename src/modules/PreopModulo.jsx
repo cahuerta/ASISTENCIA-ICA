@@ -6,6 +6,53 @@ import { getTheme } from "../theme.js";
 const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
+/* Etiquetas amigables para chips de comorbilidades */
+const LABELS_COMORB = {
+  hta: "Hipertensión arterial",
+  dm2: "Diabetes mellitus tipo 2",
+  dislipidemia: "Dislipidemia",
+  obesidad: "Obesidad",
+  tabaquismo: "Tabaco",
+  epoc_asma: "EPOC / Asma",
+  cardiopatia: "Cardiopatía",
+  erc: "Enfermedad renal crónica",
+  hipotiroidismo: "Hipotiroidismo",
+  anticoagulantes: "Anticoagulantes/antiagregantes",
+  artritis_reumatoide: "Artritis reumatoide / autoinmune",
+  alergias_flag: "Alergias",
+  alergias_detalle: "Alergias (detalle)",
+  otras: "Otros",
+  anticoagulantes_detalle: "Detalle anticoagulantes",
+};
+
+function prettyComorb(c = {}) {
+  try {
+    const keys = Object.keys(c);
+    if (!keys.length) return [];
+    const out = [];
+    for (const k of keys) {
+      const v = c[k];
+      const label = LABELS_COMORB[k] || k.replace(/_/g, " ");
+      if (typeof v === "boolean") {
+        if (v) out.push(label);
+        continue;
+      }
+      if (typeof v === "object" && v !== null && (v.tiene || v.usa || v.detalle)) {
+        let t = label;
+        if (v.detalle) t += ` — ${v.detalle}`;
+        out.push(t);
+        continue;
+      }
+      if (typeof v === "string" && v.trim()) {
+        out.push(`${label}: ${v.trim()}`);
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 export default function PreopModulo({ initialDatos }) {
   const [datos, setDatos] = useState(initialDatos || {});
   const [pagoRealizado, setPagoRealizado] = useState(false);
@@ -13,7 +60,10 @@ export default function PreopModulo({ initialDatos }) {
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
-  // === cargar salida IA y metadatos guardados POR App.jsx ===
+  // Paso previo: "Continuar" → luego preview IA → luego pago
+  const [stepStarted, setStepStarted] = useState(false);
+
+  // Salida IA y metadatos guardados POR App.jsx
   const [examenesIA, setExamenesIA] = useState([]);
   const [informeIA, setInformeIA] = useState("");
   const [comorbilidades, setComorbilidades] = useState({});
@@ -70,7 +120,6 @@ export default function PreopModulo({ initialDatos }) {
           // primero ruta específica, si falla, ruta genérica
           let r = await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`);
           if (!r.ok) r = await fetch(`${BACKEND_BASE}/obtener-datos/${idPago}`);
-          // no necesitamos el body, es sólo wake/poll
         } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
@@ -88,6 +137,25 @@ export default function PreopModulo({ initialDatos }) {
   }, []);
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /* ===================== Continuar → cargar preview IA ===================== */
+  const handleContinuar = () => {
+    try {
+      // refrescamos por si hubo cambios justo antes
+      const ex = JSON.parse(sessionStorage.getItem("preop_ia_examenes") || "[]");
+      const inf = sessionStorage.getItem("preop_ia_resumen") || "";
+      const raw = sessionStorage.getItem("preop_comorbilidades_data");
+      const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
+      const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
+      const final = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
+
+      setExamenesIA(Array.isArray(ex) ? ex : []);
+      setInformeIA(inf || "");
+      setComorbilidades(raw ? JSON.parse(raw) : {});
+      setTipoCirugia(final || "");
+    } catch {}
+    setStepStarted(true);
+  };
 
   /* ===================== Pago ===================== */
   const handlePagarDesdePreview = async () => {
@@ -221,6 +289,8 @@ export default function PreopModulo({ initialDatos }) {
   };
 
   /* ===================== UI ===================== */
+  const comorbChips = prettyComorb(comorbilidades);
+
   return (
     <div style={styles.card}>
       <h3 style={{ marginTop: 0, color: T.primary }}>Vista previa — Exámenes preoperatorios</h3>
@@ -242,47 +312,80 @@ export default function PreopModulo({ initialDatos }) {
         )}
       </div>
 
-      {/* PREVIEW (lista de IA si existe) */}
-      {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
-        <div>
-          <strong>Exámenes a solicitar (IA):</strong>
-          <ul style={{ marginTop: 6 }}>
-            {examenesIA.map((e, idx) => (
-              <li key={`${e}-${idx}`}>{typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}</li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <div style={{ color: T.textMuted }}>
-          (Aún no hay lista de exámenes. Desde el formulario principal pulsa “Generar Informe”
-          para que se ejecute la IA y se muestre aquí.)
-        </div>
-      )}
-
-      {informeIA && (
-        <div style={{ marginTop: 8 }}>
-          <strong>Informe IA (resumen):</strong>
-          <div style={styles.informeBox}>{informeIA}</div>
-        </div>
-      )}
-
-      {/* Acciones */}
-      {pagoRealizado ? (
-        <button
-          style={{ ...styles.btn, marginTop: 12 }}
-          onClick={handleDescargarPreop}
-          disabled={descargando}
-          title={mensajeDescarga || "Verificar y descargar"}
-        >
-          {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
+      {/* Botón Continuar → luego mostrar preview IA y botón de pago */}
+      {!stepStarted ? (
+        <button style={styles.btn} onClick={handleContinuar}>
+          Continuar
         </button>
       ) : (
-        <button
-          style={{ ...styles.btn, backgroundColor: T.primary, marginTop: 12 }}
-          onClick={handlePagarDesdePreview}
-        >
-          Pagar ahora (Pre Op)
-        </button>
+        <>
+          {/* Comorbilidades (chips) */}
+          {comorbChips.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <strong>Comorbilidades:</strong>
+              <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {comorbChips.map((t, i) => (
+                  <span
+                    key={`${t}-${i}`}
+                    style={{
+                      background: T.chipBg ?? "#eef6ff",
+                      border: `1px solid ${T.chipBorder ?? "#cfe4ff"}`,
+                      color: T.chipText ?? (T.primary || "#0b63c5"),
+                      borderRadius: 999,
+                      padding: "4px 10px",
+                      fontSize: 12,
+                    }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* PREVIEW (lista de IA si existe) */}
+          {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
+            <div style={{ marginTop: 12 }}>
+              <strong>Exámenes a solicitar (IA):</strong>
+              <ul style={{ marginTop: 6 }}>
+                {examenesIA.map((e, idx) => (
+                  <li key={`${e}-${idx}`}>{typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div style={{ color: T.textMuted, marginTop: 12 }}>
+              (Aún no hay lista de exámenes. Desde el formulario principal pulsa “Generar Informe”
+              para que se ejecute la IA y se muestre aquí.)
+            </div>
+          )}
+
+          {informeIA && (
+            <div style={{ marginTop: 8 }}>
+              <strong>Informe IA (resumen):</strong>
+              <div style={styles.informeBox}>{informeIA}</div>
+            </div>
+          )}
+
+          {/* Acciones */}
+          {pagoRealizado ? (
+            <button
+              style={{ ...styles.btn, marginTop: 12 }}
+              onClick={handleDescargarPreop}
+              disabled={descargando}
+              title={mensajeDescarga || "Verificar y descargar"}
+            >
+              {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
+            </button>
+          ) : (
+            <button
+              style={{ ...styles.btn, backgroundColor: T.primary, marginTop: 12 }}
+              onClick={handlePagarDesdePreview}
+            >
+              Pagar ahora (Pre Op)
+            </button>
+          )}
+        </>
       )}
     </div>
   );
