@@ -8,8 +8,8 @@ import EsquemaToggleTabs from "./EsquemaToggleTabs.jsx";
 
 /* Formularios y módulos */
 import FormularioPaciente from "./FormularioPaciente.jsx";
-import PreviewOrden from "./PreviewOrden.jsx";
-import PreviewIA from "./PreviewIA.jsx"; // ← segundo preview (post IA)
+import PreviewOrden from "./PreviewOrden.jsx"; // PRIMER preview (resumen + comorbilidades)
+import PreviewIA from "./PreviewIA.jsx";       // SEGUNDO preview (resultado IA + pagar)
 import PreopModulo from "./modules/PreopModulo.jsx";
 import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import IAModulo from "./modules/IAModulo.jsx";
@@ -20,13 +20,13 @@ import AvisoLegal from "./components/AvisoLegal.jsx";
 import FormularioResonancia from "./components/FormularioResonancia.jsx";
 import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx";
 
-/* Tema (JSON + helper) */
+/* Tema */
 import { getTheme } from "./theme.js";
 const T = getTheme();
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* === Normaliza solo para el backend (UI sigue: MASCULINO / FEMENINO) === */
+/* Normaliza sólo para el backend */
 const normalizarGenero = (g = "") => {
   const s = String(g).trim().toLowerCase();
   if (s === "masculino" || s === "hombre") return "hombre";
@@ -35,6 +35,7 @@ const normalizarGenero = (g = "") => {
 };
 
 function App() {
+  /* ====== Estado base ====== */
   const [datosPaciente, setDatosPaciente] = useState({
     nombre: "",
     rut: "",
@@ -44,24 +45,40 @@ function App() {
     lado: "",
   });
 
-  // Módulo activo: 'trauma' | 'preop' | 'generales' | 'ia'
+  // 'trauma' | 'preop' | 'generales' | 'ia'
   const [modulo, setModulo] = useState("trauma");
 
+  // Vista esquema (anterior/posterior)
+  const [vista, setVista] = useState("anterior");
+
+  // Previews
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
+  // Sólo para preop/generales: 'resumen' (primer preview) → 'ia' (segundo preview)
+  const [step, setStep] = useState("resumen");
+
+  // Pago / descarga (legacy que ya usabas)
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [mostrarPago, setMostrarPago] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
-  // Vista esquema (frontal/posterior)
-  const [vista, setVista] = useState("anterior");
+  // Aviso legal
+  const [mostrarAviso, setMostrarAviso] = useState(false);
+  const [pendingPreview, setPendingPreview] = useState(false); // IA lista pero esperando aceptar aviso
 
-  // === ETAPA DEL PREVIEW (sólo preop/generales)
-  // 'resumen' = Primer preview (datos + comorbilidades); 'ia' = Segundo preview (resultado IA)
-  const [step, setStep] = useState("resumen");
+  // Comorbilidades
+  const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
+  const [comorbilidades, setComorbilidades] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("preop_comorbilidades_data");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  // ====== Flags persistentes (por módulo: preop / generales) ======
+  // Flags de aceptación (persistidos por módulo)
   const avisoOkRef = useRef({ preop: false, generales: false });
   const comorbOkRef = useRef({ preop: false, generales: false });
 
@@ -72,22 +89,10 @@ function App() {
   const getComorbOkKey = (scope) =>
     scope === "generales" ? "generales_comorbilidades_ok" : "preop_comorbilidades_ok";
 
-  useEffect(() => {
-    try {
-      avisoOkRef.current.preop = sessionStorage.getItem("preop_aviso_ok") === "1";
-      avisoOkRef.current.generales = sessionStorage.getItem("generales_aviso_ok") === "1";
-      comorbOkRef.current.preop = sessionStorage.getItem("preop_comorbilidades_ok") === "1";
-      comorbOkRef.current.generales = sessionStorage.getItem("generales_comorbilidades_ok") === "1";
-    } catch {}
-  }, []);
-
   const marcarAvisoOk = (scope) => {
     avisoOkRef.current[scope] = true;
-    try {
-      sessionStorage.setItem(getAvisoKey(scope), "1");
-    } catch {}
+    try { sessionStorage.setItem(getAvisoKey(scope), "1"); } catch {}
   };
-
   const marcarComorbilidadesOk = (scope, payload) => {
     comorbOkRef.current[scope] = true;
     try {
@@ -96,79 +101,32 @@ function App() {
     } catch {}
   };
 
-  // ====== Aviso Legal ======
-  const [mostrarAviso, setMostrarAviso] = useState(false);
-  const [pendingPreview, setPendingPreview] = useState(false); // preview IA pendiente por aviso
-
-  const continuarTrasAviso = () => {
-    setMostrarAviso(false);
-    if (modulo === "preop" || modulo === "generales") marcarAvisoOk(modulo);
-    if (pendingPreview) {
-      setMostrarVistaPrevia(true);
-      setPagoRealizado(false);
-      setMostrarPago(false);
-      setStep("ia"); // ← tras aceptar aviso, mostrar SEGUNDO PREVIEW (IA)
-      setPendingPreview(false);
-    }
-  };
-  const rechazarAviso = () => {
-    setMostrarAviso(false);
-    setPendingPreview(false);
+  /* ====== Restauración / persistencia ====== */
+  useEffect(() => {
     try {
-      window.close();
+      const saved = sessionStorage.getItem("datosPacienteJSON");
+      if (saved) setDatosPaciente(JSON.parse(saved));
+
+      const m = sessionStorage.getItem("modulo");
+      if (["trauma", "preop", "generales", "ia"].includes(m)) setModulo(m);
+
+      avisoOkRef.current.preop = sessionStorage.getItem("preop_aviso_ok") === "1";
+      avisoOkRef.current.generales = sessionStorage.getItem("generales_aviso_ok") === "1";
+      comorbOkRef.current.preop = sessionStorage.getItem("preop_comorbilidades_ok") === "1";
+      comorbOkRef.current.generales = sessionStorage.getItem("generales_comorbilidades_ok") === "1";
+
+      const vistaSS = sessionStorage.getItem("vistaEsquema");
+      if (vistaSS === "anterior" || vistaSS === "posterior") setVista(vistaSS);
     } catch {}
-    setTimeout(() => {
-      if (!window.closed) window.location.href = "about:blank";
-    }, 0);
-  };
+  }, []);
 
-  // ====== RNM (checklist) ======
-  const [showReso, setShowReso] = useState(false);
-  const [resolverReso, setResolverReso] = useState(null);
-  const RED_FLAGS = new Set([
-    "marcapasos",
-    "coclear_o_neuro",
-    "clips_aneurisma",
-    "valvula_cardiaca_metal",
-    "fragmentos_metalicos",
-  ]);
-  const pedirChecklistResonancia = () =>
-    new Promise((resolve) => {
-      setResolverReso(() => resolve);
-      setShowReso(true);
-    });
-  const hasRedFlags = (data) =>
-    Object.entries(data || {}).some(([k, v]) => RED_FLAGS.has(k) && v === true);
-  const resumenResoTexto = (data) => {
-    const si =
-      Object.entries(data || {})
-        .filter(([_, v]) => v === true)
-        .map(([k]) => k)
-        .join(", ") || "—";
-    const no =
-      Object.entries(data || {})
-        .filter(([_, v]) => v === false)
-        .map(([k]) => k)
-        .join(", ") || "—";
-    return [
-      "FORMULARIO DE SEGURIDAD PARA RESONANCIA MAGNÉTICA",
-      `Sí: ${si}`,
-      `No: ${no}`,
-      "Declaro que la información es veraz y autorizo la realización del examen.",
-      "Firma Paciente: ______________________     RUT: _______________     Fecha: ____/____/______",
-    ].join("\n");
-  };
+  useEffect(() => {
+    try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosPaciente)); } catch {}
+  }, [datosPaciente]);
 
-  // ====== Comorbilidades (modal suelto) ======
-  const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
-  const [comorbilidades, setComorbilidades] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem(getComorbStorageKey("preop"));
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
+  useEffect(() => {
+    try { sessionStorage.setItem("vistaEsquema", vista); } catch {}
+  }, [vista]);
 
   // Mantener comorbilidades del scope al cambiar de módulo
   useEffect(() => {
@@ -176,273 +134,19 @@ function App() {
     try {
       const raw = sessionStorage.getItem(getComorbStorageKey(modulo));
       setComorbilidades(raw ? JSON.parse(raw) : null);
-    } catch {
-      setComorbilidades(null);
-    }
+    } catch { setComorbilidades(null); }
   }, [modulo]);
 
-  // ---- IA PREOP ----
-  const llamarPreopIA = async (payloadComorb) => {
-    let idPago = "";
-    try {
-      idPago = sessionStorage.getItem("idPago") || "";
-      if (!idPago) {
-        idPago = `preop_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
-        sessionStorage.setItem("idPago", idPago);
-      }
-    } catch {}
-
-    let tipoCirugia = "";
-    try {
-      const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
-      const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
-      tipoCirugia = fijo || otro || "";
-    } catch {}
-
-    let comorb = payloadComorb || comorbilidades;
-    if (!comorb) {
-      try {
-        const raw = sessionStorage.getItem(getComorbStorageKey("preop"));
-        if (raw) comorb = JSON.parse(raw);
-      } catch {}
-    }
-
-    const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
-    const paciente = {
-      ...datosPaciente,
-      edad: edadNum,
-      genero: normalizarGenero(datosPaciente.genero),
-    };
-
-    const postIA = async (path) =>
-      fetch(`${BACKEND_BASE}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPago,
-          paciente,
-          comorbilidades: comorb || {},
-          tipoCirugia,
-        }),
-      });
-
-    try {
-      let resp = await postIA("/preop-ia");
-      if (!resp.ok) resp = await postIA("/ia-preop");
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-      const j = await resp.json();
-      const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
-      const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
-
-      try {
-        sessionStorage.setItem("preop_ia_examenes", JSON.stringify(examenes));
-        sessionStorage.setItem("preop_ia_resumen", resumen || "");
-      } catch {}
-
-      if (avisoOkRef.current.preop) {
-        setMostrarVistaPrevia(true);
-        setPagoRealizado(false);
-        setMostrarPago(false);
-        setStep("ia"); // ← segundo preview
-        setPendingPreview(false);
-      } else {
-        setPendingPreview(true);
-        setMostrarAviso(true);
-      }
-    } catch {
-      alert("No fue posible obtener la información de IA desde el backend. Intenta nuevamente.");
-      setPendingPreview(false);
-    }
-  };
-
-  // ---- IA GENERALES ----
-  const llamarGeneralesIA = async (payloadComorb) => {
-    let idPago = "";
-    try {
-      idPago = sessionStorage.getItem("idPago") || "";
-      if (!idPago) {
-        idPago = `generales_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
-        sessionStorage.setItem("idPago", idPago);
-      }
-    } catch {}
-
-    let comorb = payloadComorb || comorbilidades;
-    if (!comorb) {
-      try {
-        const raw = sessionStorage.getItem(getComorbStorageKey("generales"));
-        if (raw) comorb = JSON.parse(raw);
-      } catch {}
-    }
-
-    const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
-    const paciente = {
-      ...datosPaciente,
-      edad: edadNum,
-      genero: normalizarGenero(datosPaciente.genero),
-    };
-
-    const body = {
-      idPago,
-      paciente,
-      comorbilidades: comorb || {},
-    };
-
-    try {
-      let resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!resp.ok) {
-        resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...body, tipoCirugia: "" }),
-        });
-      }
-      if (!resp.ok) {
-        resp = await fetch(`${BACKEND_BASE}/ia-preop`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...body, tipoCirugia: "" }),
-        });
-      }
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-      const j = await resp.json();
-      const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
-      const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
-
-      try {
-        sessionStorage.setItem("generales_ia_examenes", JSON.stringify(examenes));
-        sessionStorage.setItem("generales_ia_resumen", resumen || "");
-      } catch {}
-
-      if (avisoOkRef.current.generales) {
-        setMostrarVistaPrevia(true);
-        setPagoRealizado(false);
-        setMostrarPago(false);
-        setStep("ia"); // ← segundo preview
-        setPendingPreview(false);
-      } else {
-        setPendingPreview(true);
-        setMostrarAviso(true);
-      }
-    } catch {
-      alert("No fue posible obtener la información de IA (Generales). Intenta nuevamente.");
-      setPendingPreview(false);
-    }
-  };
-
-  // ====== Restauración de estado en montaje ======
-  useEffect(() => {
-    const saved = sessionStorage.getItem("datosPacienteJSON");
-    if (saved) {
-      try {
-        setDatosPaciente(JSON.parse(saved));
-      } catch {}
-    }
-
-    const moduloSS = sessionStorage.getItem("modulo");
-    if (["trauma", "preop", "generales", "ia"].includes(moduloSS)) {
-      setModulo(moduloSS);
-    }
-
-    const vistaSS = sessionStorage.getItem("vistaEsquema");
-    if (vistaSS === "anterior" || vistaSS === "posterior") setVista(vistaSS);
-
-    const params = new URLSearchParams(window.location.search);
-    const pago = params.get("pago");
-    const idPagoURL = params.get("idPago");
-    const idPagoSS = sessionStorage.getItem("idPago");
-    const idFinal = idPagoURL || idPagoSS || "";
-
-    if (pollerRef.current) {
-      clearInterval(pollerRef.current);
-      pollerRef.current = null;
-    }
-
-    if (pago === "ok" && idFinal) {
-      sessionStorage.setItem("idPago", idFinal);
-      setMostrarPago(false);
-      setMostrarVistaPrevia(true);
-      setPagoRealizado(true);
-
-      let intentos = 0;
-      pollerRef.current = setInterval(async () => {
-        intentos++;
-        try {
-          await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`);
-        } catch {}
-        if (intentos >= 30) {
-          clearInterval(pollerRef.current);
-          pollerRef.current = null;
-        }
-      }, 2000);
-    } else if (!pago && idFinal) {
-      setMostrarPago(false);
-      setMostrarVistaPrevia(true);
-      setPagoRealizado(true);
-    } else if (pago === "ok" && !idFinal) {
-      alert("No recibimos idPago en el retorno. Intenta nuevamente.");
-    } else if (pago === "cancelado") {
-      alert("Pago cancelado.");
-      setMostrarPago(false);
-      setMostrarVistaPrevia(false);
-      setPagoRealizado(false);
-    }
-
-    return () => {
-      if (pollerRef.current) {
-        clearInterval(pollerRef.current);
-        pollerRef.current = null;
-      }
-    };
-  }, []);
-
-  // Persistir vista de esquema
-  useEffect(() => {
-    try {
-      sessionStorage.setItem("vistaEsquema", vista);
-    } catch {}
-  }, [vista]);
-
-  const handleCambiarDato = (campo, valor) => {
-    setDatosPaciente((prev) => {
-      const next = { ...prev, [campo]: valor };
-      try {
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-      } catch {}
-      return next;
-    });
-  };
-
+  /* ====== Esquema: selección de zona ====== */
   const onSeleccionZona = (zona) => {
-    let dolor = "";
-    let lado = "";
-    if (zona.includes("Columna")) {
-      dolor = "Columna lumbar";
-      lado = "";
-    } else if (zona.includes("Cadera")) {
-      dolor = "Cadera";
-      lado = zona.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zona.includes("Rodilla")) {
-      dolor = "Rodilla";
-      lado = zona.includes("izquierda") ? "Izquierda" : "Derecha";
-    }
-
-    setDatosPaciente((prev) => {
-      const next = { ...prev, dolor, lado };
-      try {
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+    let dolor = "", lado = "";
+    if (zona.includes("Columna")) { dolor = "Columna lumbar"; lado = ""; }
+    else if (zona.includes("Cadera")) { dolor = "Cadera"; lado = zona.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zona.includes("Rodilla")) { dolor = "Rodilla"; lado = zona.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    setDatosPaciente((p) => ({ ...p, dolor, lado }));
   };
 
-  // ====== Submit del formulario principal ======
+  /* ====== Submit principal ====== */
   const handleSubmit = (e) => {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
@@ -451,7 +155,6 @@ function App() {
       alert("Por favor complete nombre, RUT y edad (>0).");
       return;
     }
-
     if (modulo === "trauma" && !datosPaciente.dolor?.trim()) {
       alert("Seleccione dolor/zona en el esquema para continuar.");
       return;
@@ -460,26 +163,26 @@ function App() {
     if (modulo === "preop" || modulo === "generales") {
       const scope = modulo;
       if (!comorbOkRef.current[scope]) {
-        setMostrarComorbilidades(true);
-      } else {
-        // PRIMER PREVIEW (no IA todavía)
-        setMostrarVistaPrevia(true);
-        setPagoRealizado(false);
-        setMostrarPago(false);
-        setStep("resumen");
+        setMostrarComorbilidades(true); // abrir de inmediato
+        return;
       }
+      // Primer preview (resumen sin IA todavía)
+      setMostrarVistaPrevia(true);
+      setPagoRealizado(false);
+      setMostrarPago(false);
+      setStep("resumen");
       return;
     }
 
-    // Otros módulos (trauma/ia): flujo tradicional
+    // Otros módulos (trauma/ia): preview directo (usa componente de segundo preview)
     setMostrarVistaPrevia(true);
     setPagoRealizado(false);
     setMostrarPago(false);
-    setPendingPreview(false);
+    setStep("ia");
   };
 
-  // Guardar comorbilidades → marcar ok → abrir PRIMER PREVIEW (no IA aquí)
-  const handleSaveComorbilidades = async (payload) => {
+  /* ====== Guardar comorbilidades → Primer preview ====== */
+  const handleSaveComorbilidades = (payload) => {
     setComorbilidades(payload);
     setMostrarComorbilidades(false);
     const scope = modulo === "generales" ? "generales" : "preop";
@@ -491,16 +194,136 @@ function App() {
     setStep("resumen");
   };
 
-  // Botón "Continuar" del primer preview → lanzar IA
-  const onContinuarPrimerPreview = async () => {
-    if (modulo === "preop") {
-      await llamarPreopIA();
-    } else if (modulo === "generales") {
-      await llamarGeneralesIA();
+  /* ====== Aviso Legal ====== */
+  const continuarTrasAviso = () => {
+    setMostrarAviso(false);
+    if (modulo === "preop" || modulo === "generales") marcarAvisoOk(modulo);
+    if (pendingPreview) {
+      setMostrarVistaPrevia(true);
+      setPagoRealizado(false);
+      setMostrarPago(false);
+      setStep("ia");
+      setPendingPreview(false);
     }
-    // El paso a 'ia' se hace en llamarPreopIA/GeneralesIA o tras aceptar aviso
+  };
+  const rechazarAviso = () => {
+    setMostrarAviso(false);
+    setPendingPreview(false);
   };
 
+  /* ====== Llamadas IA ====== */
+  const llamarPreopIA = async () => {
+    // Asegurar idPago
+    let idPago = sessionStorage.getItem("idPago") || "";
+    if (!idPago) {
+      idPago = `preop_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+      sessionStorage.setItem("idPago", idPago);
+    }
+
+    // Tipo de cirugía
+    let tipoCirugia = "";
+    try {
+      const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
+      const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+      tipoCirugia = fijo || otro || "";
+    } catch {}
+
+    const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
+    const paciente = { ...datosPaciente, edad: edadNum, genero: normalizarGenero(datosPaciente.genero) };
+
+    const postIA = async (path, body) =>
+      fetch(`${BACKEND_BASE}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    const body = { idPago, paciente, comorbilidades: comorbilidades || {}, tipoCirugia };
+
+    try {
+      let r = await postIA("/preop-ia", body);
+      if (!r.ok) r = await postIA("/ia-preop", body);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+      const j = await r.json();
+      const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
+      const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
+      try {
+        sessionStorage.setItem("preop_ia_examenes", JSON.stringify(examenes));
+        sessionStorage.setItem("preop_ia_resumen", resumen || "");
+      } catch {}
+
+      if (avisoOkRef.current.preop) {
+        setStep("ia");
+      } else {
+        setPendingPreview(true);
+        setMostrarAviso(true);
+      }
+    } catch {
+      alert("No fue posible obtener la información de IA (Preoperatorio).");
+    }
+  };
+
+  const llamarGeneralesIA = async () => {
+    // Asegurar idPago
+    let idPago = sessionStorage.getItem("idPago") || "";
+    if (!idPago) {
+      idPago = `generales_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+      sessionStorage.setItem("idPago", idPago);
+    }
+
+    const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
+    const paciente = { ...datosPaciente, edad: edadNum, genero: normalizarGenero(datosPaciente.genero) };
+    const body = { idPago, paciente, comorbilidades: comorbilidades || {} };
+
+    try {
+      let r = await fetch(`${BACKEND_BASE}/ia-generales`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        r = await fetch(`${BACKEND_BASE}/preop-ia`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...body, tipoCirugia: "" }),
+        });
+      }
+      if (!r.ok) {
+        r = await fetch(`${BACKEND_BASE}/ia-preop`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...body, tipoCirugia: "" }),
+        });
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+      const j = await r.json();
+      const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
+      const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
+      try {
+        sessionStorage.setItem("generales_ia_examenes", JSON.stringify(examenes));
+        sessionStorage.setItem("generales_ia_resumen", resumen || "");
+      } catch {}
+
+      if (avisoOkRef.current.generales) {
+        setStep("ia");
+      } else {
+        setPendingPreview(true);
+        setMostrarAviso(true);
+      }
+    } catch {
+      alert("No fue posible obtener la información de IA (Generales).");
+    }
+  };
+
+  // Botón "Continuar" del primer preview
+  const onContinuarPrimerPreview = async () => {
+    if (modulo === "preop") await llamarPreopIA();
+    else if (modulo === "generales") await llamarGeneralesIA();
+  };
+
+  /* ====== Resonancia / Pago / PDF (legacy) ====== */
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
@@ -528,12 +351,39 @@ function App() {
     }
   };
 
+  const [showReso, setShowReso] = useState(false);
+  const [resolverReso, setResolverReso] = useState(null);
+  const RED_FLAGS = new Set([
+    "marcapasos",
+    "coclear_o_neuro",
+    "clips_aneurisma",
+    "valvula_cardiaca_metal",
+    "fragmentos_metalicos",
+  ]);
+  const pedirChecklistResonancia = () =>
+    new Promise((resolve) => {
+      setResolverReso(() => resolve);
+      setShowReso(true);
+    });
+  const hasRedFlags = (data) =>
+    Object.entries(data || {}).some(([k, v]) => RED_FLAGS.has(k) && v === true);
+  const resumenResoTexto = (data) => {
+    const si =
+      Object.entries(data || {}).filter(([, v]) => v === true).map(([k]) => k).join(", ") || "—";
+    const no =
+      Object.entries(data || {}).filter(([, v]) => v === false).map(([k]) => k).join(", ") || "—";
+    return [
+      "FORMULARIO DE SEGURIDAD PARA RESONANCIA MAGNÉTICA",
+      `Sí: ${si}`,
+      `No: ${no}`,
+      "Declaro que la información es veraz y autorizo la realización del examen.",
+      "Firma Paciente: ______________________     RUT: _______________     Fecha: ____/____/______",
+    ].join("\n");
+  };
+
   const handleDescargarPDF = async () => {
     const idPago = sessionStorage.getItem("idPago");
-    if (!idPago) {
-      alert("ID de pago no encontrado");
-      return;
-    }
+    if (!idPago) { alert("ID de pago no encontrado"); return; }
 
     const intentaDescarga = async () => {
       const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
@@ -565,9 +415,7 @@ function App() {
         if (r.status === 402) {
           setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
-          if (i === maxIntentos) {
-            alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
-          }
+          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente.");
           continue;
         }
 
@@ -576,13 +424,11 @@ function App() {
             setMensajeDescarga("Restaurando datos…");
             const respaldo = sessionStorage.getItem("datosPacienteJSON");
             const datosReinyectar = respaldo ? JSON.parse(respaldo) : datosPaciente;
-
             await fetch(`${BACKEND_BASE}/guardar-datos`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ idPago, datosPaciente: datosReinyectar }),
             });
-
             reinyectado = true;
             await sleep(500);
             continue;
@@ -637,13 +483,11 @@ function App() {
         setShowReso(false);
         if (typeof resolverReso === "function") resolverReso(data);
         if (hasRedFlags(data)) {
-          alert("Se detectaron contraindicaciones para RM. Por favor, revise el checklist.");
+          alert("Se detectaron contraindicaciones para RM. Revise el checklist.");
           return;
         }
         const texto = resumenResoTexto(data);
-        try {
-          sessionStorage.setItem("formularioResonanciaTexto", texto);
-        } catch {}
+        try { sessionStorage.setItem("formularioResonanciaTexto", texto); } catch {}
       }
 
       irAPagoKhipu(modulo, { ...datosPaciente, edad: edadNum });
@@ -653,18 +497,16 @@ function App() {
     }
   };
 
-  /* ================== RENDER ================== */
+  /* ====== Render ====== */
   return (
     <div className="min-h-screen w-full bg-[--bg] text-[--fg]">
       <div className="max-w-6xl mx-auto p-4 md:p-6">
-        {/* HEADER / TABS */}
-        <div className="flex items-center gap-3 mb-4">
-          <h1 className="text-2xl font-semibold">Asistente Virtual para Pacientes</h1>
-        </div>
+        <h1 className="text-2xl font-semibold mb-4">Asistente Virtual para Pacientes</h1>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Columna izquierda: formulario principal + módulos */}
+          {/* Columna izquierda */}
           <div className="rounded-xl shadow-md bg-white p-4">
+            {/* OJO: FormularioPaciente de tu proyecto acepta (value, onChange) con objeto completo */}
             <FormularioPaciente value={datosPaciente} onChange={setDatosPaciente} />
 
             <div className="mt-4">
@@ -676,12 +518,6 @@ function App() {
               )}
             </div>
 
-            {/* Módulos opcionales (sin cambios) */}
-            {/* <PreopModulo /> */}
-            {/* <GeneralesModulo /> */}
-            {/* <IAModulo /> */}
-
-            {/* Botón principal de continuar / generar */}
             <form onSubmit={handleSubmit} className="mt-4">
               <button
                 type="submit"
@@ -692,19 +528,17 @@ function App() {
             </form>
           </div>
 
-          {/* Columna derecha: PREVIEW */}
+          {/* Columna derecha: PREVIEWS */}
           <div className="rounded-xl shadow-md bg-white p-4">
             {mostrarVistaPrevia && (
-              modulo === "preop" || modulo === "generales" ? (
+              (modulo === "preop" || modulo === "generales") ? (
                 step === "resumen" ? (
-                  // PRIMER PREVIEW (datos + comorbilidades positivas)
                   <PreviewOrden
                     scope={modulo}
                     datos={datosPaciente}
                     onContinuar={onContinuarPrimerPreview}
                   />
                 ) : (
-                  // SEGUNDO PREVIEW (resultado IA + Pagar ahora)
                   <PreviewIA
                     scope={modulo}
                     datos={datosPaciente}
@@ -712,8 +546,8 @@ function App() {
                   />
                 )
               ) : (
-                // TRAUMA e IA: flujo original
-                <PreviewOrden
+                // TRAUMA e IA usan el segundo preview (no tocamos su flujo)
+                <PreviewIA
                   scope={modulo}
                   datos={datosPaciente}
                   onPagar={handlePagarAhora}
@@ -742,7 +576,7 @@ function App() {
           </div>
         )}
 
-        {/* Modal/Checklist Resonancia */}
+        {/* Checklist Resonancia (cuando aplique) */}
         {showReso && (
           <div className="mt-6">
             <FormularioResonancia
