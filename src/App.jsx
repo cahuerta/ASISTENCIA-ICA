@@ -57,7 +57,7 @@ function App() {
   // Vista esquema (frontal/posterior)
   const [vista, setVista] = useState("anterior");
 
-  // === NUEVO: etapa del preview sólo para preop/generales
+  // === ETAPA DEL PREVIEW (sólo preop/generales)
   // 'resumen' = Primer preview (datos + comorbilidades); 'ia' = Segundo preview (resultado IA)
   const [step, setStep] = useState("resumen");
 
@@ -183,7 +183,6 @@ function App() {
 
   // ---- IA PREOP ----
   const llamarPreopIA = async (payloadComorb) => {
-    // Asegurar idPago
     let idPago = "";
     try {
       idPago = sessionStorage.getItem("idPago") || "";
@@ -193,7 +192,6 @@ function App() {
       }
     } catch {}
 
-    // Tipo de cirugía desde sessionStorage
     let tipoCirugia = "";
     try {
       const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
@@ -201,7 +199,6 @@ function App() {
       tipoCirugia = fijo || otro || "";
     } catch {}
 
-    // Comorbilidades
     let comorb = payloadComorb || comorbilidades;
     if (!comorb) {
       try {
@@ -247,13 +244,13 @@ function App() {
         setMostrarVistaPrevia(true);
         setPagoRealizado(false);
         setMostrarPago(false);
-        setStep("ia"); // ← mostrar segundo preview
+        setStep("ia"); // ← segundo preview
         setPendingPreview(false);
       } else {
         setPendingPreview(true);
         setMostrarAviso(true);
       }
-    } catch (err) {
+    } catch {
       alert("No fue posible obtener la información de IA desde el backend. Intenta nuevamente.");
       setPendingPreview(false);
     }
@@ -261,7 +258,6 @@ function App() {
 
   // ---- IA GENERALES ----
   const llamarGeneralesIA = async (payloadComorb) => {
-    // Asegurar idPago
     let idPago = "";
     try {
       idPago = sessionStorage.getItem("idPago") || "";
@@ -271,7 +267,6 @@ function App() {
       }
     } catch {}
 
-    // Comorbilidades
     let comorb = payloadComorb || comorbilidades;
     if (!comorb) {
       try {
@@ -329,13 +324,13 @@ function App() {
         setMostrarVistaPrevia(true);
         setPagoRealizado(false);
         setMostrarPago(false);
-        setStep("ia"); // ← mostrar segundo preview
+        setStep("ia"); // ← segundo preview
         setPendingPreview(false);
       } else {
         setPendingPreview(true);
         setMostrarAviso(true);
       }
-    } catch (err) {
+    } catch {
       alert("No fue posible obtener la información de IA (Generales). Intenta nuevamente.");
       setPendingPreview(false);
     }
@@ -452,13 +447,11 @@ function App() {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
 
-    // Reglas generales
     if (!datosPaciente.nombre?.trim() || !datosPaciente.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
       alert("Por favor complete nombre, RUT y edad (>0).");
       return;
     }
 
-    // Solo TRAUMA exige dolor/lado
     if (modulo === "trauma" && !datosPaciente.dolor?.trim()) {
       alert("Seleccione dolor/zona en el esquema para continuar.");
       return;
@@ -466,10 +459,10 @@ function App() {
 
     if (modulo === "preop" || modulo === "generales") {
       const scope = modulo;
-      // Abrir comorbilidades si faltan; si ya están, PRIMER PREVIEW (sin IA)
       if (!comorbOkRef.current[scope]) {
         setMostrarComorbilidades(true);
       } else {
+        // PRIMER PREVIEW (no IA todavía)
         setMostrarVistaPrevia(true);
         setPagoRealizado(false);
         setMostrarPago(false);
@@ -508,9 +501,7 @@ function App() {
     // El paso a 'ia' se hace en llamarPreopIA/GeneralesIA o tras aceptar aviso
   };
 
-  // ====== Detección de RM en backend ======
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
@@ -636,7 +627,6 @@ function App() {
         JSON.stringify({ ...datosPaciente, edad: edadNum })
       );
 
-      // Detección de Resonancia
       const solicitarRM = await detectarResonanciaEnBackend({
         ...datosPaciente,
         edad: edadNum,
@@ -656,10 +646,9 @@ function App() {
         } catch {}
       }
 
-      // Ir a pago
       irAPagoKhipu(modulo, { ...datosPaciente, edad: edadNum });
       setMostrarPago(true);
-    } catch (e) {
+    } catch {
       alert("No fue posible iniciar el pago.");
     }
   };
@@ -687,7 +676,7 @@ function App() {
               )}
             </div>
 
-            {/* Módulos (si los usas aquí) */}
+            {/* Módulos opcionales (sin cambios) */}
             {/* <PreopModulo /> */}
             {/* <GeneralesModulo /> */}
             {/* <IAModulo /> */}
@@ -708,14 +697,14 @@ function App() {
             {mostrarVistaPrevia && (
               modulo === "preop" || modulo === "generales" ? (
                 step === "resumen" ? (
-                  // PRIMER PREVIEW (datos + comorbilidades positivas, sin IA)
+                  // PRIMER PREVIEW (datos + comorbilidades positivas)
                   <PreviewOrden
                     scope={modulo}
                     datos={datosPaciente}
                     onContinuar={onContinuarPrimerPreview}
                   />
                 ) : (
-                  // SEGUNDO PREVIEW (resultado IA + botón Pagar ahora)
+                  // SEGUNDO PREVIEW (resultado IA + Pagar ahora)
                   <PreviewIA
                     scope={modulo}
                     datos={datosPaciente}
@@ -723,7 +712,7 @@ function App() {
                   />
                 )
               ) : (
-                // TRAUMA e IA: flujo original con el mismo preview
+                // TRAUMA e IA: flujo original
                 <PreviewOrden
                   scope={modulo}
                   datos={datosPaciente}
