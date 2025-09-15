@@ -25,30 +25,6 @@ const T = getTheme();
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* ===== Catálogo para IA de GENERALES ===== */
-const CATALOGO_GENERALES = [
-  "HEMOGRAMA",
-  "VHS",
-  "PCR",
-  "ELECTROLITOS PLASMATICOS",
-  "PERFIL BIOQUIMICO",
-  "PERFIL LIPIDICO",
-  "PERFIL HEPATICO",
-  "CREATININA",
-  "TTPK",
-  "HEMOGLOBINA GLICOSILADA",
-  "VITAMINA D",
-  "ORINA",
-  "UROCULTIVO",
-  "ECG DE REPOSO",
-  "ANTÍGENO PROSTÁTICO",
-  "CEA",
-  "MAMOGRAFÍA",
-  "TSHm y T4 LIBRE",
-  "CALCIO",
-  "PAPANICOLAO (según edad)",
-];
-
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
     nombre: "",
@@ -265,7 +241,7 @@ function App() {
     }
   };
 
-  // ---- IA GENERALES (reutiliza preopIA del backend + catálogo) ----
+  // ---- IA GENERALES (ruta propia, sin tipoCirugia ni catálogo) ----
   const llamarGeneralesIA = async (payloadComorb) => {
     // Asegurar idPago
     let idPago = "";
@@ -292,20 +268,15 @@ function App() {
       idPago,
       paciente: { ...datosPaciente, edad: edadNum },
       comorbilidades: comorb || {},
-      tipoCirugia: "", // Generales no usa cirugía
-      catalogoExamenes: CATALOGO_GENERALES,
+      // Generales NO usa tipoCirugia y NO enviamos catálogo desde el front
     };
 
-    const postIA = async (path) =>
-      fetch(`${BACKEND_BASE}${path}`, {
+    try {
+      const resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-
-    try {
-      let resp = await postIA("/preop-ia");
-      if (!resp.ok) resp = await postIA("/ia-preop");
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const j = await resp.json();
@@ -376,6 +347,7 @@ function App() {
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
 
+      // (El polling fino lo hace cada módulo; aquí mantenemos el legacy para trauma)
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
@@ -452,14 +424,13 @@ function App() {
   const handleSubmit = (e) => {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
-    if (
-      !datosPaciente.nombre?.trim() ||
-      !datosPaciente.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0 ||
-      !datosPaciente.dolor?.trim()
-    ) {
-      alert("Por favor complete todos los campos obligatorios.");
+    if (!datosPaciente.nombre?.trim() || !datosPaciente.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
+      alert("Por favor complete nombre, RUT y edad (>0).");
+      return;
+    }
+    // Solo TRAUMA exige dolor/lado en el submit principal
+    if (modulo === "trauma" && !datosPaciente.dolor?.trim()) {
+      alert("Seleccione dolor/zona en el esquema para continuar.");
       return;
     }
 
@@ -488,7 +459,7 @@ function App() {
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
-    };
+  };
 
   const detectarResonanciaEnBackend = async (datos) => {
     try {
@@ -759,7 +730,7 @@ function App() {
                         nombre: "Guest",
                         rut: "99999999-9",
                         edad: 30,
-                        genero: "Hombre",
+                        genero: "MASCULINO",
                         dolor: "Rodilla",
                         lado: "Izquierda",
                       };
