@@ -52,28 +52,7 @@ function App() {
   const [mostrarAviso, setMostrarAviso] = useState(false);
   const [pendingPreview, setPendingPreview] = useState(false); // preview sólo tras IA + aceptar
 
-  // Helpers de sesión (evitan dobles)
-  const getAvisoAceptado = () =>
-    (typeof sessionStorage !== "undefined" &&
-      sessionStorage.getItem("avisoAceptado") === "1") ||
-    false;
-  const setAvisoAceptado = (v) => {
-    try {
-      sessionStorage.setItem("avisoAceptado", v ? "1" : "0");
-    } catch {}
-  };
-  const getComorbOK = () =>
-    (typeof sessionStorage !== "undefined" &&
-      sessionStorage.getItem("preop_comorb_ok") === "1") ||
-    false;
-  const setComorbOK = (v) => {
-    try {
-      sessionStorage.setItem("preop_comorb_ok", v ? "1" : "0");
-    } catch {}
-  };
-
   const continuarTrasAviso = () => {
-    setAvisoAceptado(true);
     setMostrarAviso(false);
     if (pendingPreview) {
       setMostrarVistaPrevia(true);
@@ -134,73 +113,77 @@ function App() {
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(null);
 
-  // ---- utilidades IA (centralizado) ----
-  const ensureIdPago = () => {
-    let id = "";
-    try {
-      id = sessionStorage.getItem("idPago") || "";
-      if (!id) {
-        id = `preop_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
-        sessionStorage.setItem("idPago", id);
-      }
-    } catch {}
-    return id;
+  // ------- Helper centralizado: IA PreOp (evita dobles aperturas) -------
+  const preopIARunningRef = useRef(null);
+  const llamarPreopIA = async (payload) => {
+    // evita dobles llamados si el usuario hace clics repetidos
+    if (preopIARunningRef.current) return preopIARunningRef.current;
+
+    const run = (async () => {
+      // Asegurar idPago
+      let idPago = "";
+      try {
+        idPago = sessionStorage.getItem("idPago") || "";
+        if (!idPago) {
+          idPago = `preop_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
+          sessionStorage.setItem("idPago", idPago);
+        }
+      } catch {}
+
+      // Tipo de cirugía desde sessionStorage
+      let tipoCirugia = "";
+      try {
+        const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
+        const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+        tipoCirugia = fijo || otro || "";
+      } catch {}
+
+      const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
+      const body = {
+        idPago,
+        paciente: { ...datosPaciente, edad: edadNum },
+        comorbilidades: payload || {},
+        tipoCirugia,
+      };
+
+      // Primero el endpoint real del backend, luego fallback al alias
+      const fetchJSON = (path) =>
+        fetch(`${BACKEND_BASE}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+      let resp = await fetchJSON("/ia-preop");
+      if (!resp.ok) resp = await fetchJSON("/preop-ia");
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const j = await resp.json();
+      const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
+      const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
+
+      try {
+        sessionStorage.setItem("preop_ia_examenes", JSON.stringify(examenes));
+        sessionStorage.setItem("preop_ia_resumen", resumen || "");
+      } catch {}
+
+      // IA lista → pedir aceptación del Aviso Legal
+      setPendingPreview(true);
+      setMostrarAviso(true);
+    })().finally(() => {
+      preopIARunningRef.current = null;
+    });
+
+    preopIARunningRef.current = run;
+    return run;
   };
-  const getTipoCirugia = () => {
-    try {
-      const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
-      const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
-      return fijo || otro || "";
-    } catch {
-      return "";
-    }
-  };
 
-  async function llamarPreopIA(payloadComorb) {
-    const idPago = ensureIdPago();
-    const tipoCirugia = getTipoCirugia();
-    const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
-
-    const llamar = async (path) =>
-      fetch(`${BACKEND_BASE}${path}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPago,
-          paciente: { ...datosPaciente, edad: edadNum },
-          comorbilidades: payloadComorb || {},
-          tipoCirugia,
-        }),
-      });
-
-    let resp = await llamar("/preop-ia");
-    if (!resp.ok) resp = await llamar("/ia-preop");
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-
-    const j = await resp.json();
-    const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
-    const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
-    try {
-      sessionStorage.setItem("preop_ia_examenes", JSON.stringify(examenes));
-      sessionStorage.setItem("preop_ia_resumen", resumen || "");
-    } catch {}
-  }
-
-  // Guardar comorbilidades → llamar IA → (si falta) abrir aviso → preview
+  // Guardar comorbilidades → llamar IA → Aviso
   const handleSaveComorbilidades = async (payload) => {
     setComorbilidades(payload);
     setMostrarComorbilidades(false);
-    setComorbOK(true);
-
     try {
       await llamarPreopIA(payload);
-      // Evitar doble aviso: si ya fue aceptado, vamos directo a preview
-      if (getAvisoAceptado()) {
-        setMostrarVistaPrevia(true);
-      } else {
-        setPendingPreview(true);
-        setMostrarAviso(true);
-      }
     } catch (err) {
       alert(
         "No fue posible obtener la información de IA desde el backend. Intenta nuevamente."
@@ -316,7 +299,7 @@ function App() {
   };
 
   // ====== Submit del formulario principal ======
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
     if (
@@ -331,33 +314,19 @@ function App() {
     }
 
     if (modulo === "preop") {
-      // Si ya tengo comorbilidades guardadas, no reabrir el modal (evita doble)
-      if (getComorbOK() && comorbilidades) {
-        try {
-          await llamarPreopIA(comorbilidades);
-          if (getAvisoAceptado()) {
-            setMostrarVistaPrevia(true);
-          } else {
-            setPendingPreview(true);
-            setMostrarAviso(true);
-          }
-        } catch (err) {
-          alert(
-            "No fue posible obtener la información de IA desde el backend. Intenta nuevamente."
-          );
-        }
+      // Si YA hay comorbilidades, no abrir modal otra vez: llamar directo a IA
+      if (comorbilidades) {
+        llamarPreopIA(comorbilidades).catch(() => {
+          setPendingPreview(false);
+        });
       } else {
         setPendingPreview(false);
-        setMostrarComorbilidades(true);
+        setMostrarComorbilidades(true); // primera y única vez
       }
     } else {
-      // Otros módulos: aviso legal solo si no fue aceptado aún
-      if (getAvisoAceptado()) {
-        setMostrarVistaPrevia(true);
-      } else {
-        setPendingPreview(true);
-        setMostrarAviso(true);
-      }
+      // Otros módulos: flujo tradicional (Aviso → preview)
+      setPendingPreview(true);
+      setMostrarAviso(true);
     }
   };
 
@@ -366,9 +335,7 @@ function App() {
 
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
-    return (
-      s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t)
-    );
+    return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
   };
 
   const detectarResonanciaEnBackend = async (datos) => {
@@ -400,9 +367,7 @@ function App() {
     }
 
     const intentaDescarga = async () => {
-      const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
       if (res.status === 404) return { ok: false, status: 404 };
       if (res.status === 402) return { ok: false, status: 402 };
       if (!res.ok) throw new Error("Error al obtener el PDF");
@@ -410,10 +375,7 @@ function App() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `orden_${(datosPaciente.nombre || "paciente").replace(
-        / /g,
-        "_"
-      )}.pdf`;
+      a.download = `orden_${(datosPaciente.nombre || "paciente").replace(/ /g, "_")}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -444,9 +406,7 @@ function App() {
           if (!reinyectado) {
             setMensajeDescarga("Restaurando datos…");
             const respaldo = sessionStorage.getItem("datosPacienteJSON");
-            const datosReinyectar = respaldo
-              ? JSON.parse(respaldo)
-              : datosPaciente;
+            const datosReinyectar = respaldo ? JSON.parse(respaldo) : datosPaciente;
 
             await fetch(`${BACKEND_BASE}/guardar-datos`, {
               method: "POST",
@@ -560,15 +520,11 @@ function App() {
                 key={b.key}
                 type="button"
                 onClick={() => {
-                  // cambiar módulo
                   setModulo(b.key);
                   sessionStorage.setItem("modulo", b.key);
-
-                  // Mostrar Aviso SÓLO si aún no se aceptó en esta sesión
-                  if (!getAvisoAceptado()) {
-                    setPendingPreview(false);
-                    setMostrarAviso(true);
-                  }
+                  // Aviso Legal al cambiar de módulo (sin abrir preview)
+                  setPendingPreview(false);
+                  setMostrarAviso(true);
                 }}
                 style={styleBtn}
               >
@@ -618,7 +574,7 @@ function App() {
             datos={datosPaciente}
             onCambiarDato={handleCambiarDato}
             onSubmit={handleSubmit}
-            /* visible Cirugía sólo en PREOP */
+            /* >>>> modificación clave para PREOP */
             moduloActual={modulo}
           />
         </div>
@@ -689,9 +645,7 @@ function App() {
                   disabled={descargando}
                   title={mensajeDescarga || "Verificar y descargar"}
                 >
-                  {descargando
-                    ? mensajeDescarga || "Verificando…"
-                    : "Descargar Documento"}
+                  {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
                 </button>
               )}
             </>
@@ -724,13 +678,7 @@ function App() {
                 setShowReso(false);
                 const resumen = resumenResoTexto(data);
                 const bloquea = hasRedFlags(data);
-                resolverReso?.({
-                  canceled: false,
-                  bloquea,
-                  data,
-                  riesgos,
-                  resumen,
-                });
+                resolverReso?.({ canceled: false, bloquea, data, riesgos, resumen });
               }}
             />
           </div>
