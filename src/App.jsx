@@ -25,6 +25,30 @@ const T = getTheme();
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
+/* ===== Catálogo para IA de GENERALES ===== */
+const CATALOGO_GENERALES = [
+  "HEMOGRAMA",
+  "VHS",
+  "PCR",
+  "ELECTROLITOS PLASMATICOS",
+  "PERFIL BIOQUIMICO",
+  "PERFIL LIPIDICO",
+  "PERFIL HEPATICO",
+  "CREATININA",
+  "TTPK",
+  "HEMOGLOBINA GLICOSILADA",
+  "VITAMINA D",
+  "ORINA",
+  "UROCULTIVO",
+  "ECG DE REPOSO",
+  "ANTÍGENO PROSTÁTICO",
+  "CEA",
+  "MAMOGRAFÍA",
+  "TSHm y T4 LIBRE",
+  "CALCIO",
+  "PAPANICOLAO (según edad)",
+];
+
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
     nombre: "",
@@ -48,29 +72,39 @@ function App() {
   // Vista esquema (frontal/posterior)
   const [vista, setVista] = useState("anterior");
 
-  // ====== Flags persistentes (solo PREOP) ======
-  const avisoOkRef = useRef(false);
-  const comorbOkRef = useRef(false);
+  // ====== Flags persistentes (por módulo: preop / generales) ======
+  const avisoOkRef = useRef({ preop: false, generales: false });
+  const comorbOkRef = useRef({ preop: false, generales: false });
+
+  const getComorbStorageKey = (scope) =>
+    scope === "generales" ? "generales_comorbilidades_data" : "preop_comorbilidades_data";
+  const getAvisoKey = (scope) =>
+    scope === "generales" ? "generales_aviso_ok" : "preop_aviso_ok";
+  const getComorbOkKey = (scope) =>
+    scope === "generales" ? "generales_comorbilidades_ok" : "preop_comorbilidades_ok";
 
   useEffect(() => {
     try {
-      avisoOkRef.current = sessionStorage.getItem("preop_aviso_ok") === "1";
-      comorbOkRef.current = sessionStorage.getItem("preop_comorbilidades_ok") === "1";
+      avisoOkRef.current.preop = sessionStorage.getItem("preop_aviso_ok") === "1";
+      avisoOkRef.current.generales = sessionStorage.getItem("generales_aviso_ok") === "1";
+
+      comorbOkRef.current.preop = sessionStorage.getItem("preop_comorbilidades_ok") === "1";
+      comorbOkRef.current.generales = sessionStorage.getItem("generales_comorbilidades_ok") === "1";
     } catch {}
   }, []);
 
-  const marcarAvisoOkPreop = () => {
-    avisoOkRef.current = true;
+  const marcarAvisoOk = (scope) => {
+    avisoOkRef.current[scope] = true;
     try {
-      sessionStorage.setItem("preop_aviso_ok", "1");
+      sessionStorage.setItem(getAvisoKey(scope), "1");
     } catch {}
   };
 
-  const marcarComorbilidadesOk = (payload) => {
-    comorbOkRef.current = true;
+  const marcarComorbilidadesOk = (scope, payload) => {
+    comorbOkRef.current[scope] = true;
     try {
-      sessionStorage.setItem("preop_comorbilidades_ok", "1");
-      sessionStorage.setItem("preop_comorbilidades_data", JSON.stringify(payload || {}));
+      sessionStorage.setItem(getComorbOkKey(scope), "1");
+      sessionStorage.setItem(getComorbStorageKey(scope), JSON.stringify(payload || {}));
     } catch {}
   };
 
@@ -80,7 +114,7 @@ function App() {
 
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
-    if (modulo === "preop") marcarAvisoOkPreop();
+    if (modulo === "preop" || modulo === "generales") marcarAvisoOk(modulo);
     if (pendingPreview) {
       setMostrarVistaPrevia(true);
       setPagoRealizado(false);
@@ -140,14 +174,25 @@ function App() {
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(() => {
     try {
-      const raw = sessionStorage.getItem("preop_comorbilidades_data");
+      const raw = sessionStorage.getItem(getComorbStorageKey("preop"));
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
     }
   });
 
-  // ---- Llamado a IA PREOP (centralizado) ----
+  // Mantener comorbilidades del scope al cambiar de módulo
+  useEffect(() => {
+    if (modulo !== "preop" && modulo !== "generales") return;
+    try {
+      const raw = sessionStorage.getItem(getComorbStorageKey(modulo));
+      setComorbilidades(raw ? JSON.parse(raw) : null);
+    } catch {
+      setComorbilidades(null);
+    }
+  }, [modulo]);
+
+  // ---- IA PREOP ----
   const llamarPreopIA = async (payloadComorb) => {
     // Asegurar idPago
     let idPago = "";
@@ -159,7 +204,7 @@ function App() {
       }
     } catch {}
 
-    // Tipo de cirugía desde sessionStorage (fijo u "otro")
+    // Tipo de cirugía desde sessionStorage
     let tipoCirugia = "";
     try {
       const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
@@ -167,20 +212,19 @@ function App() {
       tipoCirugia = fijo || otro || "";
     } catch {}
 
-    // Preferir payload recibido; si no, usar estado o sessionStorage
+    // Comorbilidades
     let comorb = payloadComorb || comorbilidades;
     if (!comorb) {
       try {
-        const raw = sessionStorage.getItem("preop_comorbilidades_data");
+        const raw = sessionStorage.getItem(getComorbStorageKey("preop"));
         if (raw) comorb = JSON.parse(raw);
       } catch {}
     }
 
     const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
 
-    // Helper: intenta /preop-ia y, si no, /ia-preop
-    const postIA = async (path) => {
-      const resp = await fetch(`${BACKEND_BASE}${path}`, {
+    const postIA = async (path) =>
+      fetch(`${BACKEND_BASE}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -190,12 +234,10 @@ function App() {
           tipoCirugia,
         }),
       });
-      return resp;
-    };
 
     try {
-      let resp = await postIA("/preop-ia"); // archivo backend: preopIA.js
-      if (!resp.ok) resp = await postIA("/ia-preop"); // fallback
+      let resp = await postIA("/preop-ia");
+      if (!resp.ok) resp = await postIA("/ia-preop");
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const j = await resp.json();
@@ -208,7 +250,7 @@ function App() {
       } catch {}
 
       // Mostrar preview directo si Aviso ya aceptado; si no, abrirlo (una vez)
-      if (avisoOkRef.current) {
+      if (avisoOkRef.current.preop) {
         setMostrarVistaPrevia(true);
         setPagoRealizado(false);
         setMostrarPago(false);
@@ -223,12 +265,81 @@ function App() {
     }
   };
 
-  // Guardar comorbilidades → marcar ok → llamar IA
+  // ---- IA GENERALES (reutiliza preopIA del backend + catálogo) ----
+  const llamarGeneralesIA = async (payloadComorb) => {
+    // Asegurar idPago
+    let idPago = "";
+    try {
+      idPago = sessionStorage.getItem("idPago") || "";
+      if (!idPago) {
+        idPago = `generales_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+        sessionStorage.setItem("idPago", idPago);
+      }
+    } catch {}
+
+    // Comorbilidades
+    let comorb = payloadComorb || comorbilidades;
+    if (!comorb) {
+      try {
+        const raw = sessionStorage.getItem(getComorbStorageKey("generales"));
+        if (raw) comorb = JSON.parse(raw);
+      } catch {}
+    }
+
+    const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
+
+    const body = {
+      idPago,
+      paciente: { ...datosPaciente, edad: edadNum },
+      comorbilidades: comorb || {},
+      tipoCirugia: "", // Generales no usa cirugía
+      catalogoExamenes: CATALOGO_GENERALES,
+    };
+
+    const postIA = async (path) =>
+      fetch(`${BACKEND_BASE}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+    try {
+      let resp = await postIA("/preop-ia");
+      if (!resp.ok) resp = await postIA("/ia-preop");
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const j = await resp.json();
+      const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
+      const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
+
+      try {
+        sessionStorage.setItem("generales_ia_examenes", JSON.stringify(examenes));
+        sessionStorage.setItem("generales_ia_resumen", resumen || "");
+      } catch {}
+
+      if (avisoOkRef.current.generales) {
+        setMostrarVistaPrevia(true);
+        setPagoRealizado(false);
+        setMostrarPago(false);
+        setPendingPreview(false);
+      } else {
+        setPendingPreview(true);
+        setMostrarAviso(true);
+      }
+    } catch (err) {
+      alert("No fue posible obtener la información de IA desde el backend. Intenta nuevamente.");
+      setPendingPreview(false);
+    }
+  };
+
+  // Guardar comorbilidades → marcar ok → llamar IA del scope
   const handleSaveComorbilidades = async (payload) => {
     setComorbilidades(payload);
     setMostrarComorbilidades(false);
-    marcarComorbilidadesOk(payload); // ← queda marcado y persistido
-    await llamarPreopIA(payload);
+    const scope = modulo === "generales" ? "generales" : "preop";
+    marcarComorbilidadesOk(scope, payload);
+    if (scope === "preop") await llamarPreopIA(payload);
+    else await llamarGeneralesIA(payload);
   };
 
   // ====== Restauración de estado en montaje ======
@@ -352,20 +463,23 @@ function App() {
       return;
     }
 
-    if (modulo === "preop") {
-      // PREOP: si no hay comorbilidades, abrir una vez; si ya están → llamar IA directa
-      if (!comorbOkRef.current) {
+    if (modulo === "preop" || modulo === "generales") {
+      // Abrir comorbilidades SOLO si aún no se han completado para ese módulo
+      const scope = modulo;
+      if (!comorbOkRef.current[scope]) {
         setMostrarComorbilidades(true);
       } else {
-        llamarPreopIA();
+        if (scope === "preop") llamarPreopIA();
+        else llamarGeneralesIA();
       }
-    } else {
-      // Otros módulos: no abrir Aviso aquí según lo pedido (solo PREOP lo usa)
-      setMostrarVistaPrevia(true);
-      setPagoRealizado(false);
-      setMostrarPago(false);
-      setPendingPreview(false);
+      return;
     }
+
+    // Otros módulos (trauma/ia): flujo tradicional
+    setMostrarVistaPrevia(true);
+    setPagoRealizado(false);
+    setMostrarPago(false);
+    setPendingPreview(false);
   };
 
   // ====== Detección de RM en backend ======
@@ -374,7 +488,7 @@ function App() {
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
-  };
+    };
 
   const detectarResonanciaEnBackend = async (datos) => {
     try {
@@ -561,8 +675,11 @@ function App() {
                   setModulo(b.key);
                   sessionStorage.setItem("modulo", b.key);
                   setPendingPreview(false);
-                  // Aviso Legal solo en PREOP y solo una vez
-                  if (b.key === "preop" && !avisoOkRef.current) {
+                  // Aviso Legal al entrar por primera vez a PREOP o GENERALES
+                  if (
+                    (b.key === "preop" || b.key === "generales") &&
+                    !avisoOkRef.current[b.key]
+                  ) {
                     setMostrarAviso(true);
                   }
                 }}
