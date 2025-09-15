@@ -24,14 +24,14 @@ const PREOP_BASE = [
 function buildExamenesGenerales({ genero }) {
   const g = (genero || "").toLowerCase();
 
-  if (g === "hombre") {
-    // Hombre: mismos PREOP, quitar UROCULTIVO, + PERFIL HEPÁTICO, ANTÍGENO PROSTÁTICO, CEA
+  if (g === "masculino") {
+    // Masculino: mismos PREOP, quitar UROCULTIVO, + PERFIL HEPÁTICO, ANTÍGENO PROSTÁTICO, CEA
     const base = PREOP_BASE.filter((x) => x !== "UROCULTIVO");
     return [...base, "PERFIL HEPÁTICO", "ANTÍGENO PROSTÁTICO", "CEA"];
   }
 
-  if (g === "mujer") {
-    // Mujer: mismos PREOP, + PERFIL HEPÁTICO, MAMOGRAFÍA, TSHm y T4 LIBRE, CALCIO, PAP (según edad)
+  if (g === "femenino") {
+    // Femenino: mismos PREOP, + PERFIL HEPÁTICO, MAMOGRAFÍA, TSHm y T4 LIBRE, CALCIO, PAP (según edad)
     return [
       ...PREOP_BASE,
       "PERFIL HEPÁTICO",
@@ -192,14 +192,13 @@ export default function GeneralesModulo({ initialDatos }) {
       !datos.nombre?.trim() ||
       !datos.rut?.trim() ||
       !Number.isFinite(edadNum) ||
-      edadNum <= 0 ||
-      !datos.dolor?.trim()
+      edadNum <= 0
     ) {
-      alert("Complete nombre, RUT, edad (>0) y dolor antes de pagar.");
+      alert("Complete nombre, RUT y edad (>0) antes de pagar.");
       return;
     }
     if (!datos.genero) {
-      alert("Seleccione el género (Hombre/Mujer) en el formulario.");
+      alert("Seleccione el género (MASCULINO/FEMENINO) en el formulario.");
       return;
     }
 
@@ -388,9 +387,7 @@ export default function GeneralesModulo({ initialDatos }) {
                 nombre: "Guest",
                 rut: "99999999-9",
                 edad: 30,
-                genero: "Hombre",
-                dolor: "—",
-                lado: "",
+                genero: "MASCULINO",
               };
 
               sessionStorage.setItem("idPago", idPago);
