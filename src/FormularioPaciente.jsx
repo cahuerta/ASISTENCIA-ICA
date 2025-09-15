@@ -65,14 +65,19 @@ function cirugiasParaZona(dolor = "") {
   return [];
 }
 
-function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual }) {
+function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "trauma" }) {
   const [rutMsg, setRutMsg] = useState("");
   const [rutValido, setRutValido] = useState(true);
 
-  // === Mostrar "Tipo de cirugía" SOLO en PREOP (sin depender de "Dolor")
+  // === Mostrar "Tipo de cirugía" SOLO en PREOP
   const isPreop =
     moduloActual === "preop" ||
     (typeof window !== "undefined" && sessionStorage.getItem("modulo") === "preop");
+
+  // === En GENERALES no se piden Dolor ni Lado
+  const isGenerales =
+    moduloActual === "generales" ||
+    (typeof window !== "undefined" && sessionStorage.getItem("modulo") === "generales");
 
   // Tipo de cirugía (persistido)
   const [tipoCirugia, setTipoCirugia] = useState(() => {
@@ -90,13 +95,11 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual }) {
     }
   });
 
-  // Opciones según dolor actual (si no hay dolor, luego mostramos al menos "OTRO")
   const opcionesCirugia = useMemo(
     () => cirugiasParaZona(datos?.dolor || ""),
     [datos?.dolor]
   );
 
-  // Si cambia el dolor y la opción ya no aplica, limpiar (salvo "OTRO (ESPECIFICAR)")
   useEffect(() => {
     if (!opcionesCirugia.length) return;
     const valido =
@@ -106,7 +109,6 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual }) {
     if (!valido) setTipoCirugia("");
   }, [opcionesCirugia, tipoCirugia]);
 
-  // Persistir selección
   useEffect(() => {
     try {
       sessionStorage.setItem("preop_tipoCirugia", tipoCirugia || "");
@@ -191,10 +193,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual }) {
     onSubmit(e);
   };
 
-  // Campo visible apenas entras a PREOP
   const showCirugia = isPreop;
-
-  // Lista a mostrar en el select (si no hay dolor seleccionado, al menos "OTRO")
   const listaOpciones =
     opcionesCirugia.length > 0 ? opcionesCirugia : ["OTRO (ESPECIFICAR)"];
 
@@ -206,7 +205,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual }) {
       <input
         style={styles.input}
         type="text"
-        value={datos.nombre}
+        value={datos.nombre || ""}
         onChange={(e) => onCambiarDato("nombre", e.target.value)}
         required
       />
@@ -219,7 +218,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual }) {
           outline: rutValido ? "none" : `1px solid ${T.primaryDark}`,
         }}
         type="text"
-        value={datos.rut}
+        value={datos.rut || ""}
         onChange={handleRutChange}
         onBlur={handleRutBlur}
         placeholder="12.345.678-9"
@@ -242,7 +241,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual }) {
         type="number"
         min="10"
         max="110"
-        value={datos.edad}
+        value={datos.edad ?? ""}
         onChange={(e) => onCambiarDato("edad", e.target.value)}
         required
       />
@@ -252,26 +251,45 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual }) {
         style={styles.input}
         value={datos.genero || ""}
         onChange={(e) => onCambiarDato("genero", e.target.value)}
+        required
       >
         <option value="">Seleccione…</option>
+        {/* Valores COMPATIBLES con tu app: MASCULINO / FEMENINO */}
         <option value="MASCULINO">MASCULINO</option>
         <option value="FEMENINO">FEMENINO</option>
       </select>
 
-      <label style={styles.label}>Dolor:</label>
-      <select
-        style={styles.input}
-        value={datos.dolor}
-        onChange={(e) => onCambiarDato("dolor", e.target.value)}
-        required
-      >
-        <option value="">Seleccione...</option>
-        <option value="Rodilla">Rodilla</option>
-        <option value="Cadera">Cadera</option>
-        <option value="Columna lumbar">Columna lumbar</option>
-      </select>
+      {/* Dolor/Lado: se ocultan en GENERALES */}
+      {!isGenerales && (
+        <>
+          <label style={styles.label}>Dolor:</label>
+          <select
+            style={styles.input}
+            value={datos.dolor || ""}
+            onChange={(e) => onCambiarDato("dolor", e.target.value)}
+            required
+          >
+            <option value="">Seleccione...</option>
+            <option value="Rodilla">Rodilla</option>
+            <option value="Cadera">Cadera</option>
+            <option value="Columna lumbar">Columna lumbar</option>
+          </select>
 
-      {/* TIPO DE CIRUGÍA (SIEMPRE visible en PREOP) */}
+          <label style={styles.label}>Lado:</label>
+          <select
+            style={styles.input}
+            value={datos.lado || ""}
+            onChange={(e) => onCambiarDato("lado", e.target.value)}
+            required
+          >
+            <option value="">Seleccione...</option>
+            <option value="Derecha">Derecha</option>
+            <option value="Izquierda">Izquierda</option>
+          </select>
+        </>
+      )}
+
+      {/* TIPO DE CIRUGÍA (solo en PREOP) */}
       {showCirugia && (
         <>
           <label style={styles.label}>TIPO DE CIRUGÍA:</label>
@@ -279,6 +297,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual }) {
             style={styles.input}
             value={tipoCirugia}
             onChange={(e) => setTipoCirugia(e.target.value)}
+            required
           >
             <option value="">Seleccione…</option>
             {listaOpciones.map((t) => (
@@ -294,22 +313,11 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual }) {
               placeholder="Especifique el tipo de cirugía"
               value={tipoCirugiaLibre}
               onChange={(e) => setTipoCirugiaLibre(e.target.value)}
+              required
             />
           )}
         </>
       )}
-
-      <label style={styles.label}>Lado:</label>
-      <select
-        style={styles.input}
-        value={datos.lado}
-        onChange={(e) => onCambiarDato("lado", e.target.value)}
-        required
-      >
-        <option value="">Seleccione...</option>
-        <option value="Derecha">Derecha</option>
-        <option value="Izquierda">Izquierda</option>
-      </select>
 
       <button style={styles.button} type="submit">
         Generar Informe
