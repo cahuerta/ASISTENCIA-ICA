@@ -1,51 +1,9 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
+import { getTheme } from "../theme.js";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
-
-/* ============================== UI ============================== */
-const styles = {
-  card: {
-    background: "#fff",
-    borderRadius: 8,
-    padding: 16,
-    boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
-  },
-  btn: {
-    backgroundColor: "#0072CE",
-    color: "white",
-    border: "none",
-    padding: "12px",
-    borderRadius: "8px",
-    fontSize: "16px",
-    cursor: "pointer",
-    width: "100%",
-  },
-  block: { marginTop: 12 },
-  mono: {
-    whiteSpace: "pre-wrap",
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-    background: "#f7f7f7",
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 13,
-    lineHeight: 1.45,
-    border: "1px solid #eee",
-  },
-  hint: { marginTop: 6, fontStyle: "italic", color: "#666" },
-  tag: {
-    display: "inline-block",
-    borderRadius: 6,
-    padding: "2px 8px",
-    fontSize: 12,
-    background: "#eef6ff",
-    border: "1px solid #cfe4ff",
-    color: "#0b63c5",
-    marginRight: 6,
-    marginBottom: 6,
-  },
-};
 
 /* Etiquetas amigables para el preview de comorbilidades */
 const LABELS_COMORB = {
@@ -84,19 +42,16 @@ function prettyComorb(c = {}) {
       const v = c[k];
       const label = LABELS_COMORB[k] || k.replace(/_/g, " ");
 
-      // booleanos: mostrar solo los true
       if (typeof v === "boolean") {
         if (v) bullets.push(label);
         continue;
       }
-      // objetos {tiene/detalle} o {usa/detalle}
       if (typeof v === "object" && v !== null && (v.tiene || v.usa || v.detalle)) {
         let t = label;
         if (v.detalle) t += ` — ${v.detalle}`;
         bullets.push(t);
         continue;
       }
-      // strings con contenido
       if (typeof v === "string" && v.trim()) {
         bullets.push(`${label}: ${v.trim()}`);
       }
@@ -109,11 +64,17 @@ function prettyComorb(c = {}) {
 
 /* ============================== Componente ============================== */
 export default function GeneralesModulo({ initialDatos }) {
+  const T = getTheme();
+  const styles = makeStyles(T);
+
   const [datos, setDatos] = useState(initialDatos || {});
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
+
+  // Paso previo (Continuar → luego preview IA → luego pago)
+  const [stepStarted, setStepStarted] = useState(false);
 
   // Carga de IA y comorbilidades (guardadas por App.jsx)
   const [examenesIA, setExamenesIA] = useState([]);
@@ -181,7 +142,6 @@ export default function GeneralesModulo({ initialDatos }) {
       return;
     }
     if (!datos.genero) {
-      // No cambiamos tus valores; se siguen usando MASCULINO / FEMENINO
       alert("Seleccione el género (MASCULINO/FEMENINO) en el formulario.");
       return;
     }
@@ -296,9 +256,24 @@ export default function GeneralesModulo({ initialDatos }) {
   const usarIA = Array.isArray(examenesIA) && examenesIA.length > 0;
   const comorbBullets = prettyComorb(comorbilidades);
 
+  // Al presionar Continuar, refrescamos lo que esté en sessionStorage y pasamos al preview
+  const handleContinuar = () => {
+    try {
+      const ex = JSON.parse(sessionStorage.getItem("generales_ia_examenes") || "[]");
+      const inf = sessionStorage.getItem("generales_ia_resumen") || "";
+      const c = JSON.parse(sessionStorage.getItem("generales_comorbilidades_data") || "{}");
+      setExamenesIA(Array.isArray(ex) ? ex : []);
+      setInformeIA(inf);
+      setComorbilidades(c || {});
+    } catch {}
+    setStepStarted(true);
+  };
+
   return (
     <div style={styles.card}>
-      <h3 style={{ marginTop: 0 }}>Vista previa — Exámenes Generales</h3>
+      <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
+        Vista previa — Exámenes Generales
+      </h3>
 
       <div style={{ marginBottom: 10 }}>
         <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
@@ -307,98 +282,168 @@ export default function GeneralesModulo({ initialDatos }) {
         <div><strong>Género:</strong> {datos?.genero || "—"}</div>
       </div>
 
-      {/* Comorbilidades (si existen) */}
-      {comorbBullets.length > 0 && (
-        <div style={styles.block}>
-          <strong>Comorbilidades:</strong>
-          <div style={{ marginTop: 6 }}>
-            {comorbBullets.map((t, i) => (
-              <span key={i} style={styles.tag}>{t}</span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Exámenes (SOLO IA) */}
-      <div style={styles.block}>
-        <strong>Exámenes solicitados (IA):</strong>
-        {usarIA ? (
-          <ul style={{ marginTop: 6 }}>
-            {examenesIA.map((e, idx) => (
-              <li key={`${e}-${idx}`}>{e}</li>
-            ))}
-          </ul>
-        ) : (
-          <div style={styles.hint}>
-            Aún no hay lista generada por IA. Desde el formulario principal, pulsa
-            <strong> “Generar Informe”</strong> para ejecutar la IA y ver el resultado aquí.
-          </div>
-        )}
-      </div>
-
-      {/* Informe IA (si existe) */}
-      {informeIA && (
-        <div style={styles.block}>
-          <strong>Informe IA (resumen):</strong>
-          <div style={{ marginTop: 6, ...styles.mono }}>{informeIA}</div>
-        </div>
-      )}
-
-      {!pagoRealizado ? (
-        <>
-          <button
-            style={{ ...styles.btn, backgroundColor: "#004B94", marginTop: 12 }}
-            onClick={handlePagarGenerales}
-          >
-            Pagar ahora (Generales)
-          </button>
-          <button
-            style={{ ...styles.btn, backgroundColor: "#777", marginTop: 8 }}
-            onClick={async () => {
-              const idPago = `generales_guest_${Date.now()}`;
-              const datosGuest = {
-                nombre: "Guest",
-                rut: "99999999-9",
-                edad: 60,
-                genero: "MASCULINO", // sin cambiar tus valores
-              };
-
-              sessionStorage.setItem("idPago", idPago);
-              sessionStorage.setItem("modulo", "generales");
-              sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
-
-              await fetch(`${BACKEND_BASE}/guardar-datos-generales`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  idPago,
-                  datosPaciente: datosGuest,
-                  comorbilidades,
-                  examenesIA,
-                  informeIA,
-                }),
-              });
-
-              const url = new URL(window.location.href);
-              url.searchParams.set("pago", "ok");
-              url.searchParams.set("idPago", idPago);
-              window.location.href = url.toString();
-            }}
-            title="Simular retorno pagado (solo pruebas)"
-          >
-            Simular Pago (Guest)
-          </button>
-        </>
-      ) : (
-        <button
-          style={{ ...styles.btn, marginTop: 12 }}
-          onClick={handleDescargarGenerales}
-          disabled={descargando}
-          title={mensajeDescarga || "Verificar y descargar"}
-        >
-          {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
+      {!stepStarted && (
+        <button style={styles.btnPrimary} onClick={handleContinuar}>
+          Continuar
         </button>
+      )}
+
+      {stepStarted && (
+        <>
+          {/* Comorbilidades (si existen) */}
+          {comorbBullets.length > 0 && (
+            <div style={styles.block}>
+              <strong>Comorbilidades:</strong>
+              <div style={{ marginTop: 6 }}>
+                {comorbBullets.map((t, i) => (
+                  <span key={i} style={styles.tag}>{t}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Exámenes (SOLO IA) */}
+          <div style={styles.block}>
+            <strong>Exámenes solicitados (IA):</strong>
+            {usarIA ? (
+              <ul style={{ marginTop: 6 }}>
+                {examenesIA.map((e, idx) => (
+                  <li key={`${e}-${idx}`}>{e}</li>
+                ))}
+              </ul>
+            ) : (
+              <div style={styles.hint}>
+                Aún no hay lista generada por IA. Desde el formulario principal, pulsa
+                <strong> “Generar Informe”</strong> para ejecutar la IA y ver el resultado aquí.
+              </div>
+            )}
+          </div>
+
+          {/* Informe IA (si existe) */}
+          {informeIA && (
+            <div style={styles.block}>
+              <strong>Informe IA (resumen):</strong>
+              <div style={{ marginTop: 6, ...styles.mono }}>{informeIA}</div>
+            </div>
+          )}
+
+          {!pagoRealizado ? (
+            <>
+              <button
+                style={{ ...styles.btnPrimary, marginTop: 12 }}
+                onClick={handlePagarGenerales}
+              >
+                Pagar ahora (Generales)
+              </button>
+              <button
+                style={{ ...styles.btnSecondary, marginTop: 8 }}
+                onClick={async () => {
+                  const idPago = `generales_guest_${Date.now()}`;
+                  const datosGuest = {
+                    nombre: "Guest",
+                    rut: "99999999-9",
+                    edad: 60,
+                    genero: "MASCULINO",
+                  };
+
+                  sessionStorage.setItem("idPago", idPago);
+                  sessionStorage.setItem("modulo", "generales");
+                  sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
+
+                  await fetch(`${BACKEND_BASE}/guardar-datos-generales`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      idPago,
+                      datosPaciente: datosGuest,
+                      comorbilidades,
+                      examenesIA,
+                      informeIA,
+                    }),
+                  });
+
+                  const url = new URL(window.location.href);
+                  url.searchParams.set("pago", "ok");
+                  url.searchParams.set("idPago", idPago);
+                  window.location.href = url.toString();
+                }}
+                title="Simular retorno pagado (solo pruebas)"
+              >
+                Simular Pago (Guest)
+              </button>
+            </>
+          ) : (
+            <button
+              style={{ ...styles.btnPrimary, marginTop: 12 }}
+              onClick={handleDescargarGenerales}
+              disabled={descargando}
+              title={mensajeDescarga || "Verificar y descargar"}
+            >
+              {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
+            </button>
+          )}
+        </>
       )}
     </div>
   );
+}
+
+/* ============================== UI (desde theme.json) ============================== */
+function makeStyles(T) {
+  return {
+    card: {
+      background: T.surface ?? "#fff",
+      borderRadius: 12,
+      padding: 16,
+      boxShadow: T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)",
+      border: `1px solid ${T.border ?? "#e8e8e8"}`,
+      color: T.text ?? "#1b1b1b",
+    },
+    btnPrimary: {
+      backgroundColor: T.primary ?? "#0072CE",
+      color: T.onPrimary ?? "#fff",
+      border: "none",
+      padding: "12px",
+      borderRadius: 8,
+      fontSize: 16,
+      cursor: "pointer",
+      width: "100%",
+      boxShadow: T.shadowSm ?? "0 1px 4px rgba(0,0,0,0.08)",
+    },
+    btnSecondary: {
+      backgroundColor: T.muted ?? "#777",
+      color: T.onMuted ?? "#fff",
+      border: "none",
+      padding: "12px",
+      borderRadius: 8,
+      fontSize: 16,
+      cursor: "pointer",
+      width: "100%",
+      boxShadow: T.shadowSm ?? "0 1px 4px rgba(0,0,0,0.08)",
+    },
+    block: { marginTop: 12 },
+    mono: {
+      whiteSpace: "pre-wrap",
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+      background: T.codeBg ?? "#f7f7f7",
+      borderRadius: 8,
+      padding: 10,
+      fontSize: 13,
+      lineHeight: 1.45,
+      border: `1px solid ${T.border ?? "#eee"}`,
+      color: T.text ?? "#1b1b1b",
+    },
+    hint: { marginTop: 6, fontStyle: "italic", color: T.textMuted ?? "#666" },
+    tag: {
+      display: "inline-block",
+      borderRadius: 999,
+      padding: "4px 10px",
+      fontSize: 12,
+      background: T.chipBg ?? "#eef6ff",
+      border: `1px solid ${T.chipBorder ?? "#cfe4ff"}`,
+      color: T.chipText ?? (T.primary ? T.primary : "#0b63c5"),
+      marginRight: 6,
+      marginBottom: 6,
+    },
+  };
 }
