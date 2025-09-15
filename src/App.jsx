@@ -747,61 +747,13 @@ function App() {
         <div style={styles.previewCol} data-preview-col>
           {mostrarVistaPrevia && modulo === "trauma" && (
             <>
-              <PreviewOrden datos={datosPaciente} />
-              {!pagoRealizado && !mostrarPago && (
-                <>
-                  <button
-                    type="button"
-                    style={styles.actionBtn}
-                    onClick={handlePagarAhora}
-                  >
-                    Pagar ahora
-                  </button>
-                  <button
-                    type="button"
-                    style={{ ...styles.actionBtn, backgroundColor: T.muted }}
-                    onClick={async () => {
-                      const idPago = "guest_test_pago";
-                      const datosGuest = {
-                        nombre: "Guest",
-                        rut: "99999999-9",
-                        edad: 30,
-                        genero: "MASCULINO",
-                        dolor: "Rodilla",
-                        lado: "Izquierda",
-                      };
-                      sessionStorage.setItem("idPago", idPago);
-                      sessionStorage.setItem(
-                        "datosPacienteJSON",
-                        JSON.stringify(datosGuest)
-                      );
+              <PreviewOrden
+                scope="trauma"
+                datos={datosPaciente}
+                onPagar={handlePagarAhora}
+              />
 
-                      const resp = await fetch(
-                        `${BACKEND_BASE}/crear-pago-khipu`,
-                        {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            idPago,
-                            modoGuest: true,
-                            datosPaciente: datosGuest,
-                          }),
-                        }
-                      );
-                      const j = await resp.json();
-                      if (j?.ok && j?.url) {
-                        window.location.href = j.url;
-                      } else {
-                        alert("Guest no disponible. Ver backend.");
-                      }
-                    }}
-                  >
-                    Simular Pago como Guest
-                  </button>
-                </>
-              )}
-
-              {mostrarVistaPrevia && pagoRealizado && (
+              {pagoRealizado && (
                 <button
                   type="button"
                   style={styles.actionBtn}
