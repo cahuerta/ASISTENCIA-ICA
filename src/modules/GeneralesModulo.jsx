@@ -4,53 +4,7 @@ import { irAPagoKhipu } from "../PagoKhipu.jsx";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* ===================== Catálogo base (fallback por género/edad) ===================== */
-const PREOP_BASE = [
-  "HEMOGRAMA",
-  "VHS",
-  "PCR",
-  "ELECTROLITOS PLASMATICOS",
-  "PERFIL BIOQUIMICO",
-  "PERFIL LIPIDICO",
-  "CREATININA",
-  "TTPK",
-  "HEMOGLOBINA GLICOSILADA",
-  "VITAMINA D",
-  "ORINA",
-  "UROCULTIVO",
-  "ECG DE REPOSO",
-];
-
-function buildExamenesGenerales({ genero, edad }) {
-  const g = (genero || "").toLowerCase();
-  const e = Number(edad);
-
-  if (g === "masculino") {
-    // Masculino: mismos PREOP, quitar UROCULTIVO, + PERFIL HEPÁTICO; PSA solo si >=50
-    const base = PREOP_BASE.filter((x) => x !== "UROCULTIVO");
-    const extras = ["PERFIL HEPÁTICO"];
-    if (Number.isFinite(e) && e >= 50) extras.push("ANTÍGENO PROSTÁTICO");
-    return [...base, ...extras];
-  }
-
-  if (g === "femenino") {
-    // Femenino: mismos PREOP + PERFIL HEPÁTICO, MAMOGRAFÍA, TSHm y T4 LIBRE, CALCIO, PAP (según edad)
-    // (Dejamos 'según edad' tal cual, no lo endurecemos para no romper tu backend/IA)
-    return [
-      ...PREOP_BASE,
-      "PERFIL HEPÁTICO",
-      "MAMOGRAFÍA",
-      "TSHm y T4 LIBRE",
-      "CALCIO",
-      "PAPANICOLAO (según edad)",
-    ];
-  }
-
-  // Sin género aún → base neutral
-  return PREOP_BASE;
-}
-
-/* ============================== Utilidades UI ============================== */
+/* ============================== UI ============================== */
 const styles = {
   card: {
     background: "#fff",
@@ -135,7 +89,6 @@ function prettyComorb(c = {}) {
         if (v) bullets.push(label);
         continue;
       }
-
       // objetos {tiene/detalle} o {usa/detalle}
       if (typeof v === "object" && v !== null && (v.tiene || v.usa || v.detalle)) {
         let t = label;
@@ -143,7 +96,6 @@ function prettyComorb(c = {}) {
         bullets.push(t);
         continue;
       }
-
       // strings con contenido
       if (typeof v === "string" && v.trim()) {
         bullets.push(`${label}: ${v.trim()}`);
@@ -163,19 +115,17 @@ export default function GeneralesModulo({ initialDatos }) {
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
-  // IA (si existe en sessionStorage)
+  // Carga de IA y comorbilidades (guardadas por App.jsx)
   const [examenesIA, setExamenesIA] = useState([]);
   const [informeIA, setInformeIA] = useState("");
   const [comorbilidades, setComorbilidades] = useState({});
 
-  /* ---------- Montaje: restaurar datos + IA + comorbilidades ---------- */
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
     } catch {}
 
-    // IA Generales persistida por App.jsx (llamarGeneralesIA)
     try {
       const ex = JSON.parse(sessionStorage.getItem("generales_ia_examenes") || "[]");
       const inf = sessionStorage.getItem("generales_ia_resumen") || "";
@@ -183,17 +133,15 @@ export default function GeneralesModulo({ initialDatos }) {
       setInformeIA(inf);
     } catch {}
 
-    // Comorbilidades (clave alineada con App.jsx)
     try {
       const c = JSON.parse(sessionStorage.getItem("generales_comorbilidades_data") || "{}");
       setComorbilidades(c || {});
     } catch {}
 
-    // Modo retorno pago
+    // retorno de pago
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
     const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
-
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
       if (pollerRef.current) clearInterval(pollerRef.current);
@@ -233,6 +181,7 @@ export default function GeneralesModulo({ initialDatos }) {
       return;
     }
     if (!datos.genero) {
+      // No cambiamos tus valores; se siguen usando MASCULINO / FEMENINO
       alert("Seleccione el género (MASCULINO/FEMENINO) en el formulario.");
       return;
     }
@@ -242,7 +191,6 @@ export default function GeneralesModulo({ initialDatos }) {
       sessionStorage.setItem("modulo", "generales");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
 
-      // Guardar para PDF (el backend ignora campos desconocidos sin problema)
       await fetch(`${BACKEND_BASE}/guardar-datos-generales`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -344,13 +292,8 @@ export default function GeneralesModulo({ initialDatos }) {
     }
   };
 
-  /* ------------------------------ Preview ------------------------------ */
-  const itemsFallback = buildExamenesGenerales({
-    genero: datos?.genero,
-    edad: datos?.edad,
-  });
+  /* ------------------------------ Preview (SOLO IA) ------------------------------ */
   const usarIA = Array.isArray(examenesIA) && examenesIA.length > 0;
-
   const comorbBullets = prettyComorb(comorbilidades);
 
   return (
@@ -358,18 +301,10 @@ export default function GeneralesModulo({ initialDatos }) {
       <h3 style={{ marginTop: 0 }}>Vista previa — Exámenes Generales</h3>
 
       <div style={{ marginBottom: 10 }}>
-        <div>
-          <strong>Paciente:</strong> {datos?.nombre || "—"}
-        </div>
-        <div>
-          <strong>RUT:</strong> {datos?.rut || "—"}
-        </div>
-        <div>
-          <strong>Edad:</strong> {datos?.edad || "—"}
-        </div>
-        <div>
-          <strong>Género:</strong> {datos?.genero || "—"}
-        </div>
+        <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
+        <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
+        <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
+        <div><strong>Género:</strong> {datos?.genero || "—"}</div>
       </div>
 
       {/* Comorbilidades (si existen) */}
@@ -378,25 +313,25 @@ export default function GeneralesModulo({ initialDatos }) {
           <strong>Comorbilidades:</strong>
           <div style={{ marginTop: 6 }}>
             {comorbBullets.map((t, i) => (
-              <span key={i} style={styles.tag}>
-                {t}
-              </span>
+              <span key={i} style={styles.tag}>{t}</span>
             ))}
           </div>
         </div>
       )}
 
-      {/* Exámenes (IA o fallback) */}
+      {/* Exámenes (SOLO IA) */}
       <div style={styles.block}>
-        <strong>Exámenes solicitados {usarIA ? "(IA)" : "(base por género/edad)"}:</strong>
-        <ul style={{ marginTop: 6 }}>
-          {(usarIA ? examenesIA : itemsFallback).map((e) => (
-            <li key={e}>{e}</li>
-          ))}
-        </ul>
-        {!usarIA && !datos?.genero && (
+        <strong>Exámenes solicitados (IA):</strong>
+        {usarIA ? (
+          <ul style={{ marginTop: 6 }}>
+            {examenesIA.map((e, idx) => (
+              <li key={`${e}-${idx}`}>{e}</li>
+            ))}
+          </ul>
+        ) : (
           <div style={styles.hint}>
-            * Seleccione el género en el formulario para ver la lista final.
+            Aún no hay lista generada por IA. Desde el formulario principal, pulsa
+            <strong> “Generar Informe”</strong> para ejecutar la IA y ver el resultado aquí.
           </div>
         )}
       </div>
@@ -409,7 +344,7 @@ export default function GeneralesModulo({ initialDatos }) {
         </div>
       )}
 
-      {!pagoRealizado && (
+      {!pagoRealizado ? (
         <>
           <button
             style={{ ...styles.btn, backgroundColor: "#004B94", marginTop: 12 }}
@@ -425,7 +360,7 @@ export default function GeneralesModulo({ initialDatos }) {
                 nombre: "Guest",
                 rut: "99999999-9",
                 edad: 60,
-                genero: "MASCULINO",
+                genero: "MASCULINO", // sin cambiar tus valores
               };
 
               sessionStorage.setItem("idPago", idPago);
@@ -454,9 +389,7 @@ export default function GeneralesModulo({ initialDatos }) {
             Simular Pago (Guest)
           </button>
         </>
-      )}
-
-      {pagoRealizado && (
+      ) : (
         <button
           style={{ ...styles.btn, marginTop: 12 }}
           onClick={handleDescargarGenerales}
