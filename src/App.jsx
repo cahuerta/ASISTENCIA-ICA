@@ -241,7 +241,7 @@ function App() {
     }
   };
 
-  // ---- IA GENERALES (ruta propia, sin tipoCirugia ni catálogo) ----
+  // ---- IA GENERALES (ruta propia con fallback a endpoints existentes) ----
   const llamarGeneralesIA = async (payloadComorb) => {
     // Asegurar idPago
     let idPago = "";
@@ -263,20 +263,35 @@ function App() {
     }
 
     const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
-
     const body = {
       idPago,
       paciente: { ...datosPaciente, edad: edadNum },
       comorbilidades: comorb || {},
-      // Generales NO usa tipoCirugia y NO enviamos catálogo desde el front
     };
 
     try {
-      const resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
+      // 1) Nueva ruta específica
+      let resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+
+      // 2) Fallback a rutas en producción (sin cirugía para Generales)
+      if (!resp.ok) {
+        resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...body, tipoCirugia: "" }),
+        });
+      }
+      if (!resp.ok) {
+        resp = await fetch(`${BACKEND_BASE}/ia-preop`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...body, tipoCirugia: "" }),
+        });
+      }
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const j = await resp.json();
@@ -298,7 +313,7 @@ function App() {
         setMostrarAviso(true);
       }
     } catch (err) {
-      alert("No fue posible obtener la información de IA desde el backend. Intenta nuevamente.");
+      alert("No fue posible obtener la información de IA (Generales). Intenta nuevamente.");
       setPendingPreview(false);
     }
   };
@@ -424,18 +439,20 @@ function App() {
   const handleSubmit = (e) => {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
+
+    // Reglas generales
     if (!datosPaciente.nombre?.trim() || !datosPaciente.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
       alert("Por favor complete nombre, RUT y edad (>0).");
       return;
     }
-    // Solo TRAUMA exige dolor/lado en el submit principal
+
+    // Solo TRAUMA exige dolor/lado
     if (modulo === "trauma" && !datosPaciente.dolor?.trim()) {
       alert("Seleccione dolor/zona en el esquema para continuar.");
       return;
     }
 
     if (modulo === "preop" || modulo === "generales") {
-      // Abrir comorbilidades SOLO si aún no se han completado para ese módulo
       const scope = modulo;
       if (!comorbOkRef.current[scope]) {
         setMostrarComorbilidades(true);
