@@ -25,6 +25,14 @@ const T = getTheme();
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
+/* === Normaliza solo para el backend (UI sigue: MASCULINO / FEMENINO) === */
+const normalizarGenero = (g = "") => {
+  const s = String(g).trim().toLowerCase();
+  if (s === "masculino" || s === "hombre") return "hombre";
+  if (s === "femenino" || s === "mujer") return "mujer";
+  return s;
+};
+
 function App() {
   const [datosPaciente, setDatosPaciente] = useState({
     nombre: "",
@@ -198,6 +206,11 @@ function App() {
     }
 
     const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
+    const paciente = {
+      ...datosPaciente,
+      edad: edadNum,
+      genero: normalizarGenero(datosPaciente.genero), // <<< normalización
+    };
 
     const postIA = async (path) =>
       fetch(`${BACKEND_BASE}${path}`, {
@@ -205,7 +218,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           idPago,
-          paciente: { ...datosPaciente, edad: edadNum },
+          paciente,
           comorbilidades: comorb || {},
           tipoCirugia,
         }),
@@ -263,9 +276,15 @@ function App() {
     }
 
     const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
+    const paciente = {
+      ...datosPaciente,
+      edad: edadNum,
+      genero: normalizarGenero(datosPaciente.genero), // <<< normalización
+    };
+
     const body = {
       idPago,
-      paciente: { ...datosPaciente, edad: edadNum },
+      paciente,
       comorbilidades: comorb || {},
     };
 
