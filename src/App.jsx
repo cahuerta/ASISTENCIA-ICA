@@ -9,7 +9,7 @@ import EsquemaToggleTabs from "./EsquemaToggleTabs.jsx";
 /* Formularios y módulos */
 import FormularioPaciente from "./FormularioPaciente.jsx";
 import PreviewOrden from "./PreviewOrden.jsx";
-import PreviewIA from "./PreviewIA.jsx"; // ← NUEVO: segundo preview (post IA)
+import PreviewIA from "./PreviewIA.jsx"; // ← segundo preview (post IA)
 import PreopModulo from "./modules/PreopModulo.jsx";
 import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import IAModulo from "./modules/IAModulo.jsx";
@@ -103,7 +103,7 @@ function App() {
       setMostrarVistaPrevia(true);
       setPagoRealizado(false);
       setMostrarPago(false);
-      setStep("ia"); // ← tras aceptar aviso, mostrar SEGUNDO PREVIEW (IA)
+      setStep("ia"); // ← tras aceptar aviso, mostrar segundo preview
       setPendingPreview(false);
     }
   };
@@ -210,7 +210,7 @@ function App() {
     const paciente = {
       ...datosPaciente,
       edad: edadNum,
-      genero: normalizarGenero(datosPaciente.genero), // <<< normalización
+      genero: normalizarGenero(datosPaciente.genero),
     };
 
     const postIA = async (path) =>
@@ -244,7 +244,7 @@ function App() {
         setMostrarVistaPrevia(true);
         setPagoRealizado(false);
         setMostrarPago(false);
-        setStep("ia");           // ← SEGUNDO PREVIEW
+        setStep("ia"); // ← segundo preview
         setPendingPreview(false);
       } else {
         setPendingPreview(true);
@@ -256,7 +256,7 @@ function App() {
     }
   };
 
-  // ---- IA GENERALES ----
+  // ---- IA GENERALES (ruta propia con fallback a endpoints existentes) ----
   const llamarGeneralesIA = async (payloadComorb) => {
     // Asegurar idPago
     let idPago = "";
@@ -281,7 +281,7 @@ function App() {
     const paciente = {
       ...datosPaciente,
       edad: edadNum,
-      genero: normalizarGenero(datosPaciente.genero), // <<< normalización
+      genero: normalizarGenero(datosPaciente.genero),
     };
 
     const body = {
@@ -298,7 +298,7 @@ function App() {
         body: JSON.stringify(body),
       });
 
-      // 2) Fallbacks existentes
+      // 2) Fallback a rutas en producción (sin cirugía para Generales)
       if (!resp.ok) {
         resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
           method: "POST",
@@ -328,7 +328,7 @@ function App() {
         setMostrarVistaPrevia(true);
         setPagoRealizado(false);
         setMostrarPago(false);
-        setStep("ia");         // ← SEGUNDO PREVIEW
+        setStep("ia"); // ← segundo preview
         setPendingPreview(false);
       } else {
         setPendingPreview(true);
@@ -374,7 +374,7 @@ function App() {
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
 
-      // Legacy polling
+      // (El polling fino lo hace cada módulo; aquí mantenemos el legacy para trauma)
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
@@ -447,11 +447,11 @@ function App() {
     });
   };
 
-  /* ================== ETAPAS DEL PREVIEW ================== */
+  /* ================== ETAPAS DEL PREVIEW (solo preop/generales) ================== */
   // 'resumen' = Primer preview (datos + comorbilidades); 'ia' = Segundo preview (resultado IA)
   const [step, setStep] = useState("resumen");
 
-  // Submit del formulario principal
+  // ====== Submit del formulario principal ======
   const handleSubmit = (e) => {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
@@ -513,13 +513,13 @@ function App() {
     }
   };
 
-  // ====== Utilidades varias ======
+  // ====== Detección de RM en backend ======
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
-  };
+    };
 
   const detectarResonanciaEnBackend = async (datos) => {
     try {
@@ -618,4 +618,171 @@ function App() {
   };
 
   const handlePagarAhora = async () => {
-    const edadNum = Number(datosPaciente.edad
+    const edadNum = Number(datosPaciente.edad);
+    if (
+      !datosPaciente.nombre?.trim() ||
+      !datosPaciente.rut?.trim() ||
+      !Number.isFinite(edadNum) ||
+      edadNum <= 0 ||
+      !datosPaciente.dolor?.trim()
+    ) {
+      alert("Complete nombre, RUT, edad (>0) y dolor antes de pagar.");
+      return;
+    }
+
+    try {
+      const idPagoTmp =
+        sessionStorage.getItem("idPago") ||
+        "pago_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+
+      sessionStorage.setItem("idPago", idPagoTmp);
+      sessionStorage.setItem(
+        "datosPacienteJSON",
+        JSON.stringify({ ...datosPaciente, edad: edadNum })
+      );
+
+      // Detección de Resonancia
+      const solicitarRM = await detectarResonanciaEnBackend({
+        ...datosPaciente,
+        edad: edadNum,
+      });
+
+      if (solicitarRM) {
+        const data = await pedirChecklistResonancia();
+        setShowReso(false);
+        if (typeof resolverReso === "function") resolverReso(data);
+        if (hasRedFlags(data)) {
+          alert("Se detectaron contraindicaciones para RM. Por favor, revise el checklist.");
+          return;
+        }
+        const texto = resumenResoTexto(data);
+        try {
+          sessionStorage.setItem("formularioResonanciaTexto", texto);
+        } catch {}
+      }
+
+      // Ir a pago
+      irAPagoKhipu(modulo, { ...datosPaciente, edad: edadNum });
+      setMostrarPago(true);
+    } catch (e) {
+      alert("No fue posible iniciar el pago.");
+    }
+  };
+
+  /* ================== RENDER ================== */
+  return (
+    <div className="min-h-screen w-full bg-[--bg] text-[--fg]">
+      <div className="max-w-6xl mx-auto p-4 md:p-6">
+        {/* HEADER / TABS */}
+        <div className="flex items-center gap-3 mb-4">
+          <h1 className="text-2xl font-semibold">Asistente Virtual para Pacientes</h1>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Columna izquierda: formulario principal + módulos */}
+          <div className="rounded-xl shadow-md bg-white p-4">
+            <FormularioPaciente value={datosPaciente} onChange={setDatosPaciente} />
+
+            <div className="mt-4">
+              <EsquemaToggleTabs onChange={setVista} value={vista} />
+              {vista === "anterior" ? (
+                <EsquemaAnterior onSeleccionZona={onSeleccionZona} />
+              ) : (
+                <EsquemaPosterior onSeleccionZona={onSeleccionZona} />
+              )}
+            </div>
+
+            {/* Módulos (si los usas aquí) */}
+            {/* <PreopModulo /> */}
+            {/* <GeneralesModulo /> */}
+            {/* <IAModulo /> */}
+
+            {/* Botón principal de continuar / generar */}
+            <form onSubmit={handleSubmit} className="mt-4">
+              <button
+                type="submit"
+                className="w-full rounded-md px-4 py-2 bg-gray-800 text-white hover:opacity-90"
+              >
+                Generar informe
+              </button>
+            </form>
+          </div>
+
+          {/* Columna derecha: PREVIEW */}
+          <div className="rounded-xl shadow-md bg-white p-4">
+            {mostrarVistaPrevia && (
+              modulo === "preop" || modulo === "generales" ? (
+                step === "resumen" ? (
+                  // PRIMER PREVIEW (datos + comorbilidades positivas, sin IA)
+                  <PreviewOrden
+                    scope={modulo}
+                    datos={datosPaciente}
+                    onContinuar={onContinuarPrimerPreview}
+                  />
+                ) : (
+                  // SEGUNDO PREVIEW (resultado IA + botón Pagar ahora)
+                  <PreviewIA
+                    scope={modulo}
+                    datos={datosPaciente}
+                    onPagar={handlePagarAhora}
+                  />
+                )
+              ) : (
+                // TRAUMA e IA: flujo original con el mismo preview
+                <PreviewOrden
+                  scope={modulo}
+                  datos={datosPaciente}
+                  onPagar={handlePagarAhora}
+                />
+              )
+            )}
+          </div>
+        </div>
+
+        {/* Aviso legal */}
+        {mostrarAviso && (
+          <div className="mt-6">
+            <AvisoLegal onAceptar={continuarTrasAviso} onCancelar={rechazarAviso} />
+          </div>
+        )}
+
+        {/* Modal Comorbilidades */}
+        {mostrarComorbilidades && (
+          <div className="mt-6">
+            <FormularioComorbilidades
+              initialValue={comorbilidades}
+              onSave={handleSaveComorbilidades}
+              onCancel={() => setMostrarComorbilidades(false)}
+              scope={modulo === "generales" ? "generales" : "preop"}
+            />
+          </div>
+        )}
+
+        {/* Modal/Checklist Resonancia */}
+        {showReso && (
+          <div className="mt-6">
+            <FormularioResonancia
+              onClose={(data) => {
+                setShowReso(false);
+                if (typeof resolverReso === "function") resolverReso(data);
+              }}
+            />
+          </div>
+        )}
+
+        {/* Acciones post-pago / descarga */}
+        <div className="mt-6 flex flex-col md:flex-row gap-3">
+          <button
+            onClick={handleDescargarPDF}
+            disabled={descargando}
+            className="rounded-md px-4 py-2 bg-gray-200 hover:bg-gray-300"
+          >
+            {descargando ? mensajeDescarga || "Descargando…" : "Descargar PDF"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;
