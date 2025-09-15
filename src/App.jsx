@@ -48,12 +48,39 @@ function App() {
   // Vista esquema (frontal/posterior)
   const [vista, setVista] = useState("anterior");
 
+  // ====== Flags persistentes (solo PREOP) ======
+  const avisoOkRef = useRef(false);
+  const comorbOkRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      avisoOkRef.current = sessionStorage.getItem("preop_aviso_ok") === "1";
+      comorbOkRef.current = sessionStorage.getItem("preop_comorbilidades_ok") === "1";
+    } catch {}
+  }, []);
+
+  const marcarAvisoOkPreop = () => {
+    avisoOkRef.current = true;
+    try {
+      sessionStorage.setItem("preop_aviso_ok", "1");
+    } catch {}
+  };
+
+  const marcarComorbilidadesOk = (payload) => {
+    comorbOkRef.current = true;
+    try {
+      sessionStorage.setItem("preop_comorbilidades_ok", "1");
+      sessionStorage.setItem("preop_comorbilidades_data", JSON.stringify(payload || {}));
+    } catch {}
+  };
+
   // ====== Aviso Legal ======
   const [mostrarAviso, setMostrarAviso] = useState(false);
   const [pendingPreview, setPendingPreview] = useState(false); // preview sólo tras IA + aceptar
 
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
+    if (modulo === "preop") marcarAvisoOkPreop();
     if (pendingPreview) {
       setMostrarVistaPrevia(true);
       setPagoRealizado(false);
@@ -109,53 +136,66 @@ function App() {
     ].join("\n");
   };
 
-  // ====== Comorbilidades ======
+  // ====== Comorbilidades (modal suelto) ======
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
-  const [comorbilidades, setComorbilidades] = useState(null);
+  const [comorbilidades, setComorbilidades] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("preop_comorbilidades_data");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  // ------- Helper centralizado: IA PreOp (evita dobles aperturas) -------
-  const preopIARunningRef = useRef(null);
-  const llamarPreopIA = async (payload) => {
-    // evita dobles llamados si el usuario hace clics repetidos
-    if (preopIARunningRef.current) return preopIARunningRef.current;
+  // ---- Llamado a IA PREOP (centralizado) ----
+  const llamarPreopIA = async (payloadComorb) => {
+    // Asegurar idPago
+    let idPago = "";
+    try {
+      idPago = sessionStorage.getItem("idPago") || "";
+      if (!idPago) {
+        idPago = `preop_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
+        sessionStorage.setItem("idPago", idPago);
+      }
+    } catch {}
 
-    const run = (async () => {
-      // Asegurar idPago
-      let idPago = "";
+    // Tipo de cirugía desde sessionStorage (fijo u "otro")
+    let tipoCirugia = "";
+    try {
+      const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
+      const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+      tipoCirugia = fijo || otro || "";
+    } catch {}
+
+    // Preferir payload recibido; si no, usar estado o sessionStorage
+    let comorb = payloadComorb || comorbilidades;
+    if (!comorb) {
       try {
-        idPago = sessionStorage.getItem("idPago") || "";
-        if (!idPago) {
-          idPago = `preop_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
-          sessionStorage.setItem("idPago", idPago);
-        }
+        const raw = sessionStorage.getItem("preop_comorbilidades_data");
+        if (raw) comorb = JSON.parse(raw);
       } catch {}
+    }
 
-      // Tipo de cirugía desde sessionStorage
-      let tipoCirugia = "";
-      try {
-        const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
-        const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
-        tipoCirugia = fijo || otro || "";
-      } catch {}
+    const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
 
-      const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
-      const body = {
-        idPago,
-        paciente: { ...datosPaciente, edad: edadNum },
-        comorbilidades: payload || {},
-        tipoCirugia,
-      };
+    // Helper: intenta /preop-ia y, si no, /ia-preop
+    const postIA = async (path) => {
+      const resp = await fetch(`${BACKEND_BASE}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idPago,
+          paciente: { ...datosPaciente, edad: edadNum },
+          comorbilidades: comorb || {},
+          tipoCirugia,
+        }),
+      });
+      return resp;
+    };
 
-      // Primero el endpoint real del backend, luego fallback al alias
-      const fetchJSON = (path) =>
-        fetch(`${BACKEND_BASE}${path}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-
-      let resp = await fetchJSON("/ia-preop");
-      if (!resp.ok) resp = await fetchJSON("/preop-ia");
+    try {
+      let resp = await postIA("/preop-ia"); // archivo backend: preopIA.js
+      if (!resp.ok) resp = await postIA("/ia-preop"); // fallback
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const j = await resp.json();
@@ -167,29 +207,28 @@ function App() {
         sessionStorage.setItem("preop_ia_resumen", resumen || "");
       } catch {}
 
-      // IA lista → pedir aceptación del Aviso Legal
-      setPendingPreview(true);
-      setMostrarAviso(true);
-    })().finally(() => {
-      preopIARunningRef.current = null;
-    });
-
-    preopIARunningRef.current = run;
-    return run;
+      // Mostrar preview directo si Aviso ya aceptado; si no, abrirlo (una vez)
+      if (avisoOkRef.current) {
+        setMostrarVistaPrevia(true);
+        setPagoRealizado(false);
+        setMostrarPago(false);
+        setPendingPreview(false);
+      } else {
+        setPendingPreview(true);
+        setMostrarAviso(true);
+      }
+    } catch (err) {
+      alert("No fue posible obtener la información de IA desde el backend. Intenta nuevamente.");
+      setPendingPreview(false);
+    }
   };
 
-  // Guardar comorbilidades → llamar IA → Aviso
+  // Guardar comorbilidades → marcar ok → llamar IA
   const handleSaveComorbilidades = async (payload) => {
     setComorbilidades(payload);
     setMostrarComorbilidades(false);
-    try {
-      await llamarPreopIA(payload);
-    } catch (err) {
-      alert(
-        "No fue posible obtener la información de IA desde el backend. Intenta nuevamente."
-      );
-      setPendingPreview(false);
-    }
+    marcarComorbilidadesOk(payload); // ← queda marcado y persistido
+    await llamarPreopIA(payload);
   };
 
   // ====== Restauración de estado en montaje ======
@@ -314,19 +353,18 @@ function App() {
     }
 
     if (modulo === "preop") {
-      // Si YA hay comorbilidades, no abrir modal otra vez: llamar directo a IA
-      if (comorbilidades) {
-        llamarPreopIA(comorbilidades).catch(() => {
-          setPendingPreview(false);
-        });
+      // PREOP: si no hay comorbilidades, abrir una vez; si ya están → llamar IA directa
+      if (!comorbOkRef.current) {
+        setMostrarComorbilidades(true);
       } else {
-        setPendingPreview(false);
-        setMostrarComorbilidades(true); // primera y única vez
+        llamarPreopIA();
       }
     } else {
-      // Otros módulos: flujo tradicional (Aviso → preview)
-      setPendingPreview(true);
-      setMostrarAviso(true);
+      // Otros módulos: no abrir Aviso aquí según lo pedido (solo PREOP lo usa)
+      setMostrarVistaPrevia(true);
+      setPagoRealizado(false);
+      setMostrarPago(false);
+      setPendingPreview(false);
     }
   };
 
@@ -522,9 +560,11 @@ function App() {
                 onClick={() => {
                   setModulo(b.key);
                   sessionStorage.setItem("modulo", b.key);
-                  // Aviso Legal al cambiar de módulo (sin abrir preview)
                   setPendingPreview(false);
-                  setMostrarAviso(true);
+                  // Aviso Legal solo en PREOP y solo una vez
+                  if (b.key === "preop" && !avisoOkRef.current) {
+                    setMostrarAviso(true);
+                  }
                 }}
                 style={styleBtn}
               >
@@ -574,7 +614,7 @@ function App() {
             datos={datosPaciente}
             onCambiarDato={handleCambiarDato}
             onSubmit={handleSubmit}
-            /* >>>> modificación clave para PREOP */
+            /* sigue pasando el módulo si lo necesitas internamente */
             moduloActual={modulo}
           />
         </div>
