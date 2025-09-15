@@ -4,7 +4,7 @@ import { irAPagoKhipu } from "../PagoKhipu.jsx";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* ===================== Catálogo base (fallback por género) ===================== */
+/* ===================== Catálogo base (fallback por género/edad) ===================== */
 const PREOP_BASE = [
   "HEMOGRAMA",
   "VHS",
@@ -21,17 +21,21 @@ const PREOP_BASE = [
   "ECG DE REPOSO",
 ];
 
-function buildExamenesGenerales({ genero }) {
+function buildExamenesGenerales({ genero, edad }) {
   const g = (genero || "").toLowerCase();
+  const e = Number(edad);
 
   if (g === "masculino") {
-    // Masculino: mismos PREOP, quitar UROCULTIVO, + PERFIL HEPÁTICO, ANTÍGENO PROSTÁTICO, CEA
+    // Masculino: mismos PREOP, quitar UROCULTIVO, + PERFIL HEPÁTICO; PSA solo si >=50
     const base = PREOP_BASE.filter((x) => x !== "UROCULTIVO");
-    return [...base, "PERFIL HEPÁTICO", "ANTÍGENO PROSTÁTICO", "CEA"];
+    const extras = ["PERFIL HEPÁTICO"];
+    if (Number.isFinite(e) && e >= 50) extras.push("ANTÍGENO PROSTÁTICO");
+    return [...base, ...extras];
   }
 
   if (g === "femenino") {
-    // Femenino: mismos PREOP, + PERFIL HEPÁTICO, MAMOGRAFÍA, TSHm y T4 LIBRE, CALCIO, PAP (según edad)
+    // Femenino: mismos PREOP + PERFIL HEPÁTICO, MAMOGRAFÍA, TSHm y T4 LIBRE, CALCIO, PAP (según edad)
+    // (Dejamos 'según edad' tal cual, no lo endurecemos para no romper tu backend/IA)
     return [
       ...PREOP_BASE,
       "PERFIL HEPÁTICO",
@@ -89,6 +93,25 @@ const styles = {
   },
 };
 
+/* Etiquetas amigables para el preview de comorbilidades */
+const LABELS_COMORB = {
+  hta: "Hipertensión arterial",
+  dm2: "Diabetes mellitus tipo 2",
+  dislipidemia: "Dislipidemia",
+  obesidad: "Obesidad",
+  tabaquismo: "Tabaco",
+  epoc_asma: "EPOC / Asma",
+  cardiopatia: "Cardiopatía",
+  erc: "Enfermedad renal crónica",
+  hipotiroidismo: "Hipotiroidismo",
+  anticoagulantes: "Anticoagulantes/antiagregantes",
+  artritis_reumatoide: "Artritis reumatoide / autoinmune",
+  alergias_flag: "Alergias",
+  alergias_detalle: "Alergias (detalle)",
+  otras: "Otros",
+  anticoagulantes_detalle: "Detalle anticoagulantes",
+};
+
 function ensureGeneralesIdPago() {
   let id = sessionStorage.getItem("idPago");
   if (!id || !id.startsWith("generales_")) {
@@ -105,14 +128,26 @@ function prettyComorb(c = {}) {
     const bullets = [];
     for (const k of keys) {
       const v = c[k];
-      if (typeof v === "boolean" && v) bullets.push(k.replace(/_/g, " "));
-      // {tiene/detalle} o {usa/detalle}
-      if (typeof v === "object" && (v.tiene || v.usa)) {
-        let t = k.replace(/_/g, " ");
+      const label = LABELS_COMORB[k] || k.replace(/_/g, " ");
+
+      // booleanos: mostrar solo los true
+      if (typeof v === "boolean") {
+        if (v) bullets.push(label);
+        continue;
+      }
+
+      // objetos {tiene/detalle} o {usa/detalle}
+      if (typeof v === "object" && v !== null && (v.tiene || v.usa || v.detalle)) {
+        let t = label;
         if (v.detalle) t += ` — ${v.detalle}`;
         bullets.push(t);
+        continue;
       }
-      if (typeof v === "string" && v.trim()) bullets.push(`${k.replace(/_/g, " ")}: ${v.trim()}`);
+
+      // strings con contenido
+      if (typeof v === "string" && v.trim()) {
+        bullets.push(`${label}: ${v.trim()}`);
+      }
     }
     return bullets;
   } catch {
@@ -148,9 +183,9 @@ export default function GeneralesModulo({ initialDatos }) {
       setInformeIA(inf);
     } catch {}
 
-    // Comorbilidades por módulo
+    // Comorbilidades (clave alineada con App.jsx)
     try {
-      const c = JSON.parse(sessionStorage.getItem("comorb_json:generales") || "{}");
+      const c = JSON.parse(sessionStorage.getItem("generales_comorbilidades_data") || "{}");
       setComorbilidades(c || {});
     } catch {}
 
@@ -207,7 +242,7 @@ export default function GeneralesModulo({ initialDatos }) {
       sessionStorage.setItem("modulo", "generales");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
 
-      // Guardar para PDF: incluimos IA/comorbilidades (si backend aún no los usa, los ignora sin problema)
+      // Guardar para PDF (el backend ignora campos desconocidos sin problema)
       await fetch(`${BACKEND_BASE}/guardar-datos-generales`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -310,7 +345,10 @@ export default function GeneralesModulo({ initialDatos }) {
   };
 
   /* ------------------------------ Preview ------------------------------ */
-  const itemsFallback = buildExamenesGenerales({ genero: datos?.genero });
+  const itemsFallback = buildExamenesGenerales({
+    genero: datos?.genero,
+    edad: datos?.edad,
+  });
   const usarIA = Array.isArray(examenesIA) && examenesIA.length > 0;
 
   const comorbBullets = prettyComorb(comorbilidades);
@@ -350,7 +388,7 @@ export default function GeneralesModulo({ initialDatos }) {
 
       {/* Exámenes (IA o fallback) */}
       <div style={styles.block}>
-        <strong>Exámenes solicitados {usarIA ? "(IA)" : "(base por género)"}:</strong>
+        <strong>Exámenes solicitados {usarIA ? "(IA)" : "(base por género/edad)"}:</strong>
         <ul style={{ marginTop: 6 }}>
           {(usarIA ? examenesIA : itemsFallback).map((e) => (
             <li key={e}>{e}</li>
@@ -386,7 +424,7 @@ export default function GeneralesModulo({ initialDatos }) {
               const datosGuest = {
                 nombre: "Guest",
                 rut: "99999999-9",
-                edad: 30,
+                edad: 60,
                 genero: "MASCULINO",
               };
 
