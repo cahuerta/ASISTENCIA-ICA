@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
 
-/** ====== Estilos (idéntica lógica visual al módulo que funciona) ====== */
+/** ====== Estilos ====== */
 const S = {
   card: {
     background:"#fff",
@@ -69,7 +69,7 @@ const S = {
   hintRow:{ display:"flex", justifyContent:"space-between", fontSize:12, color:"#667085" },
 };
 
-/** ====== Itens Sí/No (claves estables para backend) ====== */
+/** ====== Ítems Sí/No ====== */
 const ITEMS = [
   { key:"hta", label:"Hipertensión arterial" },
   { key:"dm2", label:"Diabetes mellitus tipo 2" },
@@ -84,20 +84,15 @@ const ITEMS = [
   { key:"artritis_reumatoide", label:"Artritis reumatoide / autoinmune" },
 ];
 
-// estado base: null => no respondido (como tu módulo que funciona)
-const baseState = () =>
-  ITEMS.reduce((acc, it) => ({ ...acc, [it.key]: null }), {});
+const baseState = () => ITEMS.reduce((acc, it) => ({ ...acc, [it.key]: null }), {});
 
 /** ====== Componente ====== */
 export default function FormularioComorbilidades({ initial = {}, onSave, onCancel }) {
   const [form, setForm] = useState({
     ...baseState(),
-
-    // extras del formulario
-    alergias_flag: null,          // Sí/No (null al inicio)
+    alergias_flag: null,
     alergias_detalle: "",
     otras: "",
-
     anticoagulantes_detalle: "",
     ...initial,
   });
@@ -106,40 +101,34 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
   const MAX_ALERGIA = 80;
   const MAX_OTRAS = 120;
 
-  // Carga desde sessionStorage si existe
+  /** 👉 Hidratar cada vez que cambie `initial` (lo entrega App.jsx por scope) */
   useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem("comorbilidadesJSON");
-      if (saved && !initial.__skipLoad) {
-        const data = JSON.parse(saved);
-        setForm(prev => ({ ...prev, ...data }));
-      }
-    } catch {}
+    setForm((prev) => ({
+      ...baseState(),
+      alergias_flag: null,
+      alergias_detalle: "",
+      otras: "",
+      anticoagulantes_detalle: "",
+      ...initial,
+    }));
   }, [initial]);
 
-  // Helpers
-  const setYN = (key, val) => setForm(f => ({ ...f, [key]: !!val }));
+  const setYN = (key, val) => setForm((f) => ({ ...f, [key]: !!val }));
 
-  // Campos obligatorios respondidos (para feedback)
   const faltantes = useMemo(() => {
-    const keysYN = [...ITEMS.map(i=>i.key), "alergias_flag"];
-    return keysYN.filter(k => form[k] === null);
+    const keysYN = [...ITEMS.map((i) => i.key), "alergias_flag"];
+    return keysYN.filter((k) => form[k] === null);
   }, [form]);
 
   const validar = () => {
     const e = {};
-    // detalle de anticoagulantes si es Sí
     if (form.anticoagulantes === true && !String(form.anticoagulantes_detalle || "").trim()) {
       e.anticoagulantes_detalle = "Indique cuál(es).";
     }
-    // alergias: si es Sí, detalle obligatorio
     if (form.alergias_flag === true && !String(form.alergias_detalle || "").trim()) {
       e.alergias_detalle = "Indique cuál(es).";
     }
-    // todas las preguntas Sí/No deben estar respondidas
-    if (faltantes.length) {
-      e.__faltantes = "Responde todas las preguntas (Sí/No).";
-    }
+    if (faltantes.length) e.__faltantes = "Responde todas las preguntas (Sí/No).";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -148,7 +137,6 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
     if (!validar()) return;
 
     const payload = {
-      // binarios:
       hta: !!form.hta,
       dm2: !!form.dm2,
       dislipidemia: !!form.dislipidemia,
@@ -161,20 +149,15 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
       anticoagulantes: !!form.anticoagulantes,
       artritis_reumatoide: !!form.artritis_reumatoide,
 
-      // alergias simplificadas
       alergias_flag: !!form.alergias_flag,
       alergias_detalle: (form.alergias_detalle || "").slice(0, MAX_ALERGIA).trim(),
-
-      // otros (texto breve)
       otras: (form.otras || "").slice(0, MAX_OTRAS).trim(),
-
-      // detalle de anticoagulantes si aplica
       anticoagulantes_detalle: (form.anticoagulantes_detalle || "").trim(),
     };
 
-    sessionStorage.setItem("comorbilidadesJSON", JSON.stringify(payload));
-    onSave?.(payload);         // misma firma que tu otro módulo
-    onCancel?.();              // el que abre el modal lo cierra
+    /** ❌ Nada de sessionStorage aquí. El padre persiste por scope. */
+    onSave?.(payload); // App.jsx cierra el modal y continúa el flujo
+    // ❌ No llamamos onCancel() aquí para evitar “doble cierre/doble apertura”.
   };
 
   return (
@@ -187,7 +170,6 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
         </div>
       )}
 
-      {/* Ítems Sí/No */}
       <div style={S.grid}>
         {ITEMS.map(({ key, label }) => (
           <div key={key} style={S.row}>
@@ -211,7 +193,6 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
               </button>
             </div>
 
-            {/* Detalle sólo si anticoagulantes = Sí */}
             {key === "anticoagulantes" && form.anticoagulantes === true && (
               <div>
                 <input
@@ -229,7 +210,6 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
         ))}
       </div>
 
-      {/* Alergias (Sí/No + detalle corto si Sí) */}
       <div style={{ marginTop:12 }}>
         <div style={S.row}>
           <label style={S.label}>Alergias</label>
@@ -271,7 +251,6 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
         </div>
       </div>
 
-      {/* Otros (texto breve) */}
       <div style={{ marginTop:12 }}>
         <div style={S.row}>
           <label style={S.label}>Otros (opcional)</label>
@@ -289,7 +268,6 @@ export default function FormularioComorbilidades({ initial = {}, onSave, onCance
         </div>
       </div>
 
-      {/* Acciones (igual que el módulo que funciona) */}
       <div style={S.actions}>
         <button type="button" style={S.btnGray} onClick={()=>onCancel?.()}>
           Cancelar
