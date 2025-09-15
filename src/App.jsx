@@ -136,11 +136,10 @@ function App() {
       tipoCirugia = fijo || otro || "";
     } catch {}
 
-    try {
+    // Helper: intenta /preop-ia y, si no está, prueba /ia-preop
+    const llamarIA = async (path) => {
       const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
-
-      // *** IMPORTANTE: tu backend espera { idPago, paciente, comorbilidades, tipoCirugia } ***
-      const resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
+      const resp = await fetch(`${BACKEND_BASE}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -150,11 +149,18 @@ function App() {
           tipoCirugia,
         }),
       });
+      return resp;
+    };
 
+    try {
+      let resp = await llamarIA("/preop-ia"); // ← archivo backend: preopIA.js
+      if (!resp.ok) {
+        // fallback si el host solo expone /ia-preop
+        resp = await llamarIA("/ia-preop");
+      }
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const j = await resp.json();
 
-      // Nombres según tu preopIA.js
+      const j = await resp.json();
       const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
       const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
 
@@ -292,8 +298,16 @@ function App() {
       alert("Por favor complete todos los campos obligatorios.");
       return;
     }
-    // Primero Comorbilidades; luego IA; recién después Aviso/Preview
-    setMostrarComorbilidades(true);
+
+    if (modulo === "preop") {
+      // En PREOP: primero comorbilidades y luego IA → preview
+      setPendingPreview(false);
+      setMostrarComorbilidades(true);
+    } else {
+      // Otros módulos: flujo tradicional (Aviso → preview)
+      setPendingPreview(true);
+      setMostrarAviso(true);
+    }
   };
 
   // ====== Detección de RM en backend ======
