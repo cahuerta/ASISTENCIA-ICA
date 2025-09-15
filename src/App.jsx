@@ -57,6 +57,10 @@ function App() {
   // Vista esquema (frontal/posterior)
   const [vista, setVista] = useState("anterior");
 
+  // === NUEVO: etapa del preview sólo para preop/generales
+  // 'resumen' = Primer preview (datos + comorbilidades); 'ia' = Segundo preview (resultado IA)
+  const [step, setStep] = useState("resumen");
+
   // ====== Flags persistentes (por módulo: preop / generales) ======
   const avisoOkRef = useRef({ preop: false, generales: false });
   const comorbOkRef = useRef({ preop: false, generales: false });
@@ -94,7 +98,7 @@ function App() {
 
   // ====== Aviso Legal ======
   const [mostrarAviso, setMostrarAviso] = useState(false);
-  const [pendingPreview, setPendingPreview] = useState(false); // preview sólo tras IA + aceptar
+  const [pendingPreview, setPendingPreview] = useState(false); // preview IA pendiente por aviso
 
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
@@ -103,7 +107,7 @@ function App() {
       setMostrarVistaPrevia(true);
       setPagoRealizado(false);
       setMostrarPago(false);
-      setStep("ia"); // ← tras aceptar aviso, mostrar segundo preview
+      setStep("ia"); // ← tras aceptar aviso, mostrar SEGUNDO PREVIEW (IA)
       setPendingPreview(false);
     }
   };
@@ -239,12 +243,11 @@ function App() {
         sessionStorage.setItem("preop_ia_resumen", resumen || "");
       } catch {}
 
-      // Mostrar preview IA directo si Aviso ya aceptado; si no, abrirlo (una vez)
       if (avisoOkRef.current.preop) {
         setMostrarVistaPrevia(true);
         setPagoRealizado(false);
         setMostrarPago(false);
-        setStep("ia"); // ← segundo preview
+        setStep("ia"); // ← mostrar segundo preview
         setPendingPreview(false);
       } else {
         setPendingPreview(true);
@@ -256,7 +259,7 @@ function App() {
     }
   };
 
-  // ---- IA GENERALES (ruta propia con fallback a endpoints existentes) ----
+  // ---- IA GENERALES ----
   const llamarGeneralesIA = async (payloadComorb) => {
     // Asegurar idPago
     let idPago = "";
@@ -291,14 +294,12 @@ function App() {
     };
 
     try {
-      // 1) Nueva ruta específica
       let resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
-      // 2) Fallback a rutas en producción (sin cirugía para Generales)
       if (!resp.ok) {
         resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
           method: "POST",
@@ -328,7 +329,7 @@ function App() {
         setMostrarVistaPrevia(true);
         setPagoRealizado(false);
         setMostrarPago(false);
-        setStep("ia"); // ← segundo preview
+        setStep("ia"); // ← mostrar segundo preview
         setPendingPreview(false);
       } else {
         setPendingPreview(true);
@@ -374,7 +375,6 @@ function App() {
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
 
-      // (El polling fino lo hace cada módulo; aquí mantenemos el legacy para trauma)
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
@@ -447,10 +447,6 @@ function App() {
     });
   };
 
-  /* ================== ETAPAS DEL PREVIEW (solo preop/generales) ================== */
-  // 'resumen' = Primer preview (datos + comorbilidades); 'ia' = Segundo preview (resultado IA)
-  const [step, setStep] = useState("resumen");
-
   // ====== Submit del formulario principal ======
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -470,11 +466,10 @@ function App() {
 
     if (modulo === "preop" || modulo === "generales") {
       const scope = modulo;
-      // 1) Abrir comorbilidades inmediatamente si faltan
+      // Abrir comorbilidades si faltan; si ya están, PRIMER PREVIEW (sin IA)
       if (!comorbOkRef.current[scope]) {
         setMostrarComorbilidades(true);
       } else {
-        // 2) Si ya estaban OK, abrir PRIMER PREVIEW (sin IA todavía)
         setMostrarVistaPrevia(true);
         setPagoRealizado(false);
         setMostrarPago(false);
@@ -497,20 +492,20 @@ function App() {
     const scope = modulo === "generales" ? "generales" : "preop";
     marcarComorbilidadesOk(scope, payload);
 
-    // Abrir PRIMER PREVIEW inmediatamente (sin IA)
     setMostrarVistaPrevia(true);
     setPagoRealizado(false);
     setMostrarPago(false);
     setStep("resumen");
   };
 
-  // Handler del botón "Continuar → Analizar con IA" (primer preview)
+  // Botón "Continuar" del primer preview → lanzar IA
   const onContinuarPrimerPreview = async () => {
     if (modulo === "preop") {
       await llamarPreopIA();
     } else if (modulo === "generales") {
       await llamarGeneralesIA();
     }
+    // El paso a 'ia' se hace en llamarPreopIA/GeneralesIA o tras aceptar aviso
   };
 
   // ====== Detección de RM en backend ======
@@ -519,7 +514,7 @@ function App() {
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
-    };
+  };
 
   const detectarResonanciaEnBackend = async (datos) => {
     try {
