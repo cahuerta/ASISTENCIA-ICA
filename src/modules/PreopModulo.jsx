@@ -1,131 +1,61 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
-import FormularioComorbilidades from "../components/FormularioComorbilidades.jsx";
 import { getTheme } from "../theme.js";
 
 const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* ===== Catálogos por ZONA (MAYÚSCULAS) ===== */
-const CIRUGIAS_CADERA = [
-  "ARTROPLASTIA TOTAL DE CADERA (ATC)",
-  "ARTROSCOPIA DE CADERA",
-  "OSTEOTOMÍA DE CADERA",
-  "CIRUGÍA MENOR DE PARTES BLANDAS (CADERA)",
-  "OTRO (ESPECIFICAR)",
-];
-const CIRUGIAS_RODILLA = [
-  "ARTROPLASTIA TOTAL DE RODILLA (ATR)",
-  "ARTROSCOPIA DE RODILLA",
-  "OSTEOTOMÍA DE RODILLA",
-  "CIRUGÍA MENOR DE PARTES BLANDAS (RODILLA)",
-  "OTRO (ESPECIFICAR)",
-];
-
-function zonaDesdeDolor(d = "") {
-  const s = (d || "").toLowerCase();
-  if (s.includes("cadera")) return "cadera";
-  if (s.includes("rodilla")) return "rodilla";
-  return "";
-}
-function opcionesPorZona(zona) {
-  if (zona === "cadera") return CIRUGIAS_CADERA;
-  if (zona === "rodilla") return CIRUGIAS_RODILLA;
-  return []; // si no es cadera/rodilla, no mostramos catálogo
-}
-function esCompatibleConZona(zona, tipo = "") {
-  const up = (tipo || "").toUpperCase();
-  if (!zona) return true;
-  if (up.startsWith("OTRO")) return true; // "OTRO" es genérico
-  if (zona === "cadera") return up.includes("CADERA");
-  if (zona === "rodilla") return up.includes("RODILLA");
-  return true;
-}
-
 export default function PreopModulo({ initialDatos }) {
-  // ===== Estados base
   const [datos, setDatos] = useState(initialDatos || {});
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
-  // ===== Estados del flujo
-  // pasos: 'idle' | 'comorbilidades' | 'cirugia' | 'ia_cargando' | 'preview'
-  const [paso, setPaso] = useState("idle");
+  // === cargar salida IA y metadatos guardados POR App.jsx ===
+  const [examenesIA, setExamenesIA] = useState([]);
+  const [informeIA, setInformeIA] = useState("");
+  const [comorbilidades, setComorbilidades] = useState({});
+  const [tipoCirugia, setTipoCirugia] = useState("");
 
-  const [comorbilidades, setComorbilidades] = useState(() => {
-    try {
-      const idPago = sessionStorage.getItem("idPago") || "";
-      const raw = idPago ? sessionStorage.getItem(`preop_comorbilidades_${idPago}`) : null;
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
-  });
-
-  // Tipo de cirugía (preferimos lo que viene del padre; si no, sessionStorage)
-  const [tipoCirugia, setTipoCirugia] = useState(() => {
-    try {
-      const fromParent = String(initialDatos?.tipoCirugia || "").trim();
-      if (fromParent) return fromParent.toUpperCase();
-
-      const preset = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
-      const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
-      if (preset && preset.startsWith("OTRO")) {
-        return (otro || "").trim(); // no usar "OTRO..." como valor final
-      }
-      return preset || "";
-    } catch {
-      return "";
-    }
-  });
-  const [tipoCirugiaLibre, setTipoCirugiaLibre] = useState("");
-
-  // Salida IA (solo lo que venga del backend)
-  const [examenesIA, setExamenesIA] = useState(() => {
-    try {
-      const idPago = sessionStorage.getItem("idPago") || "";
-      const raw = idPago ? sessionStorage.getItem(`preop_examenes_IA_${idPago}`) : null;
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [informeIA, setInformeIA] = useState(() => {
-    try {
-      const idPago = sessionStorage.getItem("idPago") || "";
-      return idPago ? sessionStorage.getItem(`preop_informe_IA_${idPago}`) || "" : "";
-    } catch {
-      return "";
-    }
-  });
-
-  // ===== Derivados de zona/lado
-  const zona = zonaDesdeDolor(datos?.dolor);
-  const opcionesZona = opcionesPorZona(zona);
-  const etiquetaZonaLado = [zona && zona.toUpperCase(), (datos?.lado || "").toUpperCase()]
-    .filter(Boolean)
-    .join(" ");
-
-  // Si la selección guardada no es compatible con la zona actual, se pide de nuevo
   useEffect(() => {
-    if (!zona) return;
-    if (tipoCirugia && !esCompatibleConZona(zona, tipoCirugia)) {
-      setTipoCirugia("");
-      if (paso !== "comorbilidades") setPaso("cirugia");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zona]);
-
-  // ===== Montaje: sincroniza datos y detecta retorno de pago
-  useEffect(() => {
+    // Datos paciente (para mostrar)
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
     } catch {}
 
+    // Tipo cirugía (tomado del formulario principal)
+    try {
+      const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
+      const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
+      const final = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
+      setTipoCirugia(final || "");
+    } catch {}
+
+    // Comorbilidades (MISMA CLAVE QUE USA App.jsx)
+    try {
+      const raw = sessionStorage.getItem("preop_comorbilidades_data");
+      if (raw) {
+        setComorbilidades(JSON.parse(raw));
+      } else {
+        // compatibilidad retro: algunas versiones guardaban con idPago
+        const idPago = sessionStorage.getItem("idPago") || "";
+        const legacy = idPago ? sessionStorage.getItem(`preop_comorbilidades_${idPago}`) : null;
+        if (legacy) setComorbilidades(JSON.parse(legacy));
+      }
+    } catch {}
+
+    // IA (guardada por App.jsx → llamarPreopIA)
+    try {
+      const ex = JSON.parse(sessionStorage.getItem("preop_ia_examenes") || "[]");
+      const inf = sessionStorage.getItem("preop_ia_resumen") || "";
+      setExamenesIA(Array.isArray(ex) ? ex : []);
+      setInformeIA(inf);
+    } catch {}
+
+    // Retorno de pago (marcar listo y hacer polling)
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
     const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
@@ -137,7 +67,10 @@ export default function PreopModulo({ initialDatos }) {
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
-          await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`);
+          // primero ruta específica, si falla, ruta genérica
+          let r = await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`);
+          if (!r.ok) r = await fetch(`${BACKEND_BASE}/obtener-datos/${idPago}`);
+          // no necesitamos el body, es sólo wake/poll
         } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
@@ -156,205 +89,37 @@ export default function PreopModulo({ initialDatos }) {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // ========= Paso 0: Continuar (abre Comorbilidades)
-  const handleContinuarPreop = async () => {
-    const edadNum = Number(datos.edad);
-    if (
-      !datos.nombre?.trim() ||
-      !datos.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0 ||
-      !datos.dolor?.trim()
-    ) {
-      alert("Complete nombre, RUT, edad (>0) y dolor antes de continuar.");
-      return;
-    }
-
+  /* ===================== Pago ===================== */
+  const handlePagarDesdePreview = async () => {
     const idPago =
       sessionStorage.getItem("idPago") ||
-      "preop_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-
+      `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
     sessionStorage.setItem("idPago", idPago);
     sessionStorage.setItem("modulo", "preop");
-    sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
 
     try {
-      await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idPago, datosPaciente: { ...datos, edad: edadNum } }),
-      });
-    } catch {}
-
-    setPaso("comorbilidades");
-  };
-
-  // ========= Paso 1: Recibir Comorbilidades
-  const handleEnviarComorbilidades = async (formData) => {
-    const idPago = sessionStorage.getItem("idPago");
-    if (!idPago) return alert("ID de pago no encontrado");
-
-    const limpio = normalizarComorbilidades(formData);
-    setComorbilidades(limpio);
-    sessionStorage.setItem(`preop_comorbilidades_${idPago}`, JSON.stringify(limpio));
-
-    // Determinar tipo de cirugía desde sessionStorage si ya existe
-    const presetRaw = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase().trim();
-    const otroRaw = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase().trim();
-
-    let seleccion = "";
-    if (presetRaw) {
-      if (presetRaw.startsWith("OTRO")) {
-        if (otroRaw) seleccion = otroRaw; // solo si el "OTRO" fue especificado
-      } else {
-        seleccion = presetRaw;
-      }
-    }
-
-    // Si hay selección previa pero no es compatible con la zona, la descartamos
-    if (seleccion && !esCompatibleConZona(zona, seleccion)) {
-      seleccion = "";
-    }
-
-    try {
-      await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPago,
-          datosPaciente: { ...datos },
-          comorbilidades: limpio,
-          ...(seleccion ? { tipoCirugia: seleccion } : {}),
-        }),
-      });
-    } catch {}
-
-    if (seleccion) {
-      setTipoCirugia(seleccion);
-      await llamarIAyConstruirPreview(seleccion, limpio);
-    } else {
-      setPaso("cirugia"); // pedir tipo de cirugía (filtrado por zona) si aún no lo tenemos
-    }
-  };
-
-  // ========= Paso 2: Confirmar tipo de cirugía (modal)
-  const handleConfirmarCirugia = async () => {
-    const idPago = sessionStorage.getItem("idPago");
-    if (!idPago) return alert("ID de pago no encontrado");
-
-    let seleccion = (tipoCirugia || "").toUpperCase().trim();
-    if (!seleccion) return alert("Seleccione el tipo de cirugía.");
-    if (seleccion.startsWith("OTRO") && !tipoCirugiaLibre.trim())
-      return alert("Especifique el tipo de cirugía en 'OTRO'.");
-
-    if (seleccion.startsWith("OTRO")) seleccion = tipoCirugiaLibre.toUpperCase().trim();
-
-    // Compatibilidad final con zona
-    if (!esCompatibleConZona(zona, seleccion) && !seleccion.startsWith("OTRO")) {
-      return alert("La cirugía seleccionada no corresponde a la zona actual.");
-    }
-
-    setTipoCirugia(seleccion);
-    sessionStorage.setItem(`preop_tipoCirugia_${idPago}`, seleccion);
-
-    try {
-      await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPago,
-          datosPaciente: { ...datos },
-          comorbilidades,
-          tipoCirugia: seleccion,
-        }),
-      });
-    } catch {}
-
-    await llamarIAyConstruirPreview(seleccion, comorbilidades);
-  };
-
-  // ========= Paso 3: IA → examenes/informe → PREVIEW
-  const llamarIAyConstruirPreview = async (tipoSel, comorb) => {
-    const idPago = sessionStorage.getItem("idPago");
-    if (!idPago) return alert("ID de pago no encontrado");
-
-    setPaso("ia_cargando");
-    try {
+      // guardamos con ruta específica y fallback genérico
       const payload = {
         idPago,
-        paciente: {
-          nombre: datos?.nombre || "",
-          rut: datos?.rut || "",
-          edad: Number(datos?.edad) || null,
-          dolor: datos?.dolor || "",
-          lado: datos?.lado || "",
-        },
-        comorbilidades: comorb || comorbilidades || {},
-        tipoCirugia: tipoSel || tipoCirugia || "",
+        datosPaciente: { ...datos },
+        comorbilidades,
+        tipoCirugia,
+        examenesIA: Array.isArray(examenesIA) ? examenesIA : [],
+        informeIA: informeIA || "",
       };
 
-      const res = await fetch(`${BACKEND_BASE}/ia-preop`, {
+      let r = await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      let examenes = [];
-      let informe = "";
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data?.examenes)) examenes = data.examenes;
-        informe = (data?.informeIA || "").toString();
-      }
-
-      setExamenesIA(examenes);
-      setInformeIA(informe);
-
-      sessionStorage.setItem(`preop_examenes_IA_${idPago}`, JSON.stringify(examenes));
-      sessionStorage.setItem(`preop_informe_IA_${idPago}`, informe);
-
-      try {
-        await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
+      if (!r.ok) {
+        r = await fetch(`${BACKEND_BASE}/guardar-datos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            idPago,
-            datosPaciente: { ...datos },
-            comorbilidades: comorb || comorbilidades || {},
-            tipoCirugia: tipoSel || tipoCirugia || "",
-            examenesIA: examenes,
-            informeIA: informe,
-          }),
+          body: JSON.stringify({ idPago, datosPaciente: { ...datos } }),
         });
-      } catch {}
-
-      setPaso("preview");
-    } catch (e) {
-      console.error("Fallo IA-Preop:", e);
-      setExamenesIA([]);
-      setInformeIA("No fue posible obtener el informe de IA en este momento.");
-      setPaso("preview");
-    }
-  };
-
-  // ========= Paso 4: Pago (desde PREVIEW)
-  const handlePagarDesdePreview = async () => {
-    const idPago = sessionStorage.getItem("idPago");
-    if (!idPago) return alert("ID de pago no encontrado");
-
-    try {
-      await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPago,
-          datosPaciente: { ...datos },
-          comorbilidades,
-          tipoCirugia,
-          examenesIA: Array.isArray(examenesIA) ? examenesIA : [],
-          informeIA: informeIA || "",
-        }),
-      });
+      }
 
       await irAPagoKhipu({ ...datos }, { idPago, modulo: "preop" });
     } catch (err) {
@@ -363,16 +128,20 @@ export default function PreopModulo({ initialDatos }) {
     }
   };
 
-  // ========= Descargar PDF
+  /* ===================== Descargar PDF ===================== */
   const handleDescargarPreop = async () => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
 
     const intentaDescarga = async () => {
-      const res = await fetch(`${BACKEND_BASE}/pdf-preop/${idPago}`, { cache: "no-store" });
+      // primero pdf-preop, si no existe, /pdf/:id
+      let res = await fetch(`${BACKEND_BASE}/pdf-preop/${idPago}`, { cache: "no-store" });
+      if (!res.ok) res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
+
       if (res.status === 404) return { ok: false, status: 404 };
       if (res.status === 402) return { ok: false, status: 402 };
       if (!res.ok) throw new Error("Error al obtener el PDF");
+
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -399,17 +168,18 @@ export default function PreopModulo({ initialDatos }) {
         if (r.status === 402) {
           setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
-          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
+          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente.");
           continue;
         }
 
         if (r.status === 404) {
+          // reinyectar datos mínimos (compatibilidad)
           if (!reinyectado) {
             setMensajeDescarga("Restaurando datos…");
             const respaldo = sessionStorage.getItem("datosPacienteJSON");
             const datosReinyectar = respaldo ? JSON.parse(respaldo) : datos;
 
-            await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
+            let r2 = await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -421,6 +191,13 @@ export default function PreopModulo({ initialDatos }) {
                 informeIA: informeIA || "",
               }),
             });
+            if (!r2.ok) {
+              await fetch(`${BACKEND_BASE}/guardar-datos`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ idPago, datosPaciente: datosReinyectar }),
+              });
+            }
 
             reinyectado = true;
             await sleep(500);
@@ -434,8 +211,8 @@ export default function PreopModulo({ initialDatos }) {
         alert("No se pudo descargar el PDF.");
         break;
       }
-    } catch (error) {
-      console.error(error);
+    } catch (e) {
+      console.error(e);
       alert("No se pudo descargar el PDF.");
     } finally {
       setDescargando(false);
@@ -443,39 +220,11 @@ export default function PreopModulo({ initialDatos }) {
     }
   };
 
-  // ========= Simular Pago (guest)
-  const handleSimularPagoGuest = async () => {
-    const idPago = "preop_guest_" + Date.now();
-    const datosGuest = {
-      nombre: "Guest",
-      rut: "99999999-9",
-      edad: 30,
-      dolor: "Rodilla",
-      lado: "Izquierda",
-    };
-
-    sessionStorage.setItem("idPago", idPago);
-    sessionStorage.setItem("modulo", "preop");
-    sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
-
-    await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idPago, datosPaciente: datosGuest }),
-    });
-
-    const url = new URL(window.location.href);
-    url.searchParams.set("pago", "ok");
-    url.searchParams.set("idPago", idPago);
-    window.location.href = url.toString();
-  };
-
-  // ================= UI =================
+  /* ===================== UI ===================== */
   return (
     <div style={styles.card}>
       <h3 style={{ marginTop: 0, color: T.primary }}>Vista previa — Exámenes preoperatorios</h3>
 
-      {/* Datos Paciente */}
       <div style={{ marginBottom: 10, color: T.text }}>
         <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
         <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
@@ -486,37 +235,38 @@ export default function PreopModulo({ initialDatos }) {
         </div>
         {tipoCirugia ? (
           <div><strong>Tipo de cirugía:</strong> {tipoCirugia}</div>
-        ) : null}
+        ) : (
+          <div style={{ color: T.textMuted }}>
+            (El tipo de cirugía se toma del formulario principal de PREOP.)
+          </div>
+        )}
       </div>
 
-      {/* PREVIEW (solo lo devuelto por IA) */}
-      {(paso === "preview" || (Array.isArray(examenesIA) && (examenesIA.length || informeIA))) && (
-        <>
-          {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
-            <div>
-              <strong>Exámenes a solicitar (IA):</strong>
-              <ul style={{ marginTop: 6 }}>
-                {examenesIA.map((e, idx) => (
-                  <li key={`${e}-${idx}`}>{typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}</li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <div style={{ marginTop: 6, color: T.textMuted }}>
-              (La IA no devolvió una lista de exámenes en esta ocasión.)
-            </div>
-          )}
-
-          {informeIA ? (
-            <div style={{ marginTop: 8 }}>
-              <strong>Informe IA (resumen):</strong>
-              <div style={styles.informeBox}>{informeIA}</div>
-            </div>
-          ) : null}
-        </>
+      {/* PREVIEW (lista de IA si existe) */}
+      {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
+        <div>
+          <strong>Exámenes a solicitar (IA):</strong>
+          <ul style={{ marginTop: 6 }}>
+            {examenesIA.map((e, idx) => (
+              <li key={`${e}-${idx}`}>{typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}</li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div style={{ color: T.textMuted }}>
+          (Aún no hay lista de exámenes. Desde el formulario principal pulsa “Generar Informe”
+          para que se ejecute la IA y se muestre aquí.)
+        </div>
       )}
 
-      {/* Controles según estado */}
+      {informeIA && (
+        <div style={{ marginTop: 8 }}>
+          <strong>Informe IA (resumen):</strong>
+          <div style={styles.informeBox}>{informeIA}</div>
+        </div>
+      )}
+
+      {/* Acciones */}
       {pagoRealizado ? (
         <button
           style={{ ...styles.btn, marginTop: 12 }}
@@ -527,154 +277,18 @@ export default function PreopModulo({ initialDatos }) {
           {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
         </button>
       ) : (
-        <>
-          {paso === "idle" && (
-            <>
-              <button
-                style={{ ...styles.btn, backgroundColor: T.primary, marginTop: 12 }}
-                onClick={handleContinuarPreop}
-                title="Comorbilidades → (Tipo de cirugía si falta) → IA → Preview → Pago"
-              >
-                Continuar (Pre Op)
-              </button>
-              <button
-                style={{ ...styles.btn, backgroundColor: T.muted, marginTop: 8 }}
-                onClick={handleSimularPagoGuest}
-                title="Simular retorno pagado (solo pruebas)"
-              >
-                Simular Pago (Guest)
-              </button>
-            </>
-          )}
-
-          {paso === "comorbilidades" && (
-            <div style={styles.modal}>
-              <div style={styles.modalCard}>
-                <h4 style={{ marginTop: 0, color: T.primary }}>Formulario de Comorbilidades</h4>
-                <FormularioComorbilidades
-                  initial={comorbilidades || {}}
-                  onSave={handleEnviarComorbilidades}
-                  onCancel={() => setPaso("idle")}
-                />
-                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                  <button style={{ ...styles.btn, background: T.muted }} onClick={() => setPaso("idle")}>
-                    Cerrar
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {paso === "cirugia" && (
-            <div style={styles.modal}>
-              <div style={styles.modalCard}>
-                <h4 style={{ marginTop: 0, color: T.primary }}>
-                  Seleccione tipo de cirugía{etiquetaZonaLado ? ` — ${etiquetaZonaLado}` : ""}
-                </h4>
-
-                {opcionesZona.length ? (
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {opcionesZona.map((t) => (
-                      <label key={t} style={styles.radioRow}>
-                        <input
-                          type="radio"
-                          name="tipoCirugia"
-                          value={t}
-                          checked={tipoCirugia === t}
-                          onChange={(e) => setTipoCirugia(e.target.value)}
-                        />
-                        <span style={{ marginLeft: 8 }}>{t}</span>
-                      </label>
-                    ))}
-                    {tipoCirugia?.startsWith("OTRO") && (
-                      <input
-                        placeholder="ESPECIFIQUE EL TIPO DE CIRUGÍA"
-                        value={tipoCirugiaLibre}
-                        onChange={(e) => setTipoCirugiaLibre(e.target.value)}
-                        style={styles.input}
-                      />
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ color: T.textMuted }}>
-                    Seleccione primero una zona compatible (Cadera o Rodilla).
-                  </div>
-                )}
-
-                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                  <button style={{ ...styles.btn, background: T.muted }} onClick={() => setPaso("comorbilidades")}>
-                    Volver
-                  </button>
-                  <button style={{ ...styles.btn, background: T.primary }} onClick={handleConfirmarCirugia}>
-                    Confirmar
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {paso === "ia_cargando" && (
-            <div style={{ marginTop: 12, fontStyle: "italic", color: T.textMuted }}>
-              Generando resumen e indicación de exámenes con IA…
-            </div>
-          )}
-
-          {paso === "preview" && (
-            <button
-              style={{ ...styles.btn, backgroundColor: T.primary, marginTop: 12 }}
-              onClick={handlePagarDesdePreview}
-            >
-              Pagar ahora (Pre Op)
-            </button>
-          )}
-        </>
+        <button
+          style={{ ...styles.btn, backgroundColor: T.primary, marginTop: 12 }}
+          onClick={handlePagarDesdePreview}
+        >
+          Pagar ahora (Pre Op)
+        </button>
       )}
     </div>
   );
 }
 
-/* ================= Helpers ================= */
-function normalizarComorbilidades(c) {
-  if (!c) return {};
-  // Estructura compatible con tu backend (booleans + objetos para alergias/anticoagulantes)
-  return {
-    hta: !!c.hta,
-    dm2: !!c.dm2,
-    dislipidemia: !!c.dislipidemia,
-    obesidad: !!c.obesidad,
-    tabaquismo: !!c.tabaquismo,
-    epoc_asma: !!c.epoc_asma,
-    cardiopatia: !!c.cardiopatia,
-    erc: !!c.erc,
-    hipotiroidismo: !!c.hipotiroidismo,
-    artritis_reumatoide: !!c.artritis_reumatoide,
-
-    // Alergias
-    alergias:
-      typeof c.alergias_flag !== "undefined" || typeof c.alergias_detalle !== "undefined"
-        ? {
-            tiene: !!c.alergias_flag,
-            detalle: (c.alergias_detalle || "").toString(),
-          }
-        : (c.alergias || "").toString(),
-
-    // Anticoagulantes (objeto con usa/detalle)
-    anticoagulantes: {
-      usa: !!c.anticoagulantes,
-      detalle: (c.anticoagulantes_detalle || "").toString(),
-    },
-
-    // Otros textos
-    otras: (c.otras || "").toString(),
-    medicamentos: (c.medicamentos || "").toString(),
-    cirugiasPrevias: (c.cirugiasPrevias || "").toString(),
-    tabaco: (c.tabaco || "").toString(),
-    alcohol: (c.alcohol || "").toString(),
-    observaciones: (c.observaciones || "").toString(),
-  };
-}
-
-/* ================= Estilos (theme.json) ================= */
+/* ================= Estilos ================= */
 const styles = {
   card: {
     background: T.surface,
@@ -702,43 +316,6 @@ const styles = {
     padding: 12,
     marginTop: 6,
     whiteSpace: "pre-wrap",
-    color: T.text,
-  },
-  modal: {
-    position: "fixed",
-    inset: 0,
-    background: T.overlay || "rgba(0,0,0,0.35)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 9999,
-    padding: 12,
-  },
-  modalCard: {
-    background: T.surface,
-    borderRadius: 10,
-    padding: 16,
-    width: "min(720px, 92vw)",
-    boxShadow: T.shadowMd,
-    border: `1px solid ${T.border}`,
-    color: T.text,
-  },
-  input: {
-    width: "100%",
-    padding: "10px",
-    border: `1px solid ${T.border}`,
-    borderRadius: 8,
-    fontSize: 14,
-    background: T.surface,
-    color: T.text,
-  },
-  radioRow: {
-    display: "flex",
-    alignItems: "center",
-    padding: "6px 8px",
-    border: `1px solid ${T.border}`,
-    borderRadius: 8,
-    background: T.surface,
     color: T.text,
   },
 };
