@@ -78,8 +78,9 @@ export default function PreopModulo({ initialDatos }) {
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
-  // Paso previo: "Continuar" → luego preview IA → luego pago
+  // Paso previo: "Continuar" → llama IA → segundo preview → pago/descarga
   const [stepStarted, setStepStarted] = useState(false);
+  const [loadingIA, setLoadingIA] = useState(false);
 
   // Salida IA y metadatos guardados POR App.jsx
   const [examenesIA, setExamenesIA] = useState([]);
@@ -108,14 +109,14 @@ export default function PreopModulo({ initialDatos }) {
       if (raw) {
         setComorbilidades(JSON.parse(raw));
       } else {
-        // compatibilidad retro: algunas versiones guardaban con idPago
+        // compatibilidad retro
         const idPago = sessionStorage.getItem("idPago") || "";
         const legacy = idPago ? sessionStorage.getItem(`preop_comorbilidades_${idPago}`) : null;
         if (legacy) setComorbilidades(JSON.parse(legacy));
       }
     } catch {}
 
-    // IA (guardada por App.jsx → llamarPreopIA)
+    // IA (si ya existía guardada)
     try {
       const ex = JSON.parse(sessionStorage.getItem("preop_ia_examenes") || "[]");
       const inf = sessionStorage.getItem("preop_ia_resumen") || "";
@@ -123,13 +124,14 @@ export default function PreopModulo({ initialDatos }) {
       setInformeIA(inf);
     } catch {}
 
-    // Retorno de pago (marcar listo y hacer polling)
+    // Retorno de pago (marcar listo, mostrar SEGUNDO preview y hacer polling)
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
     const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
 
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
+      setStepStarted(true); // ← clave: quedar en segundo preview
       if (pollerRef.current) clearInterval(pollerRef.current);
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
@@ -156,23 +158,74 @@ export default function PreopModulo({ initialDatos }) {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /* ===================== Continuar → cargar preview IA ===================== */
-  const handleContinuar = () => {
+  /* ===================== Continuar → LLAMA IA y pasa al preview ===================== */
+  const handleContinuar = async () => {
     try {
-      // refrescamos por si hubo cambios justo antes
-      const ex = JSON.parse(sessionStorage.getItem("preop_ia_examenes") || "[]");
-      const inf = sessionStorage.getItem("preop_ia_resumen") || "";
-      const raw = sessionStorage.getItem("preop_comorbilidades_data");
-      const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
-      const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
-      const final = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
+      setLoadingIA(true);
 
-      setExamenesIA(Array.isArray(ex) ? ex : []);
-      setInformeIA(inf || "");
-      setComorbilidades(raw ? JSON.parse(raw) : {});
-      setTipoCirugia(final || "");
-    } catch {}
-    setStepStarted(true);
+      // refrescos defensivos por si se editaron justo antes
+      try {
+        const saved = sessionStorage.getItem("datosPacienteJSON");
+        if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      } catch {}
+
+      let rawComorb = {};
+      try { rawComorb = JSON.parse(sessionStorage.getItem("preop_comorbilidades_data") || "{}"); } catch {}
+      setComorbilidades(rawComorb || {});
+
+      let fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
+      let otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
+      const cir = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
+      setTipoCirugia(cir || "");
+
+      // asegurar idPago preop
+      const idPago =
+        sessionStorage.getItem("idPago") ||
+        `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+      sessionStorage.setItem("idPago", idPago);
+      sessionStorage.setItem("modulo", "preop");
+
+      const payload = {
+        idPago,
+        paciente: { ...datos, edad: Number(datos.edad) || datos.edad },
+        comorbilidades: rawComorb || {},
+        tipoCirugia: cir || "",
+      };
+
+      // endpoint principal + fallbacks
+      let r = await fetch(`${BACKEND_BASE}/preop-ia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) {
+        r = await fetch(`${BACKEND_BASE}/ia-preop`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+      const j = await r.json();
+      const ex = Array.isArray(j?.examenes) ? j.examenes : [];
+      const inf = typeof j?.informeIA === "string" ? j.informeIA : "";
+
+      // persistir para PDF/recargas
+      try {
+        sessionStorage.setItem("preop_ia_examenes", JSON.stringify(ex));
+        sessionStorage.setItem("preop_ia_resumen", inf || "");
+      } catch {}
+
+      setExamenesIA(ex);
+      setInformeIA(inf);
+      setStepStarted(true);
+    } catch (err) {
+      console.error(err);
+      alert("No fue posible obtener la información de IA (Preop). Intenta nuevamente.");
+    } finally {
+      setLoadingIA(false);
+    }
   };
 
   /* ===================== Pago ===================== */
@@ -339,8 +392,12 @@ export default function PreopModulo({ initialDatos }) {
           <div style={styles.mono}>
             {resumenInicialPreop({ datos, comorb: comorbilidades, tipoCirugia })}
           </div>
-          <button style={{ ...styles.btn, marginTop: 10 }} onClick={handleContinuar}>
-            Continuar
+          <button
+            style={{ ...styles.btn, marginTop: 10 }}
+            onClick={handleContinuar}
+            disabled={loadingIA}
+          >
+            {loadingIA ? "Generando con IA…" : "Continuar"}
           </button>
         </>
       )}
@@ -378,7 +435,9 @@ export default function PreopModulo({ initialDatos }) {
               <strong>Exámenes a solicitar (IA):</strong>
               <ul style={{ marginTop: 6 }}>
                 {examenesIA.map((e, idx) => (
-                  <li key={`${e}-${idx}`}>{typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}</li>
+                  <li key={`${e}-${idx}`}>
+                    {typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}
+                  </li>
                 ))}
               </ul>
             </div>
