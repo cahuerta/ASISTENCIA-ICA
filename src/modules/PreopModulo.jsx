@@ -53,6 +53,24 @@ function prettyComorb(c = {}) {
   }
 }
 
+/* ===== Helper para el resumen inicial PREOP (sin cambiar tus variables) ===== */
+function generoPalabra(genero = "") {
+  const s = String(genero).toUpperCase();
+  if (s === "MASCULINO") return "Hombre";
+  if (s === "FEMENINO") return "Mujer";
+  return "Paciente";
+}
+function resumenInicialPreop({ datos = {}, comorb = {}, tipoCirugia = "" }) {
+  const sujeto = generoPalabra(datos.genero);
+  const edad = datos.edad ? `${datos.edad} años` : "";
+  const lista = prettyComorb(comorb);
+  const antecedentes = lista.length
+    ? `con antecedentes de: ${lista.join(", ")}`
+    : "sin comorbilidades relevantes registradas";
+  const cir = (tipoCirugia || "").trim() || "la cirugía indicada";
+  return `${sujeto} ${edad}, ${antecedentes}. Solicita exámenes prequirúrgicos para operarse de ${cir}.`;
+}
+
 export default function PreopModulo({ initialDatos }) {
   const [datos, setDatos] = useState(initialDatos || {});
   const [pagoRealizado, setPagoRealizado] = useState(false);
@@ -300,6 +318,9 @@ export default function PreopModulo({ initialDatos }) {
         <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
         <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
         <div>
+          <strong>Género:</strong> {datos?.genero || "—"}
+        </div>
+        <div>
           <strong>Motivo/Área:</strong>{" "}
           {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
         </div>
@@ -312,12 +333,20 @@ export default function PreopModulo({ initialDatos }) {
         )}
       </div>
 
-      {/* Botón Continuar → luego mostrar preview IA y botón de pago */}
-      {!stepStarted ? (
-        <button style={styles.btn} onClick={handleContinuar}>
-          Continuar
-        </button>
-      ) : (
+      {/* Resumen inicial (antes de Continuar) */}
+      {!stepStarted && (
+        <>
+          <div style={styles.mono}>
+            {resumenInicialPreop({ datos, comorb: comorbilidades, tipoCirugia })}
+          </div>
+          <button style={{ ...styles.btn, marginTop: 10 }} onClick={handleContinuar}>
+            Continuar
+          </button>
+        </>
+      )}
+
+      {/* Después de Continuar: chips, lista IA e informe, y acciones */}
+      {stepStarted && (
         <>
           {/* Comorbilidades (chips) */}
           {comorbChips.length > 0 && (
@@ -419,6 +448,16 @@ const styles = {
     padding: 12,
     marginTop: 6,
     whiteSpace: "pre-wrap",
+    color: T.text,
+  },
+  /* Caja de resumen */
+  mono: {
+    whiteSpace: "pre-wrap",
+    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+    background: T.bg,
+    border: `1px solid ${T.border}`,
+    borderRadius: 8,
+    padding: 12,
     color: T.text,
   },
 };
