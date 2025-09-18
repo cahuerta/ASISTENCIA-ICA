@@ -62,7 +62,7 @@ function prettyComorb(c = {}) {
   }
 }
 
-/* ===== NUEVO: Helpers para el resumen inicial ===== */
+/* ===== Helpers para el resumen inicial ===== */
 function sexoPalabra(genero = "") {
   const s = String(genero).toUpperCase();
   return s === "FEMENINO" ? "mujer" : "hombre";
@@ -90,13 +90,14 @@ export default function GeneralesModulo({ initialDatos }) {
 
   // Paso previo (Continuar → luego preview IA → luego pago)
   const [stepStarted, setStepStarted] = useState(false);
+  const [loadingIA, setLoadingIA] = useState(false); // ← NUEVO
 
   // Carga de IA y comorbilidades (guardadas por App.jsx)
   const [examenesIA, setExamenesIA] = useState([]);
   const [informeIA, setInformeIA] = useState("");
   const [comorbilidades, setComorbilidades] = useState({});
 
-  // ===== NUEVO: Texto libre opcional para proponer un examen =====
+  // Texto libre (SOLO segundo preview)
   const [examenLibre, setExamenLibre] = useState("");
 
   useEffect(() => {
@@ -169,7 +170,7 @@ export default function GeneralesModulo({ initialDatos }) {
       sessionStorage.setItem("modulo", "generales");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
 
-      // ===== NUEVO: incluir examen libre si el paciente ingresó algo
+      // incluir examen libre si el paciente ingresó algo
       const examenPaciente = (examenLibre || "").trim();
       const examenesFinales = [
         ...(Array.isArray(examenesIA) ? examenesIA : []),
@@ -185,7 +186,7 @@ export default function GeneralesModulo({ initialDatos }) {
           comorbilidades,
           examenesIA: examenesFinales,
           informeIA,
-          examenLibre: examenPaciente, // explícito para distinguir en backend/pdf
+          examenLibre: examenPaciente,
         }),
       });
 
@@ -282,21 +283,77 @@ export default function GeneralesModulo({ initialDatos }) {
     }
   };
 
-  /* ------------------------------ Preview (SOLO IA) ------------------------------ */
+  /* ------------------------------ Preview ------------------------------ */
   const usarIA = Array.isArray(examenesIA) && examenesIA.length > 0;
   const comorbBullets = prettyComorb(comorbilidades);
 
-  // Al presionar Continuar, refrescamos lo que esté en sessionStorage y pasamos al preview
-  const handleContinuar = () => {
+  // “Continuar” → ahora SÍ llama a la IA
+  const handleContinuar = async () => {
     try {
-      const ex = JSON.parse(sessionStorage.getItem("generales_ia_examenes") || "[]");
-      const inf = sessionStorage.getItem("generales_ia_resumen") || "";
-      const c = JSON.parse(sessionStorage.getItem("generales_comorbilidades_data") || "{}");
-      setExamenesIA(Array.isArray(ex) ? ex : []);
-      setInformeIA(inf);
+      setLoadingIA(true);
+
+      // refresco defensivo
+      const saved = sessionStorage.getItem("datosPacienteJSON");
+      if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
+
+      // comorbilidades actuales
+      let c = {};
+      try { c = JSON.parse(sessionStorage.getItem("generales_comorbilidades_data") || "{}"); } catch {}
       setComorbilidades(c || {});
-    } catch {}
-    setStepStarted(true);
+
+      const idPago = sessionStorage.getItem("idPago") || `generales_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
+      sessionStorage.setItem("idPago", idPago);
+
+      const body = {
+        idPago,
+        paciente: {
+          ...datos,
+          edad: Number(datos.edad) || datos.edad,
+        },
+        comorbilidades: c || {},
+      };
+
+      // 1) Nueva ruta específica
+      let resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      // 2) Fallback a rutas legacy
+      if (!resp.ok) {
+        resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...body, tipoCirugia: "" }),
+        });
+      }
+      if (!resp.ok) {
+        resp = await fetch(`${BACKEND_BASE}/ia-preop`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...body, tipoCirugia: "" }),
+        });
+      }
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const j = await resp.json();
+      const ex = Array.isArray(j?.examenes) ? j.examenes : [];
+      const inf = typeof j?.informeIA === "string" ? j.informeIA : "";
+
+      // persistimos para PDF
+      try {
+        sessionStorage.setItem("generales_ia_examenes", JSON.stringify(ex));
+        sessionStorage.setItem("generales_ia_resumen", inf || "");
+      } catch {}
+
+      setExamenesIA(ex);
+      setInformeIA(inf);
+      setStepStarted(true);
+    } catch (e) {
+      alert("No fue posible obtener la información de IA (Generales). Intenta nuevamente.");
+    } finally {
+      setLoadingIA(false);
+    }
   };
 
   return (
@@ -312,34 +369,26 @@ export default function GeneralesModulo({ initialDatos }) {
         <div><strong>Género:</strong> {datos?.genero || "—"}</div>
       </div>
 
-      {/* ===== NUEVO: Resumen en el primer preview ===== */}
+      {/* Primer preview: SOLO resumen */}
       {!stepStarted && (
         <>
           <div style={{ ...styles.mono, marginTop: 6 }}>
             {resumenInicialGenerales(datos, comorbilidades)}
           </div>
 
-          {/* ===== NUEVO: Texto libre opcional (también visible en este primer paso) ===== */}
-          <div style={styles.block}>
-            <label><strong>¿Deseas agregar algún examen? (opcional)</strong></label>
-            <input
-              type="text"
-              value={examenLibre}
-              onChange={(e) => setExamenLibre(e.target.value)}
-              placeholder="Ej.: Densitometría ósea"
-              style={styles.input}
-            />
-          </div>
-
-          <button style={styles.btnPrimary} onClick={handleContinuar}>
-            Continuar
+          <button
+            style={styles.btnPrimary}
+            onClick={handleContinuar}
+            disabled={loadingIA}
+          >
+            {loadingIA ? "Generando con IA…" : "Continuar"}
           </button>
         </>
       )}
 
+      {/* Segundo preview: IA + texto libre + pago */}
       {stepStarted && (
         <>
-          {/* Comorbilidades (si existen) */}
           {comorbBullets.length > 0 && (
             <div style={styles.block}>
               <strong>Comorbilidades:</strong>
@@ -351,7 +400,6 @@ export default function GeneralesModulo({ initialDatos }) {
             </div>
           )}
 
-          {/* Exámenes (SOLO IA) */}
           <div style={styles.block}>
             <strong>Exámenes solicitados (IA):</strong>
             {usarIA ? (
@@ -368,7 +416,7 @@ export default function GeneralesModulo({ initialDatos }) {
             )}
           </div>
 
-          {/* ===== NUEVO: el mismo texto libre al final, editable/no obligatorio ===== */}
+          {/* Texto libre SOLO aquí */}
           <div style={styles.block}>
             <label><strong>Agregar examen opcional:</strong></label>
             <input
@@ -381,7 +429,6 @@ export default function GeneralesModulo({ initialDatos }) {
             <div style={styles.hint}>Este campo es opcional y se incluirá junto a la lista.</div>
           </div>
 
-          {/* Informe IA (si existe) */}
           {informeIA && (
             <div style={styles.block}>
               <strong>Informe IA (resumen):</strong>
