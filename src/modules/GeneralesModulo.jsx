@@ -62,6 +62,21 @@ function prettyComorb(c = {}) {
   }
 }
 
+/* ===== NUEVO: Helpers para el resumen inicial ===== */
+function sexoPalabra(genero = "") {
+  const s = String(genero).toUpperCase();
+  return s === "FEMENINO" ? "mujer" : "hombre";
+}
+function resumenInicialGenerales(datos = {}, comorb = {}) {
+  const sexo = sexoPalabra(datos.genero);
+  const edad = datos.edad ? `${datos.edad} años` : "";
+  const lista = prettyComorb(comorb);
+  const antecedentes = lista.length
+    ? `con antecedentes de: ${lista.join(", ")}`
+    : "sin comorbilidades relevantes registradas";
+  return `${sexo} ${edad}, ${antecedentes}. Solicita exámenes para chequeo general.`;
+}
+
 /* ============================== Componente ============================== */
 export default function GeneralesModulo({ initialDatos }) {
   const T = getTheme();
@@ -80,6 +95,9 @@ export default function GeneralesModulo({ initialDatos }) {
   const [examenesIA, setExamenesIA] = useState([]);
   const [informeIA, setInformeIA] = useState("");
   const [comorbilidades, setComorbilidades] = useState({});
+
+  // ===== NUEVO: Texto libre opcional para proponer un examen =====
+  const [examenLibre, setExamenLibre] = useState("");
 
   useEffect(() => {
     try {
@@ -151,6 +169,13 @@ export default function GeneralesModulo({ initialDatos }) {
       sessionStorage.setItem("modulo", "generales");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
 
+      // ===== NUEVO: incluir examen libre si el paciente ingresó algo
+      const examenPaciente = (examenLibre || "").trim();
+      const examenesFinales = [
+        ...(Array.isArray(examenesIA) ? examenesIA : []),
+        ...(examenPaciente ? [examenPaciente] : []),
+      ];
+
       await fetch(`${BACKEND_BASE}/guardar-datos-generales`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -158,8 +183,9 @@ export default function GeneralesModulo({ initialDatos }) {
           idPago,
           datosPaciente: { ...datos, edad: edadNum },
           comorbilidades,
-          examenesIA,
+          examenesIA: examenesFinales,
           informeIA,
+          examenLibre: examenPaciente, // explícito para distinguir en backend/pdf
         }),
       });
 
@@ -226,8 +252,12 @@ export default function GeneralesModulo({ initialDatos }) {
                 idPago,
                 datosPaciente: datosReinyectar,
                 comorbilidades,
-                examenesIA,
+                examenesIA: [
+                  ...(Array.isArray(examenesIA) ? examenesIA : []),
+                  ...((examenLibre || "").trim() ? [examenLibre.trim()] : []),
+                ],
                 informeIA,
+                examenLibre: (examenLibre || "").trim(),
               }),
             });
 
@@ -282,10 +312,29 @@ export default function GeneralesModulo({ initialDatos }) {
         <div><strong>Género:</strong> {datos?.genero || "—"}</div>
       </div>
 
+      {/* ===== NUEVO: Resumen en el primer preview ===== */}
       {!stepStarted && (
-        <button style={styles.btnPrimary} onClick={handleContinuar}>
-          Continuar
-        </button>
+        <>
+          <div style={{ ...styles.mono, marginTop: 6 }}>
+            {resumenInicialGenerales(datos, comorbilidades)}
+          </div>
+
+          {/* ===== NUEVO: Texto libre opcional (también visible en este primer paso) ===== */}
+          <div style={styles.block}>
+            <label><strong>¿Deseas agregar algún examen? (opcional)</strong></label>
+            <input
+              type="text"
+              value={examenLibre}
+              onChange={(e) => setExamenLibre(e.target.value)}
+              placeholder="Ej.: Densitometría ósea"
+              style={styles.input}
+            />
+          </div>
+
+          <button style={styles.btnPrimary} onClick={handleContinuar}>
+            Continuar
+          </button>
+        </>
       )}
 
       {stepStarted && (
@@ -319,6 +368,19 @@ export default function GeneralesModulo({ initialDatos }) {
             )}
           </div>
 
+          {/* ===== NUEVO: el mismo texto libre al final, editable/no obligatorio ===== */}
+          <div style={styles.block}>
+            <label><strong>Agregar examen opcional:</strong></label>
+            <input
+              type="text"
+              value={examenLibre}
+              onChange={(e) => setExamenLibre(e.target.value)}
+              placeholder="Ej.: Densitometría ósea"
+              style={styles.input}
+            />
+            <div style={styles.hint}>Este campo es opcional y se incluirá junto a la lista.</div>
+          </div>
+
           {/* Informe IA (si existe) */}
           {informeIA && (
             <div style={styles.block}>
@@ -350,6 +412,12 @@ export default function GeneralesModulo({ initialDatos }) {
                   sessionStorage.setItem("modulo", "generales");
                   sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
 
+                  const examenPaciente = (examenLibre || "").trim();
+                  const examenesFinales = [
+                    ...(Array.isArray(examenesIA) ? examenesIA : []),
+                    ...(examenPaciente ? [examenPaciente] : []),
+                  ];
+
                   await fetch(`${BACKEND_BASE}/guardar-datos-generales`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -357,8 +425,9 @@ export default function GeneralesModulo({ initialDatos }) {
                       idPago,
                       datosPaciente: datosGuest,
                       comorbilidades,
-                      examenesIA,
+                      examenesIA: examenesFinales,
                       informeIA,
+                      examenLibre: examenPaciente,
                     }),
                   });
 
@@ -444,6 +513,15 @@ function makeStyles(T) {
       color: T.chipText ?? (T.primary ? T.primary : "#0b63c5"),
       marginRight: 6,
       marginBottom: 6,
+    },
+    input: {
+      width: "100%",
+      borderRadius: 8,
+      border: `1px solid ${T.border ?? "#e8e8e8"}`,
+      padding: "10px 12px",
+      background: T.bg ?? "#fff",
+      color: T.text ?? "#1b1b1b",
+      marginTop: 6,
     },
   };
 }
