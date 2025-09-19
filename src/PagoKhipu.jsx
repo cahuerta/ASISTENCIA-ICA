@@ -111,7 +111,7 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
     !Number.isFinite(edadNum) ||
     edadNum <= 0;
 
-  // Solo Trauma exige "dolor"
+  // Solo TRAUMA exige "dolor"
   const faltaDolor = modulo === "trauma" && !datosPaciente?.dolor?.trim();
 
   if (baseIncompleto || faltaDolor) {
