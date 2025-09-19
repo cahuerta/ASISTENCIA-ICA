@@ -347,6 +347,34 @@ function App() {
     else await llamarGeneralesIA(payload);
   };
 
+  // ====== NUEVO: preview rápido desde backend para TRAUMA ======
+  const cargarPreviewTraumaRapido = async () => {
+    const edadNum = Number(datosPaciente.edad) || datosPaciente.edad || "";
+    const q = new URLSearchParams({
+      dolor: String(datosPaciente.dolor || ""),
+      lado: String(datosPaciente.lado || ""),
+      edad: String(edadNum || ""),
+    });
+    try {
+      const r = await fetch(`${BACKEND_BASE}/sugerir-imagenologia?${q.toString()}`, {
+        cache: "no-store",
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      const examen = j?.examen || (Array.isArray(j?.examLines) ? j.examLines.join("\n") : "");
+      const nota = j?.nota || "";
+      setDatosPaciente((prev) => {
+        const next = { ...prev, examen, nota };
+        try {
+          sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    } catch {
+      // si falla, seguimos con el preview local; el PDF igual se armará en backend
+    }
+  };
+
   // ====== Restauración de estado en montaje ======
   useEffect(() => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
@@ -455,7 +483,7 @@ function App() {
   };
 
   // ====== Submit del formulario principal ======
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
 
@@ -476,10 +504,15 @@ function App() {
       if (!comorbOkRef.current[scope]) {
         setMostrarComorbilidades(true);
       } else {
-        if (scope === "preop") llamarPreopIA();
-        else llamarGeneralesIA();
+        if (scope === "preop") await llamarPreopIA();
+        else await llamarGeneralesIA();
       }
       return;
+    }
+
+    // ====== TRAUMA: preview rápido desde backend antes de mostrar ======
+    if (modulo === "trauma") {
+      await cargarPreviewTraumaRapido();
     }
 
     // Otros módulos (trauma/ia): flujo tradicional
