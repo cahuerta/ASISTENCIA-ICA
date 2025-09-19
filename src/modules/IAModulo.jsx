@@ -2,13 +2,17 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
+import { getTheme } from "../theme.js";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
 export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
+  const T = getTheme();
+  const S = makeStyles(T);
+
   // ===== Estado base
   const [datos, setDatos] = useState(
-    initialDatos || { nombre: "", rut: "", edad: "", consulta: "" }
+    initialDatos || { nombre: "", rut: "", edad: "", consulta: "", genero: "", dolor: "", lado: "" }
   );
   const [previewIA, setPreviewIA] = useState("");
   const [generando, setGenerando] = useState(false);
@@ -79,11 +83,51 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
     };
   }, []);
 
-  // ===== Detección simple de si se está pidiendo una RM desde IA
-  const requiereRM = () => {
-    const txt = (previewIA || datos.consulta || "").toLowerCase();
-    // heurística liviana; puedes ajustarla cuando quieras
-    return /(^|\b)(rm|resonancia)(\b|:)/i.test(txt);
+  // ====== Detección robusta de RM ======
+  const normaliza = (t = "") =>
+    String(t || "")
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase();
+
+  const contieneRMlocal = (texto = "") => {
+    const s = normaliza(texto);
+    if (!s) return false;
+
+    // Frases
+    const frases = [
+      "resonancia magnetica",
+      "resonancia nuclear",
+      "magnetic resonance",
+    ];
+    if (frases.some((p) => s.includes(p))) return true;
+
+    // Abreviaturas comunes
+    const re = [/\brm\b/i, /\brmn\b/i, /\brnm\b/i, /\bmri\b/i, /\birm\b/i];
+    return re.some((rx) => rx.test(texto));
+  };
+
+  // Primero backend (si falla, fallback local)
+  const requiereRM = async () => {
+    const examenTexto = previewIA || datos.consulta || "";
+    if (!examenTexto.trim()) return false;
+
+    try {
+      const r = await fetch(`${BACKEND_BASE}/detectar-resonancia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          datosPaciente: { ...datos, examen: examenTexto },
+        }),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        if (typeof j?.resonancia === "boolean") return j.resonancia;
+        return contieneRMlocal(j?.texto || examenTexto);
+      }
+    } catch {}
+    // fallback local
+    return contieneRMlocal(examenTexto);
   };
 
   // ===== Generar PREVIEW (GPT)
@@ -172,45 +216,46 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
       sessionStorage.setItem("modulo", "ia");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify(base));
 
-      // ======== NUEVO: Gate de Resonancia (opcional) ========
-      // Si detectamos que el informe sugiere RM y existe pedirChecklistResonancia, la pedimos.
-      if (typeof pedirChecklistResonancia === "function" && requiereRM()) {
-        const res = await pedirChecklistResonancia();
-        if (res?.canceled) return; // usuario cerró
+      // ======== Gate de Resonancia (backend + fallback) ========
+      if (typeof pedirChecklistResonancia === "function") {
+        const pideRM = await requiereRM();
+        if (pideRM) {
+          const res = await pedirChecklistResonancia();
+          if (res?.canceled) return; // usuario cerró
 
-        if (res.bloquea) {
-          // Red flags → cambiar RM por examen alternativo
-          const alternativa =
-            "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
-          // Guardar para futura inclusión en PDF/orden (no rompe si el backend aún no lo usa)
-          sessionStorage.setItem("ordenAlternativa", alternativa);
-          await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idPago, ordenAlternativa: alternativa }),
-          }).catch(() => {});
-        } else {
-          // Sin red flags → adjuntar resumen del checklist para firma
-          sessionStorage.setItem(
-            "resonanciaChecklist",
-            JSON.stringify(res.data || {})
-          );
-          sessionStorage.setItem(
-            "resonanciaResumenTexto",
-            res.resumen || ""
-          );
-          await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              idPago,
-              resonanciaChecklist: res.data || {},
-              resonanciaResumenTexto: res.resumen || "",
-            }),
-          }).catch(() => {});
+          if (res.bloquea) {
+            // Red flags → cambiar RM por examen alternativo
+            const alternativa =
+              "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
+            sessionStorage.setItem("ordenAlternativa", alternativa);
+            await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ idPago, ordenAlternativa: alternativa }),
+            }).catch(() => {});
+          } else {
+            // Sin red flags → adjuntar resumen del checklist para firma
+            sessionStorage.setItem(
+              "resonanciaChecklist",
+              JSON.stringify(res.data || {})
+            );
+            sessionStorage.setItem(
+              "resonanciaResumenTexto",
+              res.resumen || ""
+            );
+            await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                idPago,
+                resonanciaChecklist: res.data || {},
+                resonanciaResumenTexto: res.resumen || "",
+              }),
+            }).catch(() => {});
+          }
         }
       }
-      // =======================================================
+      // =========================================================
 
       // Mismo flujo que otros módulos: irAPagoKhipu
       await irAPagoKhipu({ ...base, edad: edadNum }, { idPago, modulo: "ia" });
@@ -472,13 +517,15 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
 
   // ===== UI
   return (
-    <div style={styles.card}>
-      <h3 style={{ marginTop: 0 }}>Vista previa — Informe IA (texto libre)</h3>
+    <div style={S.card}>
+      <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
+        Vista previa — Informe IA (texto libre)
+      </h3>
 
       {/* Datos Paciente */}
       <div style={{ marginBottom: 10 }}>
-        <div style={styles.grid2}>
-          <label style={styles.label}>
+        <div style={S.grid2}>
+          <label style={S.label}>
             Nombre
             <input
               type="text"
@@ -487,22 +534,22 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
                 setDatos((p) => ({ ...p, nombre: e.target.value }))
               }
               placeholder="Nombre del paciente"
-              style={styles.input}
+              style={S.input}
             />
           </label>
-          <label style={styles.label}>
+          <label style={S.label}>
             RUT
             <input
               type="text"
               value={datos.rut || ""}
               onChange={(e) => setDatos((p) => ({ ...p, rut: e.target.value }))}
               placeholder="11.111.111-1"
-              style={styles.input}
+              style={S.input}
             />
           </label>
         </div>
 
-        <label style={styles.label}>
+        <label style={S.label}>
           Edad
           <input
             type="number"
@@ -511,7 +558,7 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
               setDatos((p) => ({ ...p, edad: e.target.value }))
             }
             placeholder="Edad"
-            style={styles.input}
+            style={S.input}
           />
         </label>
       </div>
@@ -526,10 +573,10 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
             setDatos((p) => ({ ...p, consulta: e.target.value }))
           }
           placeholder="Ej.: Dolor de rodilla derecha; elaborar informe con sugerencias, exámenes, consideraciones, etc."
-          style={styles.textarea}
+          style={S.textarea}
         />
         <button
-          style={{ ...styles.btn, backgroundColor: "#004B94", marginTop: 12 }}
+          style={{ ...S.btnPrimary, marginTop: 12 }}
           onClick={handleGenerarPreview}
           disabled={generando}
         >
@@ -541,7 +588,7 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
       {previewIA && (
         <div style={{ marginTop: 14 }}>
           <strong>Preview generado:</strong>
-          <pre style={styles.pre}>{previewIA}</pre>
+          <pre style={S.pre}>{previewIA}</pre>
         </div>
       )}
 
@@ -549,13 +596,13 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
       {!pagoRealizado && previewIA && (
         <>
           <button
-            style={{ ...styles.btn, backgroundColor: "#004B94", marginTop: 12 }}
+            style={{ ...S.btnPrimary, marginTop: 12 }}
             onClick={handlePagarIA}
           >
             Pagar ahora (Informe IA)
           </button>
           <button
-            style={{ ...styles.btn, backgroundColor: "#777", marginTop: 8 }}
+            style={{ ...S.btnSecondary, marginTop: 8 }}
             onClick={handleSimularPagoGuest}
             title="Simular retorno pagado (solo pruebas)"
           >
@@ -567,7 +614,7 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
       {pagoRealizado && (
         <>
           <button
-            style={{ ...styles.btn, marginTop: 12 }}
+            style={{ ...S.btnPrimary, marginTop: 12 }}
             onClick={handleDescargarIA}
             disabled={descargando}
             title={mensajeDescarga || "Verificar y descargar"}
@@ -579,7 +626,7 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
 
           {/* Orden de Exámenes (IA) */}
           <button
-            style={{ ...styles.btn, marginTop: 8 }}
+            style={{ ...S.btnPrimary, marginTop: 8 }}
             onClick={handleDescargarOrdenIA}
             disabled={descargandoOrden}
             title={mensajeDescargaOrden || "Verificar y descargar"}
@@ -594,48 +641,71 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
   );
 }
 
-const styles = {
-  card: {
-    background: "#fff",
-    borderRadius: 8,
-    padding: 16,
-    boxShadow: "0 2px 10px rgba(0,0,0,0.08)",
-  },
-  grid2: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 12,
-  },
-  label: { display: "flex", flexDirection: "column", gap: 6 },
-  input: {
-    padding: "10px",
-    borderRadius: 8,
-    border: "1px solid #ddd",
-    fontSize: 16,
-  },
-  textarea: {
-    width: "100%",
-    padding: "10px",
-    borderRadius: 8,
-    border: "1px solid #ddd",
-    fontSize: 16,
-    marginTop: 6,
-  },
-  btn: {
-    backgroundColor: "#0072CE",
-    color: "white",
-    border: "none",
-    padding: "12px",
-    borderRadius: "8px",
-    fontSize: "16px",
-    cursor: "pointer",
-    width: "100%",
-  },
-  pre: {
-    whiteSpace: "pre-wrap",
-    background: "#f7f7f7",
-    borderRadius: 8,
-    padding: 12,
-    lineHeight: 1.4,
-  },
-};
+/* ============================== UI (desde theme.json) ============================== */
+function makeStyles(T) {
+  return {
+    card: {
+      background: T.surface ?? "#fff",
+      borderRadius: 12,
+      padding: 16,
+      boxShadow: T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)",
+      border: `1px solid ${T.border ?? "#e8e8e8"}`,
+      color: T.text ?? "#1b1b1b",
+    },
+    grid2: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 12,
+    },
+    label: { display: "flex", flexDirection: "column", gap: 6 },
+    input: {
+      padding: "10px",
+      borderRadius: 8,
+      border: `1px solid ${T.border ?? "#ddd"}`,
+      background: T.bg ?? "#fff",
+      color: T.text ?? "#1b1b1b",
+      fontSize: 16,
+    },
+    textarea: {
+      width: "100%",
+      padding: "10px",
+      borderRadius: 8,
+      border: `1px solid ${T.border ?? "#ddd"}`,
+      background: T.bg ?? "#fff",
+      color: T.text ?? "#1b1b1b",
+      fontSize: 16,
+      marginTop: 6,
+    },
+    btnPrimary: {
+      backgroundColor: T.primary ?? "#0072CE",
+      color: T.onPrimary ?? "#fff",
+      border: "none",
+      padding: "12px",
+      borderRadius: 8,
+      fontSize: 16,
+      cursor: "pointer",
+      width: "100%",
+      boxShadow: T.shadowSm ?? "0 1px 4px rgba(0,0,0,0.08)",
+    },
+    btnSecondary: {
+      backgroundColor: T.muted ?? "#777",
+      color: T.onMuted ?? "#fff",
+      border: "none",
+      padding: "12px",
+      borderRadius: 8,
+      fontSize: 16,
+      cursor: "pointer",
+      width: "100%",
+      boxShadow: T.shadowSm ?? "0 1px 4px rgba(0,0,0,0.08)",
+    },
+    pre: {
+      whiteSpace: "pre-wrap",
+      background: T.codeBg ?? "#f7f7f7",
+      borderRadius: 8,
+      padding: 12,
+      lineHeight: 1.4,
+      border: `1px solid ${T.border ?? "#e8e8e8"}`,
+      color: T.text ?? "#1b1b1b",
+    },
+  };
+}
