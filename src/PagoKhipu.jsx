@@ -95,24 +95,36 @@ export async function crearPagoKhipu({
   return data.url; // URL de Khipu (real) o retorno (guest)
 }
 
+// ====== CAMBIO ÚNICO: validación según el módulo ======
 export async function irAPagoKhipu(datosPaciente, opts = {}) {
-  const edadNum = Number(datosPaciente?.edad);
-  if (
-    !datosPaciente?.nombre?.trim() ||
-    !datosPaciente?.rut?.trim() ||
-    !Number.isFinite(edadNum) ||
-    edadNum <= 0 ||
-    !datosPaciente?.dolor?.trim()
-  ) {
-    alert("Complete todos los campos antes de pagar");
-    return;
-  }
-
+  // Detectar módulo antes de validar
   const modulo = (
     opts?.modulo ||
     (typeof window !== "undefined" && sessionStorage.getItem("modulo")) ||
     "trauma"
   ).toLowerCase();
+
+  // Validación mínima por módulo
+  const edadNum = Number(datosPaciente?.edad);
+  const faltantes = [];
+
+  if (!datosPaciente?.nombre?.trim()) faltantes.push("nombre");
+  if (!datosPaciente?.rut?.trim()) faltantes.push("RUT");
+  if (!Number.isFinite(edadNum) || edadNum <= 0) faltantes.push("edad (>0)");
+
+  if (modulo === "trauma") {
+    // Sólo TRAUMA requiere dolor/zona
+    if (!datosPaciente?.dolor?.trim()) faltantes.push("dolor/zona");
+  } else if (modulo === "preop" || modulo === "generales") {
+    // PREOP y GENERALES requieren género, no exigen dolor ni tipo de cirugía
+    if (!datosPaciente?.genero?.trim())
+      faltantes.push("género (MASCULINO/FEMENINO)");
+  }
+
+  if (faltantes.length) {
+    alert("Complete los siguientes campos antes de pagar: " + faltantes.join(", "));
+    return;
+  }
 
   const idPago =
     opts?.idPago ||
@@ -158,12 +170,3 @@ export async function descargarPDF(nombreArchivo = "orden.pdf", idPagoParam) {
   if (!r.ok) throw new Error("Error al obtener el PDF");
 
   const blob = await r.blob();
-  const dlUrl = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = dlUrl;
-  a.download = nombreArchivo;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.URL.revokeObjectURL(dlUrl);
-}
