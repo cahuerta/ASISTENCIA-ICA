@@ -8,13 +8,12 @@ import EsquemaToggleTabs from "./EsquemaToggleTabs.jsx";
 
 /* Formularios y módulos */
 import FormularioPaciente from "./FormularioPaciente.jsx";
-import PreviewOrden from "./PreviewOrden.jsx";
 import PreopModulo from "./modules/PreopModulo.jsx";
 import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import IAModulo from "./modules/IAModulo.jsx";
+import TraumaModulo from "./modules/TraumaModulo.jsx";
 
 /* Utilidades existentes */
-import { irAPagoKhipu } from "./PagoKhipu.jsx";
 import AvisoLegal from "./components/AvisoLegal.jsx";
 import FormularioResonancia from "./components/FormularioResonancia.jsx";
 import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx";
@@ -47,10 +46,7 @@ function App() {
   const [modulo, setModulo] = useState("trauma");
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
-  const [pagoRealizado, setPagoRealizado] = useState(false);
-  const [mostrarPago, setMostrarPago] = useState(false);
-  const [descargando, setDescargando] = useState(false);
-  const [mensajeDescarga, setMensajeDescarga] = useState("");
+  const [pagoRealizado, setPagoRealizado] = useState(false); // usado por módulos que lean el query param
   const pollerRef = useRef(null);
 
   // Vista esquema (frontal/posterior)
@@ -101,8 +97,6 @@ function App() {
     if (modulo === "preop" || modulo === "generales") marcarAvisoOk(modulo);
     if (pendingPreview) {
       setMostrarVistaPrevia(true);
-      setPagoRealizado(false);
-      setMostrarPago(false);
       setPendingPreview(false);
     }
   };
@@ -117,7 +111,7 @@ function App() {
     }, 0);
   };
 
-  // ====== RNM (checklist) ======
+  // ====== RNM (checklist) centralizado en App para compartirlo ======
   const [showReso, setShowReso] = useState(false);
   const [resolverReso, setResolverReso] = useState(null);
   const RED_FLAGS = new Set([
@@ -152,6 +146,32 @@ function App() {
       "Declaro que la información es veraz y autorizo la realización del examen.",
       "Firma Paciente: ______________________     RUT: _______________     Fecha: ____/____/______",
     ].join("\n");
+  };
+
+  // Expuesto para módulos que lo necesiten
+  const esResonanciaTexto = (t = "") => {
+    const s = (t || "").toLowerCase();
+    return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
+  };
+  const detectarResonanciaEnBackend = async (datos) => {
+    try {
+      const r = await fetch(`${BACKEND_BASE}/detectar-resonancia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datosPaciente: datos }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      const flag =
+        typeof j?.resonancia === "boolean"
+          ? j.resonancia
+          : esResonanciaTexto(j?.texto || j?.orden || "");
+      sessionStorage.setItem("solicitaResonancia", flag ? "1" : "0");
+      return !!flag;
+    } catch {
+      sessionStorage.setItem("solicitaResonancia", "0");
+      return false;
+    }
   };
 
   // ====== Comorbilidades (modal suelto) ======
@@ -209,7 +229,7 @@ function App() {
     const paciente = {
       ...datosPaciente,
       edad: edadNum,
-      genero: normalizarGenero(datosPaciente.genero), // <<< normalización
+      genero: normalizarGenero(datosPaciente.genero),
     };
 
     const postIA = async (path) =>
@@ -241,20 +261,18 @@ function App() {
       // Mostrar preview directo si Aviso ya aceptado; si no, abrirlo (una vez)
       if (avisoOkRef.current.preop) {
         setMostrarVistaPrevia(true);
-        setPagoRealizado(false);
-        setMostrarPago(false);
         setPendingPreview(false);
       } else {
         setPendingPreview(true);
         setMostrarAviso(true);
       }
-    } catch (err) {
+    } catch {
       alert("No fue posible obtener la información de IA desde el backend. Intenta nuevamente.");
       setPendingPreview(false);
     }
   };
 
-  // ---- IA GENERALES (ruta propia con fallback a endpoints existentes) ----
+  // ---- IA GENERALES ----
   const llamarGeneralesIA = async (payloadComorb) => {
     // Asegurar idPago
     let idPago = "";
@@ -279,7 +297,7 @@ function App() {
     const paciente = {
       ...datosPaciente,
       edad: edadNum,
-      genero: normalizarGenero(datosPaciente.genero), // <<< normalización
+      genero: normalizarGenero(datosPaciente.genero),
     };
 
     const body = {
@@ -296,7 +314,7 @@ function App() {
         body: JSON.stringify(body),
       });
 
-      // 2) Fallback a rutas en producción (sin cirugía para Generales)
+      // 2) Fallback a endpoints existentes
       if (!resp.ok) {
         resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
           method: "POST",
@@ -324,14 +342,12 @@ function App() {
 
       if (avisoOkRef.current.generales) {
         setMostrarVistaPrevia(true);
-        setPagoRealizado(false);
-        setMostrarPago(false);
         setPendingPreview(false);
       } else {
         setPendingPreview(true);
         setMostrarAviso(true);
       }
-    } catch (err) {
+    } catch {
       alert("No fue posible obtener la información de IA (Generales). Intenta nuevamente.");
       setPendingPreview(false);
     }
@@ -345,34 +361,6 @@ function App() {
     marcarComorbilidadesOk(scope, payload);
     if (scope === "preop") await llamarPreopIA(payload);
     else await llamarGeneralesIA(payload);
-  };
-
-  // ====== NUEVO: preview rápido desde backend para TRAUMA ======
-  const cargarPreviewTraumaRapido = async () => {
-    const edadNum = Number(datosPaciente.edad) || datosPaciente.edad || "";
-    const q = new URLSearchParams({
-      dolor: String(datosPaciente.dolor || ""),
-      lado: String(datosPaciente.lado || ""),
-      edad: String(edadNum || ""),
-    });
-    try {
-      const r = await fetch(`${BACKEND_BASE}/sugerir-imagenologia?${q.toString()}`, {
-        cache: "no-store",
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const j = await r.json();
-      const examen = j?.examen || (Array.isArray(j?.examLines) ? j.examLines.join("\n") : "");
-      const nota = j?.nota || "";
-      setDatosPaciente((prev) => {
-        const next = { ...prev, examen, nota };
-        try {
-          sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-        } catch {}
-        return next;
-      });
-    } catch {
-      // si falla, seguimos con el preview local; el PDF igual se armará en backend
-    }
   };
 
   // ====== Restauración de estado en montaje ======
@@ -405,16 +393,17 @@ function App() {
 
     if (pago === "ok" && idFinal) {
       sessionStorage.setItem("idPago", idFinal);
-      setMostrarPago(false);
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
 
-      // (El polling fino lo hace cada módulo; aquí mantenemos el legacy para trauma)
+      // (El polling fino lo hace cada módulo; mantenemos legacy para compatibilidad)
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
+          // Trauma
           await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`);
+          // Preop / Generales manejan su propia restauración
         } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
@@ -422,14 +411,13 @@ function App() {
         }
       }, 2000);
     } else if (!pago && idFinal) {
-      setMostrarPago(false);
+      // Si venimos de historial con idPago en sessionStorage
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
     } else if (pago === "ok" && !idFinal) {
       alert("No recibimos idPago en el retorno. Intenta nuevamente.");
     } else if (pago === "cancelado") {
       alert("Pago cancelado.");
-      setMostrarPago(false);
       setMostrarVistaPrevia(false);
       setPagoRealizado(false);
     }
@@ -488,7 +476,12 @@ function App() {
     const edadNum = Number(datosPaciente.edad);
 
     // Reglas generales
-    if (!datosPaciente.nombre?.trim() || !datosPaciente.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
+    if (
+      !datosPaciente.nombre?.trim() ||
+      !datosPaciente.rut?.trim() ||
+      !Number.isFinite(edadNum) ||
+      edadNum <= 0
+    ) {
       alert("Por favor complete nombre, RUT y edad (>0).");
       return;
     }
@@ -510,184 +503,10 @@ function App() {
       return;
     }
 
-    // ====== TRAUMA: preview rápido desde backend antes de mostrar ======
-    if (modulo === "trauma") {
-      await cargarPreviewTraumaRapido();
-    }
-
-    // Otros módulos (trauma/ia): flujo tradicional
+    // Otros módulos (trauma/ia): mostrar el módulo correspondiente
     setMostrarVistaPrevia(true);
     setPagoRealizado(false);
-    setMostrarPago(false);
     setPendingPreview(false);
-  };
-
-  // ====== Detección de RM en backend ======
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-  const esResonanciaTexto = (t = "") => {
-    const s = (t || "").toLowerCase();
-    return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
-  };
-
-  const detectarResonanciaEnBackend = async (datos) => {
-    try {
-      const r = await fetch(`${BACKEND_BASE}/detectar-resonancia`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ datosPaciente: datos }),
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const j = await r.json();
-      const flag =
-        typeof j?.resonancia === "boolean"
-          ? j.resonancia
-          : esResonanciaTexto(j?.texto || j?.orden || "");
-      sessionStorage.setItem("solicitaResonancia", flag ? "1" : "0");
-      return !!flag;
-    } catch {
-      sessionStorage.setItem("solicitaResonancia", "0");
-      return false;
-    }
-  };
-
-  const handleDescargarPDF = async () => {
-    const idPago = sessionStorage.getItem("idPago");
-    if (!idPago) {
-      alert("ID de pago no encontrado");
-      return;
-    }
-
-    const intentaDescarga = async () => {
-      const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
-      if (res.status === 404) return { ok: false, status: 404 };
-      if (res.status === 402) return { ok: false, status: 402 };
-      if (!res.ok) throw new Error("Error al obtener el PDF");
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `orden_${(datosPaciente.nombre || "paciente").replace(/ /g, "_")}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      return { ok: true };
-    };
-
-    setDescargando(true);
-    setMensajeDescarga("Verificando pago…");
-
-    let reinyectado = false;
-    try {
-      const maxIntentos = 30;
-      for (let i = 1; i <= maxIntentos; i++) {
-        const r = await intentaDescarga();
-        if (r.ok) break;
-
-        if (r.status === 402) {
-          setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
-          await sleep(1500);
-          if (i === maxIntentos) {
-            alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
-          }
-          continue;
-        }
-
-        if (r.status === 404) {
-          if (!reinyectado) {
-            setMensajeDescarga("Restaurando datos…");
-            const respaldo = sessionStorage.getItem("datosPacienteJSON");
-            const datosReinyectar = respaldo ? JSON.parse(respaldo) : datosPaciente;
-
-            await fetch(`${BACKEND_BASE}/guardar-datos`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ idPago, datosPaciente: datosReinyectar }),
-            });
-
-            reinyectado = true;
-            await sleep(500);
-            continue;
-          } else {
-            alert("No se pudo descargar el PDF después de reintentar.");
-            break;
-          }
-        }
-
-        alert("No se pudo descargar el PDF.");
-        break;
-      }
-    } catch {
-      alert("No se pudo descargar el PDF.");
-    } finally {
-      setDescargando(false);
-      setMensajeDescarga("");
-    }
-  };
-
-  const handlePagarAhora = async () => {
-    const edadNum = Number(datosPaciente.edad);
-    if (
-      !datosPaciente.nombre?.trim() ||
-      !datosPaciente.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0 ||
-      !datosPaciente.dolor?.trim()
-    ) {
-      alert("Complete nombre, RUT, edad (>0) y dolor antes de pagar.");
-      return;
-    }
-
-    try {
-      const idPagoTmp =
-        sessionStorage.getItem("idPago") ||
-        "pago_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-
-      sessionStorage.setItem("idPago", idPagoTmp);
-      sessionStorage.setItem(
-        "datosPacienteJSON",
-        JSON.stringify({ ...datosPaciente, edad: edadNum })
-      );
-
-      let extras = {};
-      const solicitarRM = await detectarResonanciaEnBackend({
-        ...datosPaciente,
-        edad: edadNum,
-      });
-
-      if (solicitarRM) {
-        const res = await pedirChecklistResonancia();
-        if (res?.canceled) return;
-
-        if (res.bloquea) {
-          alert("Por seguridad, cambiaremos la resonancia por otro examen.");
-          extras.ordenAlternativa =
-            "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
-        } else {
-          extras.resonanciaChecklist = res.data || {};
-          extras.resonanciaResumenTexto =
-            res.resumen || resumenResoTexto(res.data || {});
-        }
-      }
-
-      await fetch(`${BACKEND_BASE}/guardar-datos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPago: idPagoTmp,
-          datosPaciente: { ...datosPaciente, edad: edadNum },
-          ...extras,
-        }),
-      });
-
-      await irAPagoKhipu(
-        { ...datosPaciente, edad: edadNum },
-        { idPago: idPagoTmp, modulo: "trauma" }
-      );
-    } catch (err) {
-      alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
-    }
   };
 
   // ====== UI ======
@@ -771,7 +590,6 @@ function App() {
             datos={datosPaciente}
             onCambiarDato={handleCambiarDato}
             onSubmit={handleSubmit}
-            /* sigue pasando el módulo si lo necesitas internamente */
             moduloActual={modulo}
           />
         </div>
@@ -779,73 +597,13 @@ function App() {
         {/* Columna 3 - Previews / Acciones */}
         <div style={styles.previewCol} data-preview-col>
           {mostrarVistaPrevia && modulo === "trauma" && (
-            <>
-              <PreviewOrden datos={datosPaciente} />
-              {!pagoRealizado && !mostrarPago && (
-                <>
-                  <button
-                    type="button"
-                    style={styles.actionBtn}
-                    onClick={handlePagarAhora}
-                  >
-                    Pagar ahora
-                  </button>
-                  <button
-                    type="button"
-                    style={{ ...styles.actionBtn, backgroundColor: T.muted }}
-                    onClick={async () => {
-                      const idPago = "guest_test_pago";
-                      const datosGuest = {
-                        nombre: "Guest",
-                        rut: "99999999-9",
-                        edad: 30,
-                        genero: "MASCULINO",
-                        dolor: "Rodilla",
-                        lado: "Izquierda",
-                      };
-                      sessionStorage.setItem("idPago", idPago);
-                      sessionStorage.setItem(
-                        "datosPacienteJSON",
-                        JSON.stringify(datosGuest)
-                      );
-
-                      const resp = await fetch(
-                        `${BACKEND_BASE}/crear-pago-khipu`,
-                        {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            idPago,
-                            modoGuest: true,
-                            datosPaciente: datosGuest,
-                          }),
-                        }
-                      );
-                      const j = await resp.json();
-                      if (j?.ok && j?.url) {
-                        window.location.href = j.url;
-                      } else {
-                        alert("Guest no disponible. Ver backend.");
-                      }
-                    }}
-                  >
-                    Simular Pago como Guest
-                  </button>
-                </>
-              )}
-
-              {mostrarVistaPrevia && pagoRealizado && (
-                <button
-                  type="button"
-                  style={styles.actionBtn}
-                  onClick={handleDescargarPDF}
-                  disabled={descargando}
-                  title={mensajeDescarga || "Verificar y descargar"}
-                >
-                  {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
-                </button>
-              )}
-            </>
+            <TraumaModulo
+              initialDatos={datosPaciente}
+              // props opcionales para usar el checklist desde el módulo
+              onPedirChecklistResonancia={pedirChecklistResonancia}
+              onDetectarResonancia={detectarResonanciaEnBackend}
+              resumenResoTexto={resumenResoTexto}
+            />
           )}
 
           {mostrarVistaPrevia && modulo === "preop" && (
@@ -985,19 +743,6 @@ const styles = {
     borderStyle: "solid",
     borderColor: T.border,
     minHeight: 30,
-  },
-
-  actionBtn: {
-    marginTop: 12,
-    backgroundColor: T.primary,
-    color: T.onPrimary,
-    border: "none",
-    padding: "12px",
-    borderRadius: 8,
-    fontSize: 16,
-    cursor: "pointer",
-    width: "100%",
-    boxShadow: T.shadowSm,
   },
 
   /* Modals */
