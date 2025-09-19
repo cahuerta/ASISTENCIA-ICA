@@ -41,7 +41,6 @@ function prettyComorb(c = {}) {
     for (const k of keys) {
       const v = c[k];
       const label = LABELS_COMORB[k] || k.replace(/_/g, " ");
-
       if (typeof v === "boolean") {
         if (v) bullets.push(label);
         continue;
@@ -88,16 +87,16 @@ export default function GeneralesModulo({ initialDatos }) {
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
-  // Paso previo (Continuar → luego preview IA → luego pago)
+  // Paso previo (Continuar → IA → luego pago)
   const [stepStarted, setStepStarted] = useState(false);
-  const [loadingIA, setLoadingIA] = useState(false); // ← NUEVO
+  const [loadingIA, setLoadingIA] = useState(false);
 
-  // Carga de IA y comorbilidades (guardadas por App.jsx)
+  // IA y comorbilidades
   const [examenesIA, setExamenesIA] = useState([]);
   const [informeIA, setInformeIA] = useState("");
   const [comorbilidades, setComorbilidades] = useState({});
 
-  // Texto libre (SOLO segundo preview)
+  // Texto libre (SOLO en segundo preview)
   const [examenLibre, setExamenLibre] = useState("");
 
   useEffect(() => {
@@ -118,12 +117,23 @@ export default function GeneralesModulo({ initialDatos }) {
       setComorbilidades(c || {});
     } catch {}
 
+    // Si el usuario ya había pasado al segundo preview antes, lo mantenemos
+    try {
+      if (sessionStorage.getItem("generales_step") === "2") {
+        setStepStarted(true);
+      }
+    } catch {}
+
     // retorno de pago
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
     const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
+      // Aseguramos mantener el segundo preview al volver del pago
+      setStepStarted(true);
+      try { sessionStorage.setItem("generales_step", "2"); } catch {}
+
       if (pollerRef.current) clearInterval(pollerRef.current);
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
@@ -287,7 +297,7 @@ export default function GeneralesModulo({ initialDatos }) {
   const usarIA = Array.isArray(examenesIA) && examenesIA.length > 0;
   const comorbBullets = prettyComorb(comorbilidades);
 
-  // “Continuar” → ahora SÍ llama a la IA
+  // “Continuar” → llama a la IA y pasa al segundo preview
   const handleContinuar = async () => {
     try {
       setLoadingIA(true);
@@ -301,7 +311,9 @@ export default function GeneralesModulo({ initialDatos }) {
       try { c = JSON.parse(sessionStorage.getItem("generales_comorbilidades_data") || "{}"); } catch {}
       setComorbilidades(c || {});
 
-      const idPago = sessionStorage.getItem("idPago") || `generales_${Date.now()}_${Math.floor(Math.random()*1e6)}`;
+      const idPago =
+        sessionStorage.getItem("idPago") ||
+        `generales_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
       sessionStorage.setItem("idPago", idPago);
 
       const body = {
@@ -340,10 +352,11 @@ export default function GeneralesModulo({ initialDatos }) {
       const ex = Array.isArray(j?.examenes) ? j.examenes : [];
       const inf = typeof j?.informeIA === "string" ? j.informeIA : "";
 
-      // persistimos para PDF
+      // persistimos para PDF y para mantener estado
       try {
         sessionStorage.setItem("generales_ia_examenes", JSON.stringify(ex));
         sessionStorage.setItem("generales_ia_resumen", inf || "");
+        sessionStorage.setItem("generales_step", "2");
       } catch {}
 
       setExamenesIA(ex);
@@ -458,6 +471,7 @@ export default function GeneralesModulo({ initialDatos }) {
                   sessionStorage.setItem("idPago", idPago);
                   sessionStorage.setItem("modulo", "generales");
                   sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
+                  sessionStorage.setItem("generales_step", "2"); // mantener segundo preview
 
                   const examenPaciente = (examenLibre || "").trim();
                   const examenesFinales = [
