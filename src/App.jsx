@@ -2,18 +2,19 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 
-/* Esquema corporal (están en src/) */
+/* Esquema corporal */
 import EsquemaAnterior from "./EsquemaAnterior.jsx";
 import EsquemaPosterior from "./EsquemaPosterior.jsx";
 import EsquemaToggleTabs from "./EsquemaToggleTabs.jsx";
 
-/* Formularios y módulos (están en src/components y src/modules) */
+/* Formularios y módulos */
 import FormularioPaciente from "./FormularioPaciente.jsx";
 import PreopModulo from "./modules/PreopModulo.jsx";
 import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import IAModulo from "./modules/IAModulo.jsx";
 import TraumaModulo from "./modules/TraumaModulo.jsx";
 
+/* Utilidades existentes */
 import AvisoLegal from "./components/AvisoLegal.jsx";
 import FormularioResonancia from "./components/FormularioResonancia.jsx";
 import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx";
@@ -57,27 +58,19 @@ function App() {
   const comorbOkRef = useRef({ preop: false, generales: false });
 
   const getComorbStorageKey = (scope) =>
-    scope === "generales"
-      ? "generales_comorbilidades_data"
-      : "preop_comorbilidades_data";
+    scope === "generales" ? "generales_comorbilidades_data" : "preop_comorbilidades_data";
   const getAvisoKey = (scope) =>
     scope === "generales" ? "generales_aviso_ok" : "preop_aviso_ok";
   const getComorbOkKey = (scope) =>
-    scope === "generales"
-      ? "generales_comorbilidades_ok"
-      : "preop_comorbilidades_ok";
+    scope === "generales" ? "generales_comorbilidades_ok" : "preop_comorbilidades_ok";
 
   useEffect(() => {
     try {
-      avisoOkRef.current.preop =
-        sessionStorage.getItem("preop_aviso_ok") === "1";
-      avisoOkRef.current.generales =
-        sessionStorage.getItem("generales_aviso_ok") === "1";
+      avisoOkRef.current.preop = sessionStorage.getItem("preop_aviso_ok") === "1";
+      avisoOkRef.current.generales = sessionStorage.getItem("generales_aviso_ok") === "1";
 
-      comorbOkRef.current.preop =
-        sessionStorage.getItem("preop_comorbilidades_ok") === "1";
-      comorbOkRef.current.generales =
-        sessionStorage.getItem("generales_comorbilidades_ok") === "1";
+      comorbOkRef.current.preop = sessionStorage.getItem("preop_comorbilidades_ok") === "1";
+      comorbOkRef.current.generales = sessionStorage.getItem("generales_comorbilidades_ok") === "1";
     } catch {}
   }, []);
 
@@ -92,10 +85,7 @@ function App() {
     comorbOkRef.current[scope] = true;
     try {
       sessionStorage.setItem(getComorbOkKey(scope), "1");
-      sessionStorage.setItem(
-        getComorbStorageKey(scope),
-        JSON.stringify(payload || {})
-      );
+      sessionStorage.setItem(getComorbStorageKey(scope), JSON.stringify(payload || {}));
     } catch {}
   };
 
@@ -138,9 +128,7 @@ function App() {
       setShowReso(true);
     });
   const hasRedFlags = (data) =>
-    Object.entries(data || {}).some(
-      ([k, v]) => RED_FLAGS.has(k) && v === true
-    );
+    Object.entries(data || {}).some(([k, v]) => RED_FLAGS.has(k) && v === true);
   const resumenResoTexto = (data) => {
     const si =
       Object.entries(data || {})
@@ -164,11 +152,7 @@ function App() {
   // Expuesto para módulos que lo necesiten
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
-    return (
-      s.includes("resonancia") ||
-      s.includes("resonancia magn") ||
-      /\brm\b/i.test(t)
-    );
+    return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
   };
   const detectarResonanciaEnBackend = async (datos) => {
     try {
@@ -284,9 +268,7 @@ function App() {
         setMostrarAviso(true);
       }
     } catch {
-      alert(
-        "No fue posible obtener la información de IA desde el backend. Intenta nuevamente."
-      );
+      alert("No fue posible obtener la información de IA desde el backend. Intenta nuevamente.");
       setPendingPreview(false);
     }
   };
@@ -367,9 +349,7 @@ function App() {
         setMostrarAviso(true);
       }
     } catch {
-      alert(
-        "No fue posible obtener la información de IA (Generales). Intenta nuevamente."
-      );
+      alert("No fue posible obtener la información de IA (Generales). Intenta nuevamente.");
       setPendingPreview(false);
     }
   };
@@ -639,7 +619,7 @@ function App() {
             <IAModulo
               key={`ia-${modulo}`}
               initialDatos={datosPaciente}
-              /* ← único cambio necesario para compatibilidad */
+              /* ← única modificación pedida */
               pedirChecklistResonancia={pedirChecklistResonancia}
             />
           )}
@@ -659,13 +639,7 @@ function App() {
                 setShowReso(false);
                 const resumen = resumenResoTexto(data);
                 const bloquea = hasRedFlags(data);
-                resolverReso?.({
-                  canceled: false,
-                  bloquea,
-                  data,
-                  riesgos,
-                  resumen,
-                });
+                resolverReso?.({ canceled: false, bloquea, data, riesgos, resumen });
               }}
             />
           </div>
