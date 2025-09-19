@@ -31,8 +31,41 @@ function resumenInicialTrauma(datos = {}) {
   return `${sexo} ${edad}. ${zona}. Se solicita evaluación imagenológica según clínica.`;
 }
 
+/** Normaliza y detecta si un texto hace referencia a resonancia magnética */
+function isResonanciaTexto(t = "") {
+  if (!t) return false;
+  // quitar tildes y bajar a minúsculas
+  const s = t
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+
+  // patrones robustos (palabras y abreviaturas habituales)
+  const includes = [
+    "resonancia magnetica",
+    "resonancia nuclear",
+    "magnetic resonance",
+  ];
+  if (includes.some((p) => s.includes(p))) return true;
+
+  // variantes y abreviaturas: RM, RMN, RNM, MRI, IRM (francés)
+  const regexes = [
+    /\brm\b/i,
+    /\brmn\b/i,
+    /\brnm\b/i,
+    /\bmri\b/i,
+    /\birm\b/i,
+  ];
+  return regexes.some((re) => re.test(t));
+}
+
 /* ================= Componente ================= */
-export default function TraumaModulo({ initialDatos }) {
+export default function TraumaModulo({
+  initialDatos,
+  onDetectarResonancia,        // (datos)-> boolean | Promise<boolean>
+  onPedirChecklistResonancia,  // () -> Promise<{canceled, bloquea, data, resumen}>
+  resumenResoTexto,            // (data)-> string
+}) {
   const T = getTheme();
   const S = makeStyles(T);
 
@@ -43,6 +76,11 @@ export default function TraumaModulo({ initialDatos }) {
   const [examenesIA, setExamenesIA] = useState([]);
   const [diagnosticoIA, setDiagnosticoIA] = useState("");
   const [justificacionIA, setJustificacionIA] = useState("");
+
+  // Checklist RM
+  const [resonanciaChecklist, setResonanciaChecklist] = useState(null);
+  const [resonanciaResumenTexto, setResonanciaResumenTexto] = useState("");
+  const [ordenAlternativa, setOrdenAlternativa] = useState("");
 
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [descargando, setDescargando] = useState(false);
@@ -62,6 +100,16 @@ export default function TraumaModulo({ initialDatos }) {
       setDiagnosticoIA(sessionStorage.getItem("trauma_ia_diagnostico") || "");
       setJustificacionIA(sessionStorage.getItem("trauma_ia_justificacion") || "");
       if (ex && ex.length) setStepStarted(true);
+    } catch {}
+
+    // restaurar checklist/alternativa si existían
+    try {
+      const ck = sessionStorage.getItem("resonanciaChecklist");
+      const rs = sessionStorage.getItem("resonanciaResumenTexto");
+      const alt = sessionStorage.getItem("ordenAlternativa");
+      if (ck) setResonanciaChecklist(JSON.parse(ck));
+      if (rs) setResonanciaResumenTexto(rs);
+      if (alt) setOrdenAlternativa(alt);
     } catch {}
 
     // retorno de pago
@@ -127,7 +175,7 @@ export default function TraumaModulo({ initialDatos }) {
       const dx = typeof j?.diagnostico === "string" ? j.diagnostico : "";
       const just = typeof j?.justificacion === "string" ? j.justificacion : j?.resumen || "";
 
-      // Persistimos para PDF / retorno
+      // Persistimos IA para retorno/PDF
       try {
         sessionStorage.setItem("trauma_ia_examenes", JSON.stringify(ex));
         sessionStorage.setItem("trauma_ia_diagnostico", dx || "");
@@ -137,6 +185,42 @@ export default function TraumaModulo({ initialDatos }) {
       setExamenesIA(ex);
       setDiagnosticoIA(dx);
       setJustificacionIA(just);
+
+      // ===== Detección de RM en la lista sugerida por IA =====
+      const textoEx = ex.join("\n");
+      let solicitaRM = false;
+
+      if (typeof onDetectarResonancia === "function") {
+        // usa backend (incluye fallback server-side si examen vacío)
+        solicitaRM = await onDetectarResonancia({ ...datos, edad: edadNum, examen: textoEx });
+      } else {
+        // fallback local robusto
+        solicitaRM = isResonanciaTexto(textoEx);
+      }
+
+      if (solicitaRM && typeof onPedirChecklistResonancia === "function") {
+        const res = await onPedirChecklistResonancia();
+        if (!res?.canceled) {
+          if (res.bloquea) {
+            const alt =
+              "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
+            setOrdenAlternativa(alt);
+            sessionStorage.setItem("ordenAlternativa", alt);
+          } else {
+            const resumen =
+              res.resumen ||
+              (typeof resumenResoTexto === "function" ? resumenResoTexto(res.data) : "");
+            setResonanciaChecklist(res.data || {});
+            setResonanciaResumenTexto(resumen);
+            sessionStorage.setItem(
+              "resonanciaChecklist",
+              JSON.stringify(res.data || {})
+            );
+            sessionStorage.setItem("resonanciaResumenTexto", resumen);
+          }
+        }
+      }
+
       setStepStarted(true);
     } catch (e) {
       alert("No fue posible obtener la información de IA (Trauma). Intenta nuevamente.");
@@ -164,7 +248,7 @@ export default function TraumaModulo({ initialDatos }) {
       sessionStorage.setItem("modulo", "trauma");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
 
-      // Guardar datos + IA para que el PDF quede consistente
+      // Guardar datos + IA + checklist para que el PDF quede consistente
       await fetch(`${BACKEND_BASE}/guardar-datos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -177,6 +261,9 @@ export default function TraumaModulo({ initialDatos }) {
             diagnosticoIA,
             justificacionIA,
           },
+          resonanciaChecklist,
+          resonanciaResumenTexto,
+          ordenAlternativa,
         }),
       });
 
@@ -248,6 +335,9 @@ export default function TraumaModulo({ initialDatos }) {
                   diagnosticoIA,
                   justificacionIA,
                 },
+                resonanciaChecklist,
+                resonanciaResumenTexto,
+                ordenAlternativa,
               }),
             });
 
@@ -362,6 +452,9 @@ export default function TraumaModulo({ initialDatos }) {
                         diagnosticoIA,
                         justificacionIA,
                       },
+                      resonanciaChecklist,
+                      resonanciaResumenTexto,
+                      ordenAlternativa,
                     }),
                   });
 
