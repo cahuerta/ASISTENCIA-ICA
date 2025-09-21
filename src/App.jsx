@@ -448,7 +448,7 @@ function App() {
     });
   };
 
-  // ====== NUEVAS ZONAS + lado (recordando: vista anterior = invertido en pantalla) ======
+  // ====== NUEVAS ZONAS con la MISMA lógica que Cadera/Rodilla ======
   const onSeleccionZona = (zona) => {
     let dolor = "";
     let lado = "";
@@ -464,7 +464,7 @@ function App() {
       dolor = "Rodilla";
       lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
     }
-    // Nuevas zonas (Hombro, Codo, Mano, Tobillo)
+    // === NUEVAS ZONAS (igual que arriba) ===
     else if (z.includes("Hombro")) {
       dolor = "Hombro";
       lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
