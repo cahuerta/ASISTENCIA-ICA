@@ -7,7 +7,7 @@ const T = getTheme();
 
 /**
  * Esquema anterior (híbrido): imagen base + hotspots SVG.
- * - Caderas y Rodillas (existentes) se mantienen EXACTAMENTE igual.
+ * - Caderas y Rodillas existentes se mantienen EXACTAMENTE igual.
  * - Se agregan: HOMBRO, CODO, MANO, TOBILLO.
  * Nota: IZQUIERDA de pantalla = DERECHA del paciente.
  */
@@ -23,22 +23,16 @@ export default function EsquemaAnterior({
   const VB = 1024; // base 1024x1024
 
   // ===== Puntos =====
-  // Caderas/Rodillas: SIN CAMBIOS (idénticos a los originales)
-  // Nuevos puntos (Hombro, Codo, Mano, Tobillo) con tamaños solicitados:
-  // - Hombro = rodilla (44,44)
-  // - Codo más chico (38,38)
-  // - Mano más chica que codo (32,32)
-  // - Tobillo = codo (38,38)
   const puntos = {
     // En pantalla IZQUIERDA => DERECHA del paciente
     pantallaIzq_cadera: { cx: VB * 0.43, cy: VB * 0.48, rx: 48, ry: 40 },
     pantallaDer_cadera: { cx: VB * 0.57, cy: VB * 0.48, rx: 48, ry: 40 },
 
-    // Rodillas (ajustadas previamente) — se mantienen
+    // Rodillas (sin cambios vs tu versión)
     pantallaIzq_rodilla: { cx: VB * 0.42, cy: VB * 0.75, rx: 44, ry: 44 },
     pantallaDer_rodilla: { cx: VB * 0.58, cy: VB * 0.75, rx: 44, ry: 44 },
 
-    // ===== Nuevos =====
+    // Nuevos:
     // Hombros (igual a rodilla)
     pantallaIzq_hombro: { cx: VB * 0.36, cy: VB * 0.23, rx: 44, ry: 44 },
     pantallaDer_hombro: { cx: VB * 0.64, cy: VB * 0.23, rx: 44, ry: 44 },
@@ -62,6 +56,8 @@ export default function EsquemaAnterior({
       handle(z);
     }
   };
+
+  const hitFill = T.primary ?? "#2f6bd8";
 
   return (
     <div
@@ -98,7 +94,7 @@ export default function EsquemaAnterior({
         <defs>
           <style>{`
             .hit {
-              fill: ${T.primary ?? "#2f6bd8"};
+              fill: ${hitFill};
               opacity: .18;
               transition: opacity .15s ease;
               pointer-events: auto;
@@ -108,7 +104,7 @@ export default function EsquemaAnterior({
           `}</style>
         </defs>
 
-        {/* ===== CADERAS (pantalla IZQUIERDA = DERECHA del paciente) ===== */}
+        {/* ===== CADERAS ===== */}
         <ellipse
           className="hit"
           cx={puntos.pantallaIzq_cadera.cx}
@@ -120,11 +116,7 @@ export default function EsquemaAnterior({
           aria-label="Cadera derecha (inguinal)"
           onClick={() => handle("Cadera derecha")}
           onKeyDown={onKey("Cadera derecha")}
-        >
-          <title>Cadera derecha (inguinal)</title>
-        </ellipse>
-
-        {/* CADERA (pantalla DERECHA = IZQUIERDA del paciente) */}
+        />
         <ellipse
           className="hit"
           cx={puntos.pantallaDer_cadera.cx}
@@ -136,12 +128,9 @@ export default function EsquemaAnterior({
           aria-label="Cadera izquierda (inguinal)"
           onClick={() => handle("Cadera izquierda")}
           onKeyDown={onKey("Cadera izquierda")}
-        >
-          <title>Cadera izquierda (inguinal)</title>
-        </ellipse>
+        />
 
         {/* ===== RODILLAS ===== */}
-        {/* pantalla IZQUIERDA = DERECHA del paciente */}
         <ellipse
           className="hit"
           cx={puntos.pantallaIzq_rodilla.cx}
@@ -153,11 +142,7 @@ export default function EsquemaAnterior({
           aria-label="Rodilla derecha"
           onClick={() => handle("Rodilla derecha")}
           onKeyDown={onKey("Rodilla derecha")}
-        >
-          <title>Rodilla derecha</title>
-        </ellipse>
-
-        {/* pantalla DERECHA = IZQUIERDA del paciente */}
+        />
         <ellipse
           className="hit"
           cx={puntos.pantallaDer_rodilla.cx}
@@ -169,12 +154,9 @@ export default function EsquemaAnterior({
           aria-label="Rodilla izquierda"
           onClick={() => handle("Rodilla izquierda")}
           onKeyDown={onKey("Rodilla izquierda")}
-        >
-          <title>Rodilla izquierda</title>
-        </ellipse>
+        />
 
-        {/* ===== HOMBROS (nuevo) ===== */}
-        {/* pantalla IZQUIERDA = DERECHA del paciente */}
+        {/* ===== HOMBROS ===== */}
         <ellipse
           className="hit"
           cx={puntos.pantallaIzq_hombro.cx}
@@ -186,11 +168,7 @@ export default function EsquemaAnterior({
           aria-label="Hombro derecho"
           onClick={() => handle("Hombro derecho")}
           onKeyDown={onKey("Hombro derecho")}
-        >
-          <title>Hombro derecho</title>
-        </ellipse>
-
-        {/* pantalla DERECHA = IZQUIERDA del paciente */}
+        />
         <ellipse
           className="hit"
           cx={puntos.pantallaDer_hombro.cx}
@@ -202,11 +180,9 @@ export default function EsquemaAnterior({
           aria-label="Hombro izquierdo"
           onClick={() => handle("Hombro izquierdo")}
           onKeyDown={onKey("Hombro izquierdo")}
-        >
-          <title>Hombro izquierdo</title>
-        </ellipse>
+        />
 
-        {/* ===== CODOS (nuevo) ===== */}
+        {/* ===== CODOS ===== */}
         <ellipse
           className="hit"
           cx={puntos.pantallaIzq_codo.cx}
@@ -218,10 +194,7 @@ export default function EsquemaAnterior({
           aria-label="Codo derecho"
           onClick={() => handle("Codo derecho")}
           onKeyDown={onKey("Codo derecho")}
-        >
-          <title>Codo derecho</title>
-        </ellipse>
-
+        />
         <ellipse
           className="hit"
           cx={puntos.pantallaDer_codo.cx}
@@ -231,4 +204,62 @@ export default function EsquemaAnterior({
           tabIndex={0}
           role="button"
           aria-label="Codo izquierdo"
-          on
+          onClick={() => handle("Codo izquierdo")}
+          onKeyDown={onKey("Codo izquierdo")}
+        />
+
+        {/* ===== MANOS ===== */}
+        <ellipse
+          className="hit"
+          cx={puntos.pantallaIzq_mano.cx}
+          cy={puntos.pantallaIzq_mano.cy}
+          rx={puntos.pantallaIzq_mano.rx}
+          ry={puntos.pantallaIzq_mano.ry}
+          tabIndex={0}
+          role="button"
+          aria-label="Mano derecha"
+          onClick={() => handle("Mano derecha")}
+          onKeyDown={onKey("Mano derecha")}
+        />
+        <ellipse
+          className="hit"
+          cx={puntos.pantallaDer_mano.cx}
+          cy={puntos.pantallaDer_mano.cy}
+          rx={puntos.pantallaDer_mano.rx}
+          ry={puntos.pantallaDer_mano.ry}
+          tabIndex={0}
+          role="button"
+          aria-label="Mano izquierda"
+          onClick={() => handle("Mano izquierda")}
+          onKeyDown={onKey("Mano izquierda")}
+        />
+
+        {/* ===== TOBILLOS ===== */}
+        <ellipse
+          className="hit"
+          cx={puntos.pantallaIzq_tobillo.cx}
+          cy={puntos.pantallaIzq_tobillo.cy}
+          rx={puntos.pantallaIzq_tobillo.rx}
+          ry={puntos.pantallaIzq_tobillo.ry}
+          tabIndex={0}
+          role="button"
+          aria-label="Tobillo derecho"
+          onClick={() => handle("Tobillo derecho")}
+          onKeyDown={onKey("Tobillo derecho")}
+        />
+        <ellipse
+          className="hit"
+          cx={puntos.pantallaDer_tobillo.cx}
+          cy={puntos.pantallaDer_tobillo.cy}
+          rx={puntos.pantallaDer_tobillo.rx}
+          ry={puntos.pantallaDer_tobillo.ry}
+          tabIndex={0}
+          role="button"
+          aria-label="Tobillo izquierdo"
+          onClick={() => handle("Tobillo izquierdo")}
+          onKeyDown={onKey("Tobillo izquierdo")}
+        />
+      </svg>
+    </div>
+  );
+}
