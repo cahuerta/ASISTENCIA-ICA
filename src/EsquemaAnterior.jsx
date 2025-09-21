@@ -46,8 +46,8 @@ export default function EsquemaAnterior({
     pantallaDer_mano: { cx: VB * 0.76, cy: VB * 0.63, rx: 32, ry: 32 },
 
     // Tobillos (igual a codo) — MÁS ABAJO (cy 0.975)
-    pantallaIzq_tobillo: { cx: VB * 0.45, cy: VB * 1.0, rx: 38, ry: 38 },
-    pantallaDer_tobillo: { cx: VB * 0.55, cy: VB * 1.0, rx: 38, ry: 38 },
+    pantallaIzq_tobillo: { cx: VB * 0.35, cy: VB * 1.1, rx: 38, ry: 38 },
+    pantallaDer_tobillo: { cx: VB * 0.65, cy: VB * 1.1, rx: 38, ry: 38 },
   };
 
   const onKey = (z) => (e) => {
