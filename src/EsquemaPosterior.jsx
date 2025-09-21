@@ -51,8 +51,8 @@ export default function EsquemaPosterior({
     manoDer:   { cx: VB * 0.74, cy: VB * 0.495, rx: 32, ry: 32, label: "Mano derecha" },
 
     // TOBILLOS (apenas por sobre el borde inferior)
-    tobilloIzq:{ cx: VB * 0.41, cy: VB * 1.1, rx: 38, ry: 38, label: "Tobillo izquierda" },
-    tobilloDer:{ cx: VB * 0.59, cy: VB * 1.1, rx: 38, ry: 38, label: "Tobillo derecha" },
+    tobilloIzq:{ cx: VB * 0.41, cy: VB * 1.08, rx: 38, ry: 38, label: "Tobillo izquierda" },
+    tobilloDer:{ cx: VB * 0.59, cy: VB * 1.08, rx: 38, ry: 38, label: "Tobillo derecha" },
   };
 
   // ===== Columnas adicionales (sin lado) =====
