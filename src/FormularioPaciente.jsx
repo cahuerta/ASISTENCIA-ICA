@@ -270,9 +270,15 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
             required
           >
             <option value="">Seleccione...</option>
+            {/* existentes */}
             <option value="Rodilla">Rodilla</option>
             <option value="Cadera">Cadera</option>
             <option value="Columna lumbar">Columna lumbar</option>
+            {/* nuevos puntos agregados al esquema */}
+            <option value="Hombro">Hombro</option>
+            <option value="Codo">Codo</option>
+            <option value="Mano">Mano</option>
+            <option value="Tobillo">Tobillo</option>
           </select>
 
           <label style={styles.label}>Lado:</label>
