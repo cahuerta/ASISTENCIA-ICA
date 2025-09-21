@@ -454,10 +454,19 @@ function App() {
     let lado = "";
     const z = String(zona || "");
 
-    if (z.includes("Columna")) {
+    // --- Columna: respetar cervical/dorsal/lumbar, sin lado ---
+    if (z.includes("Columna cervical")) {
+      dolor = "Columna cervical";
+      lado = "";
+    } else if (z.includes("Columna dorsal")) {
+      dolor = "Columna dorsal";
+      lado = "";
+    } else if (z.includes("Columna lumbar") || z.includes("Columna")) {
+      // Mantiene tu comportamiento previo si llega "Columna" sin subtipo
       dolor = "Columna lumbar";
       lado = "";
-    } else if (z.includes("Cadera")) {
+    }
+    else if (z.includes("Cadera")) {
       dolor = "Cadera";
       lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
     } else if (z.includes("Rodilla")) {
