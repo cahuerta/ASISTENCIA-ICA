@@ -49,22 +49,16 @@ function isResonanciaTexto(t = "") {
   if (includes.some((p) => s.includes(p))) return true;
 
   // variantes y abreviaturas: RM, RMN, RNM, MRI, IRM (francés)
-  const regexes = [
-    /\brm\b/i,
-    /\brmn\b/i,
-    /\brnm\b/i,
-    /\bmri\b/i,
-    /\birm\b/i,
-  ];
+  const regexes = [/\brm\b/i, /\brmn\b/i, /\brnm\b/i, /\bmri\b/i, /\birm\b/i];
   return regexes.some((re) => re.test(t));
 }
 
 /* ================= Componente ================= */
 export default function TraumaModulo({
   initialDatos,
-  onDetectarResonancia,        // (datos)-> boolean | Promise<boolean>
-  onPedirChecklistResonancia,  // () -> Promise<{canceled, bloquea, data, resumen}>
-  resumenResoTexto,            // (data)-> string
+  onDetectarResonancia, // (datos)-> boolean | Promise<boolean>
+  onPedirChecklistResonancia, // () -> Promise<{canceled, bloquea, data, resumen}>
+  resumenResoTexto, // (data)-> string
 }) {
   const T = getTheme();
   const S = makeStyles(T);
@@ -81,6 +75,10 @@ export default function TraumaModulo({
   const [resonanciaChecklist, setResonanciaChecklist] = useState(null);
   const [resonanciaResumenTexto, setResonanciaResumenTexto] = useState("");
   const [ordenAlternativa, setOrdenAlternativa] = useState("");
+
+  // NUEVOS flags de control de flujo RM
+  const [requiereRM, setRequiereRM] = useState(false);
+  const [bloqueaRM, setBloqueaRM] = useState(false);
 
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [descargando, setDescargando] = useState(false);
@@ -186,7 +184,7 @@ export default function TraumaModulo({
       setDiagnosticoIA(dx);
       setJustificacionIA(just);
 
-      // ===== Detección de RM en la lista sugerida por IA =====
+      // ===== Detección de RM en la lista sugerida por IA (sin abrir checklist aún) =====
       const textoEx = ex.join("\n");
       let solicitaRM = false;
 
@@ -198,34 +196,41 @@ export default function TraumaModulo({
         solicitaRM = isResonanciaTexto(textoEx);
       }
 
-      if (solicitaRM && typeof onPedirChecklistResonancia === "function") {
-        const res = await onPedirChecklistResonancia();
-        if (!res?.canceled) {
-          if (res.bloquea) {
-            const alt =
-              "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
-            setOrdenAlternativa(alt);
-            sessionStorage.setItem("ordenAlternativa", alt);
-          } else {
-            const resumen =
-              res.resumen ||
-              (typeof resumenResoTexto === "function" ? resumenResoTexto(res.data) : "");
-            setResonanciaChecklist(res.data || {});
-            setResonanciaResumenTexto(resumen);
-            sessionStorage.setItem(
-              "resonanciaChecklist",
-              JSON.stringify(res.data || {})
-            );
-            sessionStorage.setItem("resonanciaResumenTexto", resumen);
-          }
-        }
-      }
+      setRequiereRM(!!solicitaRM);
+      setBloqueaRM(false); // reset
+      setResonanciaChecklist(null);
+      setResonanciaResumenTexto("");
 
       setStepStarted(true);
     } catch (e) {
       alert("No fue posible obtener la información de IA (Trauma). Intenta nuevamente.");
     } finally {
       setLoadingIA(false);
+    }
+  };
+
+  // Lanzar checklist RM tras confirmación en el segundo preview
+  const lanzarChecklistRM = async () => {
+    if (!requiereRM || typeof onPedirChecklistResonancia !== "function") return;
+    const res = await onPedirChecklistResonancia();
+    if (res?.canceled) return;
+
+    if (res.bloquea) {
+      setBloqueaRM(true);
+      const alt = "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
+      setOrdenAlternativa(alt);
+      sessionStorage.setItem("ordenAlternativa", alt);
+      setResonanciaChecklist(null);
+      setResonanciaResumenTexto("");
+    } else {
+      setBloqueaRM(false);
+      const resumen =
+        res.resumen ||
+        (typeof resumenResoTexto === "function" ? resumenResoTexto(res.data) : "");
+      setResonanciaChecklist(res.data || {});
+      setResonanciaResumenTexto(resumen);
+      sessionStorage.setItem("resonanciaChecklist", JSON.stringify(res.data || {}));
+      sessionStorage.setItem("resonanciaResumenTexto", resumen);
     }
   };
 
@@ -372,12 +377,24 @@ export default function TraumaModulo({
       </h3>
 
       <div style={{ marginBottom: 10 }}>
-        <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
-        <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
-        <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
-        <div><strong>Género:</strong> {datos?.genero || "—"}</div>
-        <div><strong>Dolor:</strong> {datos?.dolor || "—"}</div>
-        <div><strong>Lado:</strong> {datos?.lado || "—"}</div>
+        <div>
+          <strong>Paciente:</strong> {datos?.nombre || "—"}
+        </div>
+        <div>
+          <strong>RUT:</strong> {datos?.rut || "—"}
+        </div>
+        <div>
+          <strong>Edad:</strong> {datos?.edad || "—"}
+        </div>
+        <div>
+          <strong>Género:</strong> {datos?.genero || "—"}
+        </div>
+        <div>
+          <strong>Dolor:</strong> {datos?.dolor || "—"}
+        </div>
+        <div>
+          <strong>Lado:</strong> {datos?.lado || "—"}
+        </div>
       </div>
 
       {/* Primer preview: resumen plano */}
@@ -390,7 +407,7 @@ export default function TraumaModulo({
         </>
       )}
 
-      {/* Segundo preview: IA + pago */}
+      {/* Segundo preview: IA + confirmación/pago */}
       {stepStarted && (
         <>
           <div style={S.block}>
@@ -418,54 +435,82 @@ export default function TraumaModulo({
             </div>
           )}
 
+          {/* Mensajes de estado RM */}
+          {requiereRM && !resonanciaChecklist && !bloqueaRM && (
+            <div style={S.hint}>
+              La IA sugiere Resonancia Magnética. Presiona “Continuar” para completar el checklist
+              de seguridad.
+            </div>
+          )}
+          {bloqueaRM && (
+            <div style={S.hint}>
+              RM contraindicada por checklist. {ordenAlternativa || "Se sugiere alternativa."}
+            </div>
+          )}
+
           {!pagoRealizado ? (
             <>
-              <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={handlePagar}>
-                Pagar ahora (Trauma)
-              </button>
-              <button
-                style={{ ...S.btnSecondary, marginTop: 8 }}
-                title="Simular retorno pagado (solo pruebas)"
-                onClick={async () => {
-                  const idPago = `trauma_guest_${Date.now()}`;
-                  const datosGuest = {
-                    nombre: "Guest",
-                    rut: "99999999-9",
-                    edad: 35,
-                    genero: "MASCULINO",
-                    dolor: "Rodilla",
-                    lado: "Izquierda",
-                  };
+              {/* Si requiere RM y aún no hay checklist: botón Continuar para abrir formulario */}
+              {requiereRM && !resonanciaChecklist && !bloqueaRM && (
+                <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={lanzarChecklistRM}>
+                  Continuar
+                </button>
+              )}
 
-                  sessionStorage.setItem("idPago", idPago);
-                  sessionStorage.setItem("modulo", "trauma");
-                  sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
+              {/* Si NO requiere RM, o ya se completó checklist, o quedó bloqueada: pagar */}
+              {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
+                <>
+                  <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={handlePagar}>
+                    Pagar ahora (Trauma)
+                  </button>
+                  <button
+                    style={{ ...S.btnSecondary, marginTop: 8 }}
+                    title="Simular retorno pagado (solo pruebas)"
+                    onClick={async () => {
+                      const idPago = `trauma_guest_${Date.now()}`;
+                      const datosGuest = {
+                        nombre: "Guest",
+                        rut: "99999999-9",
+                        edad: 35,
+                        genero: "MASCULINO",
+                        dolor: "Rodilla",
+                        lado: "Izquierda",
+                      };
 
-                  await fetch(`${BACKEND_BASE}/guardar-datos`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      idPago,
-                      datosPaciente: {
-                        ...datosGuest,
-                        examenesIA,
-                        diagnosticoIA,
-                        justificacionIA,
-                      },
-                      resonanciaChecklist,
-                      resonanciaResumenTexto,
-                      ordenAlternativa,
-                    }),
-                  });
+                      sessionStorage.setItem("idPago", idPago);
+                      sessionStorage.setItem("modulo", "trauma");
+                      sessionStorage.setItem(
+                        "datosPacienteJSON",
+                        JSON.stringify(datosGuest)
+                      );
 
-                  const url = new URL(window.location.href);
-                  url.searchParams.set("pago", "ok");
-                  url.searchParams.set("idPago", idPago);
-                  window.location.href = url.toString();
-                }}
-              >
-                Simular Pago (Guest)
-              </button>
+                      await fetch(`${BACKEND_BASE}/guardar-datos`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          idPago,
+                          datosPaciente: {
+                            ...datosGuest,
+                            examenesIA,
+                            diagnosticoIA,
+                            justificacionIA,
+                          },
+                          resonanciaChecklist,
+                          resonanciaResumenTexto,
+                          ordenAlternativa,
+                        }),
+                      });
+
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("pago", "ok");
+                      url.searchParams.set("idPago", idPago);
+                      window.location.href = url.toString();
+                    }}
+                  >
+                    Simular Pago (Guest)
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <button
