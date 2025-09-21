@@ -57,7 +57,7 @@ export default function EsquemaPosterior({
 
   // ===== Columnas adicionales (sin lado) =====
   // Mismo estilo que lumbar; ubicadas por encima de lumbar
-  const cervical = { x: VB * 0.5 - 34, y: VB * 0.0000001,  w: 68,  h: 65,  rx: 10, label: "Columna cervical" };
+  const cervical = { x: VB * 0.5 - 34, y: VB * 0.00001,  w: 68,  h: 65,  rx: 10, label: "Columna cervical" };
   const dorsal   = { x: VB * 0.5 - 40, y: VB * 0.07,  w: 80,  h: 145, rx: 12, label: "Columna dorsal" };
 
   const hitFill = T.primary ?? "#2f6bd8";
