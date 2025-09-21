@@ -448,7 +448,7 @@ function App() {
     });
   };
 
-  // ====== ÚNICO CAMBIO: nuevas zonas del esquema ======
+  // ====== NUEVAS ZONAS + lado (recordando: vista anterior = invertido en pantalla) ======
   const onSeleccionZona = (zona) => {
     let dolor = "";
     let lado = "";
@@ -464,7 +464,7 @@ function App() {
       dolor = "Rodilla";
       lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
     }
-    // Nuevas zonas
+    // Nuevas zonas (Hombro, Codo, Mano, Tobillo)
     else if (z.includes("Hombro")) {
       dolor = "Hombro";
       lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
