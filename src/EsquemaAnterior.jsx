@@ -8,7 +8,7 @@ const T = getTheme();
 /**
  * Esquema anterior (híbrido): imagen base + hotspots SVG.
  * - Caderas y Rodillas existentes se mantienen EXACTAMENTE igual.
- * - Se agregan: HOMBRO, CODO, MANO, TOBILLO (ajustados).
+ * - Hombro/Codo/Mano más altos (mismo delta); Tobillo más bajo.
  * Nota: IZQUIERDA de pantalla = DERECHA del paciente.
  */
 export default function EsquemaAnterior({
@@ -32,22 +32,22 @@ export default function EsquemaAnterior({
     pantallaIzq_rodilla: { cx: VB * 0.42, cy: VB * 0.75, rx: 44, ry: 44 },
     pantallaDer_rodilla: { cx: VB * 0.58, cy: VB * 0.75, rx: 44, ry: 44 },
 
-    // ===== Nuevos (ajustados) =====
-    // Hombros (igual a rodilla) — más laterales y levemente más abajo
-    pantallaIzq_hombro: { cx: VB * 0.34, cy: VB * 0.245, rx: 44, ry: 44 },
-    pantallaDer_hombro: { cx: VB * 0.66, cy: VB * 0.245, rx: 44, ry: 44 },
+    // ===== Nuevos (ajustados con el mismo delta en altura) =====
+    // Hombros (igual a rodilla) — MÁS ARRIBA (cy 0.215)
+    pantallaIzq_hombro: { cx: VB * 0.34, cy: VB * 0.215, rx: 44, ry: 44 },
+    pantallaDer_hombro: { cx: VB * 0.66, cy: VB * 0.215, rx: 44, ry: 44 },
 
-    // Codos (más chico que hombro) — más laterales y un poco más abajo
-    pantallaIzq_codo: { cx: VB * 0.28, cy: VB * 0.48, rx: 38, ry: 38 },
-    pantallaDer_codo: { cx: VB * 0.72, cy: VB * 0.48, rx: 38, ry: 38 },
+    // Codos (más chico que hombro) — MÁS ARRIBA (cy 0.45)
+    pantallaIzq_codo: { cx: VB * 0.28, cy: VB * 0.45, rx: 38, ry: 38 },
+    pantallaDer_codo: { cx: VB * 0.72, cy: VB * 0.45, rx: 38, ry: 38 },
 
-    // Manos (más chicas que codo) — un poco más abajo
-    pantallaIzq_mano: { cx: VB * 0.24, cy: VB * 0.66, rx: 32, ry: 32 },
-    pantallaDer_mano: { cx: VB * 0.76, cy: VB * 0.66, rx: 32, ry: 32 },
+    // Manos (más chicas que codo) — MÁS ARRIBA (cy 0.63)
+    pantallaIzq_mano: { cx: VB * 0.24, cy: VB * 0.63, rx: 32, ry: 32 },
+    pantallaDer_mano: { cx: VB * 0.76, cy: VB * 0.63, rx: 32, ry: 32 },
 
-    // Tobillos (igual a codo) — apenas más laterales y abajo
-    pantallaIzq_tobillo: { cx: VB * 0.45, cy: VB * 0.96, rx: 38, ry: 38 },
-    pantallaDer_tobillo: { cx: VB * 0.55, cy: VB * 0.96, rx: 38, ry: 38 },
+    // Tobillos (igual a codo) — MÁS ABAJO (cy 0.975)
+    pantallaIzq_tobillo: { cx: VB * 0.45, cy: VB * 0.975, rx: 38, ry: 38 },
+    pantallaDer_tobillo: { cx: VB * 0.55, cy: VB * 0.975, rx: 38, ry: 38 },
   };
 
   const onKey = (z) => (e) => {
