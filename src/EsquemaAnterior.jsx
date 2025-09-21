@@ -34,20 +34,20 @@ export default function EsquemaAnterior({
 
     // ===== Nuevos (ajustados con el mismo delta en altura) =====
     // Hombros (igual a rodilla) — MÁS ARRIBA (cy 0.215)
-    pantallaIzq_hombro: { cx: VB * 0.34, cy: VB * 0.215, rx: 44, ry: 44 },
-    pantallaDer_hombro: { cx: VB * 0.66, cy: VB * 0.215, rx: 44, ry: 44 },
+    pantallaIzq_hombro: { cx: VB * 0.34, cy: VB * 1.215, rx: 44, ry: 44 },
+    pantallaDer_hombro: { cx: VB * 0.66, cy: VB * 1.215, rx: 44, ry: 44 },
 
     // Codos (más chico que hombro) — MÁS ARRIBA (cy 0.45)
-    pantallaIzq_codo: { cx: VB * 0.28, cy: VB * 0.45, rx: 38, ry: 38 },
-    pantallaDer_codo: { cx: VB * 0.72, cy: VB * 0.45, rx: 38, ry: 38 },
+    pantallaIzq_codo: { cx: VB * 0.28, cy: VB * 1.45, rx: 38, ry: 38 },
+    pantallaDer_codo: { cx: VB * 0.72, cy: VB * 1.45, rx: 38, ry: 38 },
 
     // Manos (más chicas que codo) — MÁS ARRIBA (cy 0.63)
-    pantallaIzq_mano: { cx: VB * 0.24, cy: VB * 0.63, rx: 32, ry: 32 },
-    pantallaDer_mano: { cx: VB * 0.76, cy: VB * 0.63, rx: 32, ry: 32 },
+    pantallaIzq_mano: { cx: VB * 0.24, cy: VB * 1.63, rx: 32, ry: 32 },
+    pantallaDer_mano: { cx: VB * 0.76, cy: VB * 1.63, rx: 32, ry: 32 },
 
     // Tobillos (igual a codo) — MÁS ABAJO (cy 0.975)
-    pantallaIzq_tobillo: { cx: VB * 0.40, cy: VB * 1.05, rx: 38, ry: 38 },
-    pantallaDer_tobillo: { cx: VB * 0.60, cy: VB * 1.05, rx: 38, ry: 38 },
+    pantallaIzq_tobillo: { cx: VB * 0.42, cy: VB * 1.052, rx: 38, ry: 38 },
+    pantallaDer_tobillo: { cx: VB * 0.58, cy: VB * 1.052, rx: 38, ry: 38 },
   };
 
   const onKey = (z) => (e) => {
