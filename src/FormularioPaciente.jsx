@@ -1,3 +1,4 @@
+// src/FormularioPaciente.jsx
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
 import { getTheme } from "./theme.js"; // <- colores desde theme.json
@@ -193,6 +194,21 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
     onSubmit(e);
   };
 
+  // === Lado no aplica en zonas de columna ===
+  const isZonaColumna = useMemo(() => {
+    const d = (datos?.dolor || "").toLowerCase();
+    return d.includes("columna");
+  }, [datos?.dolor]);
+
+  const manejoCambioDolor = (e) => {
+    const v = e.target.value;
+    onCambiarDato("dolor", v);
+    if (v.toLowerCase().includes("columna")) {
+      // borrar lado si la zona no tiene lateralidad
+      onCambiarDato("lado", "");
+    }
+  };
+
   const showCirugia = isPreop;
   const listaOpciones =
     opcionesCirugia.length > 0 ? opcionesCirugia : ["OTRO (ESPECIFICAR)"];
@@ -266,7 +282,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
           <select
             style={styles.input}
             value={datos.dolor || ""}
-            onChange={(e) => onCambiarDato("dolor", e.target.value)}
+            onChange={manejoCambioDolor}
             required
           >
             <option value="">Seleccione...</option>
@@ -274,6 +290,9 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
             <option value="Rodilla">Rodilla</option>
             <option value="Cadera">Cadera</option>
             <option value="Columna lumbar">Columna lumbar</option>
+            {/* nuevos de columna SIN lado */}
+            <option value="Columna cervical">Columna cervical</option>
+            <option value="Columna dorsal">Columna dorsal</option>
             {/* nuevos puntos agregados al esquema */}
             <option value="Hombro">Hombro</option>
             <option value="Codo">Codo</option>
@@ -286,11 +305,18 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
             style={styles.input}
             value={datos.lado || ""}
             onChange={(e) => onCambiarDato("lado", e.target.value)}
-            required
+            required={!isZonaColumna}
+            disabled={isZonaColumna}
           >
-            <option value="">Seleccione...</option>
-            <option value="Derecha">Derecha</option>
-            <option value="Izquierda">Izquierda</option>
+            {isZonaColumna ? (
+              <option value="">No aplica</option>
+            ) : (
+              <>
+                <option value="">Seleccione...</option>
+                <option value="Derecha">Derecha</option>
+                <option value="Izquierda">Izquierda</option>
+              </>
+            )}
           </select>
         </>
       )}
