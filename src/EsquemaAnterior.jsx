@@ -34,8 +34,8 @@ export default function EsquemaAnterior({
 
     // ===== Nuevos (solo textos; posiciones se respetan) =====
     // Hombros (igual a rodilla)
-    pantallaIzq_hombro: { cx: VB * 0.36, cy: VB * 0.095, rx: 44, ry: 44 },
-    pantallaDer_hombro: { cx: VB * 0.64, cy: VB * 0.095, rx: 44, ry: 44 },
+    pantallaIzq_hombro: { cx: VB * 0.36, cy: VB * 0.099, rx: 44, ry: 44 },
+    pantallaDer_hombro: { cx: VB * 0.64, cy: VB * 0.099, rx: 44, ry: 44 },
 
     // Codos (más chico que hombro)
     pantallaIzq_codo: { cx: VB * 0.31, cy: VB * 0.3, rx: 38, ry: 38 },
