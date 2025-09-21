@@ -34,16 +34,16 @@ export default function EsquemaAnterior({
 
     // ===== Nuevos (solo textos; posiciones se respetan) =====
     // Hombros (igual a rodilla)
-    pantallaIzq_hombro: { cx: VB * 0.34, cy: VB * 0.08, rx: 44, ry: 44 },
-    pantallaDer_hombro: { cx: VB * 0.66, cy: VB * 0.08, rx: 44, ry: 44 },
+    pantallaIzq_hombro: { cx: VB * 0.34, cy: VB * 0.085, rx: 44, ry: 44 },
+    pantallaDer_hombro: { cx: VB * 0.66, cy: VB * 0.085, rx: 44, ry: 44 },
 
     // Codos (más chico que hombro)
-    pantallaIzq_codo: { cx: VB * 0.30, cy: VB * 0.3, rx: 38, ry: 38 },
-    pantallaDer_codo: { cx: VB * 0.60, cy: VB * 0.3, rx: 38, ry: 38 },
+    pantallaIzq_codo: { cx: VB * 0.32, cy: VB * 0.3, rx: 38, ry: 38 },
+    pantallaDer_codo: { cx: VB * 0.68, cy: VB * 0.3, rx: 38, ry: 38 },
 
     // Manos (más chicas que codo)
-    pantallaIzq_mano: { cx: VB * 0.28, cy: VB * 0.5, rx: 32, ry: 32 },
-    pantallaDer_mano: { cx: VB * 0.72, cy: VB * 0.5, rx: 32, ry: 32 },
+    pantallaIzq_mano: { cx: VB * 0.26, cy: VB * 0.5, rx: 32, ry: 32 },
+    pantallaDer_mano: { cx: VB * 0.74, cy: VB * 0.5, rx: 32, ry: 32 },
 
     // Tobillos (igual a codo)
     pantallaIzq_tobillo: { cx: VB * 0.41, cy: VB * 1.052, rx: 38, ry: 38 },
