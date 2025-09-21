@@ -448,18 +448,35 @@ function App() {
     });
   };
 
+  // ====== ÚNICO CAMBIO: nuevas zonas del esquema ======
   const onSeleccionZona = (zona) => {
     let dolor = "";
     let lado = "";
-    if (zona.includes("Columna")) {
+    const z = String(zona || "");
+
+    if (z.includes("Columna")) {
       dolor = "Columna lumbar";
       lado = "";
-    } else if (zona.includes("Cadera")) {
+    } else if (z.includes("Cadera")) {
       dolor = "Cadera";
-      lado = zona.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zona.includes("Rodilla")) {
+      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (z.includes("Rodilla")) {
       dolor = "Rodilla";
-      lado = zona.includes("izquierda") ? "Izquierda" : "Derecha";
+      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
+    }
+    // Nuevas zonas
+    else if (z.includes("Hombro")) {
+      dolor = "Hombro";
+      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (z.includes("Codo")) {
+      dolor = "Codo";
+      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (z.includes("Mano")) {
+      dolor = "Mano";
+      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (z.includes("Tobillo")) {
+      dolor = "Tobillo";
+      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
     }
 
     setDatosPaciente((prev) => {
