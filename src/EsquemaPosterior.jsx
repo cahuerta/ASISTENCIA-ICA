@@ -43,16 +43,16 @@ export default function EsquemaPosterior({
     hombroDer: { cx: VB * 0.66, cy: VB * 0.10, rx: 44, ry: 44, label: "Hombro derecha" },
 
     // CODOS (a la mitad del brazo)
-    codoIzq:   { cx: VB * 0.35, cy: VB * 0.32, rx: 38, ry: 38, label: "Codo izquierda" },
-    codoDer:   { cx: VB * 0.65, cy: VB * 0.32, rx: 38, ry: 38, label: "Codo derecha" },
+    codoIzq:   { cx: VB * 0.35, cy: VB * 0.20, rx: 38, ry: 38, label: "Codo izquierda" },
+    codoDer:   { cx: VB * 0.65, cy: VB * 0.20, rx: 38, ry: 38, label: "Codo derecha" },
 
     // MANOS (a la altura del muslo superior)
-    manoIzq:   { cx: VB * 0.24, cy: VB * 0.61, rx: 32, ry: 32, label: "Mano izquierda" },
-    manoDer:   { cx: VB * 0.76, cy: VB * 0.61, rx: 32, ry: 32, label: "Mano derecha" },
+    manoIzq:   { cx: VB * 0.24, cy: VB * 0.50, rx: 32, ry: 32, label: "Mano izquierda" },
+    manoDer:   { cx: VB * 0.76, cy: VB * 0.50, rx: 32, ry: 32, label: "Mano derecha" },
 
     // TOBILLOS (apenas por sobre el borde inferior)
-    tobilloIzq:{ cx: VB * 0.41, cy: VB * 1.02, rx: 38, ry: 38, label: "Tobillo izquierda" },
-    tobilloDer:{ cx: VB * 0.59, cy: VB * 1.02, rx: 38, ry: 38, label: "Tobillo derecha" },
+    tobilloIzq:{ cx: VB * 0.41, cy: VB * 1.22, rx: 38, ry: 38, label: "Tobillo izquierda" },
+    tobilloDer:{ cx: VB * 0.59, cy: VB * 1.22, rx: 38, ry: 38, label: "Tobillo derecha" },
   };
 
   // ===== Columnas adicionales (sin lado) =====
