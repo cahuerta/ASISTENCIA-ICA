@@ -8,7 +8,7 @@ const T = getTheme();
 /**
  * Esquema anterior (híbrido): imagen base + hotspots SVG.
  * - Caderas y Rodillas existentes se mantienen EXACTAMENTE igual.
- * - Se agregan: HOMBRO, CODO, MANO, TOBILLO.
+ * - Se agregan: HOMBRO, CODO, MANO, TOBILLO (ajustados).
  * Nota: IZQUIERDA de pantalla = DERECHA del paciente.
  */
 export default function EsquemaAnterior({
@@ -24,30 +24,30 @@ export default function EsquemaAnterior({
 
   // ===== Puntos =====
   const puntos = {
-    // En pantalla IZQUIERDA => DERECHA del paciente
+    // En pantalla IZQUIERDA => DERECHA del paciente (NO TOCAR)
     pantallaIzq_cadera: { cx: VB * 0.43, cy: VB * 0.48, rx: 48, ry: 40 },
     pantallaDer_cadera: { cx: VB * 0.57, cy: VB * 0.48, rx: 48, ry: 40 },
 
-    // Rodillas (sin cambios vs tu versión)
+    // Rodillas (NO TOCAR)
     pantallaIzq_rodilla: { cx: VB * 0.42, cy: VB * 0.75, rx: 44, ry: 44 },
     pantallaDer_rodilla: { cx: VB * 0.58, cy: VB * 0.75, rx: 44, ry: 44 },
 
-    // Nuevos:
-    // Hombros (igual a rodilla)
-    pantallaIzq_hombro: { cx: VB * 0.36, cy: VB * 0.23, rx: 44, ry: 44 },
-    pantallaDer_hombro: { cx: VB * 0.64, cy: VB * 0.23, rx: 44, ry: 44 },
+    // ===== Nuevos (ajustados) =====
+    // Hombros (igual a rodilla) — más laterales y levemente más abajo
+    pantallaIzq_hombro: { cx: VB * 0.34, cy: VB * 0.245, rx: 44, ry: 44 },
+    pantallaDer_hombro: { cx: VB * 0.66, cy: VB * 0.245, rx: 44, ry: 44 },
 
-    // Codos (más chico que hombro)
-    pantallaIzq_codo: { cx: VB * 0.30, cy: VB * 0.43, rx: 38, ry: 38 },
-    pantallaDer_codo: { cx: VB * 0.70, cy: VB * 0.43, rx: 38, ry: 38 },
+    // Codos (más chico que hombro) — más laterales y un poco más abajo
+    pantallaIzq_codo: { cx: VB * 0.28, cy: VB * 0.48, rx: 38, ry: 38 },
+    pantallaDer_codo: { cx: VB * 0.72, cy: VB * 0.48, rx: 38, ry: 38 },
 
-    // Manos (más chicas que codo)
-    pantallaIzq_mano: { cx: VB * 0.26, cy: VB * 0.62, rx: 32, ry: 32 },
-    pantallaDer_mano: { cx: VB * 0.74, cy: VB * 0.62, rx: 32, ry: 32 },
+    // Manos (más chicas que codo) — un poco más abajo
+    pantallaIzq_mano: { cx: VB * 0.24, cy: VB * 0.66, rx: 32, ry: 32 },
+    pantallaDer_mano: { cx: VB * 0.76, cy: VB * 0.66, rx: 32, ry: 32 },
 
-    // Tobillos (igual a codo)
-    pantallaIzq_tobillo: { cx: VB * 0.46, cy: VB * 0.95, rx: 38, ry: 38 },
-    pantallaDer_tobillo: { cx: VB * 0.54, cy: VB * 0.95, rx: 38, ry: 38 },
+    // Tobillos (igual a codo) — apenas más laterales y abajo
+    pantallaIzq_tobillo: { cx: VB * 0.45, cy: VB * 0.96, rx: 38, ry: 38 },
+    pantallaDer_tobillo: { cx: VB * 0.55, cy: VB * 0.96, rx: 38, ry: 38 },
   };
 
   const onKey = (z) => (e) => {
@@ -105,160 +105,28 @@ export default function EsquemaAnterior({
         </defs>
 
         {/* ===== CADERAS ===== */}
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaIzq_cadera.cx}
-          cy={puntos.pantallaIzq_cadera.cy}
-          rx={puntos.pantallaIzq_cadera.rx}
-          ry={puntos.pantallaIzq_cadera.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Cadera derecha (inguinal)"
-          onClick={() => handle("Cadera derecha")}
-          onKeyDown={onKey("Cadera derecha")}
-        />
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaDer_cadera.cx}
-          cy={puntos.pantallaDer_cadera.cy}
-          rx={puntos.pantallaDer_cadera.rx}
-          ry={puntos.pantallaDer_cadera.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Cadera izquierda (inguinal)"
-          onClick={() => handle("Cadera izquierda")}
-          onKeyDown={onKey("Cadera izquierda")}
-        />
+        <ellipse className="hit" cx={puntos.pantallaIzq_cadera.cx} cy={puntos.pantallaIzq_cadera.cy} rx={puntos.pantallaIzq_cadera.rx} ry={puntos.pantallaIzq_cadera.ry} tabIndex={0} role="button" aria-label="Cadera derecha (inguinal)" onClick={() => handle("Cadera derecha")} onKeyDown={onKey("Cadera derecha")} />
+        <ellipse className="hit" cx={puntos.pantallaDer_cadera.cx} cy={puntos.pantallaDer_cadera.cy} rx={puntos.pantallaDer_cadera.rx} ry={puntos.pantallaDer_cadera.ry} tabIndex={0} role="button" aria-label="Cadera izquierda (inguinal)" onClick={() => handle("Cadera izquierda")} onKeyDown={onKey("Cadera izquierda")} />
 
         {/* ===== RODILLAS ===== */}
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaIzq_rodilla.cx}
-          cy={puntos.pantallaIzq_rodilla.cy}
-          rx={puntos.pantallaIzq_rodilla.rx}
-          ry={puntos.pantallaIzq_rodilla.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Rodilla derecha"
-          onClick={() => handle("Rodilla derecha")}
-          onKeyDown={onKey("Rodilla derecha")}
-        />
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaDer_rodilla.cx}
-          cy={puntos.pantallaDer_rodilla.cy}
-          rx={puntos.pantallaDer_rodilla.rx}
-          ry={puntos.pantallaDer_rodilla.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Rodilla izquierda"
-          onClick={() => handle("Rodilla izquierda")}
-          onKeyDown={onKey("Rodilla izquierda")}
-        />
+        <ellipse className="hit" cx={puntos.pantallaIzq_rodilla.cx} cy={puntos.pantallaIzq_rodilla.cy} rx={puntos.pantallaIzq_rodilla.rx} ry={puntos.pantallaIzq_rodilla.ry} tabIndex={0} role="button" aria-label="Rodilla derecha" onClick={() => handle("Rodilla derecha")} onKeyDown={onKey("Rodilla derecha")} />
+        <ellipse className="hit" cx={puntos.pantallaDer_rodilla.cx} cy={puntos.pantallaDer_rodilla.cy} rx={puntos.pantallaDer_rodilla.rx} ry={puntos.pantallaDer_rodilla.ry} tabIndex={0} role="button" aria-label="Rodilla izquierda" onClick={() => handle("Rodilla izquierda")} onKeyDown={onKey("Rodilla izquierda")} />
 
         {/* ===== HOMBROS ===== */}
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaIzq_hombro.cx}
-          cy={puntos.pantallaIzq_hombro.cy}
-          rx={puntos.pantallaIzq_hombro.rx}
-          ry={puntos.pantallaIzq_hombro.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Hombro derecho"
-          onClick={() => handle("Hombro derecho")}
-          onKeyDown={onKey("Hombro derecho")}
-        />
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaDer_hombro.cx}
-          cy={puntos.pantallaDer_hombro.cy}
-          rx={puntos.pantallaDer_hombro.rx}
-          ry={puntos.pantallaDer_hombro.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Hombro izquierdo"
-          onClick={() => handle("Hombro izquierdo")}
-          onKeyDown={onKey("Hombro izquierdo")}
-        />
+        <ellipse className="hit" cx={puntos.pantallaIzq_hombro.cx} cy={puntos.pantallaIzq_hombro.cy} rx={puntos.pantallaIzq_hombro.rx} ry={puntos.pantallaIzq_hombro.ry} tabIndex={0} role="button" aria-label="Hombro derecho" onClick={() => handle("Hombro derecho")} onKeyDown={onKey("Hombro derecho")} />
+        <ellipse className="hit" cx={puntos.pantallaDer_hombro.cx} cy={puntos.pantallaDer_hombro.cy} rx={puntos.pantallaDer_hombro.rx} ry={puntos.pantallaDer_hombro.ry} tabIndex={0} role="button" aria-label="Hombro izquierdo" onClick={() => handle("Hombro izquierdo")} onKeyDown={onKey("Hombro izquierdo")} />
 
         {/* ===== CODOS ===== */}
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaIzq_codo.cx}
-          cy={puntos.pantallaIzq_codo.cy}
-          rx={puntos.pantallaIzq_codo.rx}
-          ry={puntos.pantallaIzq_codo.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Codo derecho"
-          onClick={() => handle("Codo derecho")}
-          onKeyDown={onKey("Codo derecho")}
-        />
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaDer_codo.cx}
-          cy={puntos.pantallaDer_codo.cy}
-          rx={puntos.pantallaDer_codo.rx}
-          ry={puntos.pantallaDer_codo.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Codo izquierdo"
-          onClick={() => handle("Codo izquierdo")}
-          onKeyDown={onKey("Codo izquierdo")}
-        />
+        <ellipse className="hit" cx={puntos.pantallaIzq_codo.cx} cy={puntos.pantallaIzq_codo.cy} rx={puntos.pantallaIzq_codo.rx} ry={puntos.pantallaIzq_codo.ry} tabIndex={0} role="button" aria-label="Codo derecho" onClick={() => handle("Codo derecho")} onKeyDown={onKey("Codo derecho")} />
+        <ellipse className="hit" cx={puntos.pantallaDer_codo.cx} cy={puntos.pantallaDer_codo.cy} rx={puntos.pantallaDer_codo.rx} ry={puntos.pantallaDer_codo.ry} tabIndex={0} role="button" aria-label="Codo izquierdo" onClick={() => handle("Codo izquierdo")} onKeyDown={onKey("Codo izquierdo")} />
 
         {/* ===== MANOS ===== */}
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaIzq_mano.cx}
-          cy={puntos.pantallaIzq_mano.cy}
-          rx={puntos.pantallaIzq_mano.rx}
-          ry={puntos.pantallaIzq_mano.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Mano derecha"
-          onClick={() => handle("Mano derecha")}
-          onKeyDown={onKey("Mano derecha")}
-        />
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaDer_mano.cx}
-          cy={puntos.pantallaDer_mano.cy}
-          rx={puntos.pantallaDer_mano.rx}
-          ry={puntos.pantallaDer_mano.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Mano izquierda"
-          onClick={() => handle("Mano izquierda")}
-          onKeyDown={onKey("Mano izquierda")}
-        />
+        <ellipse className="hit" cx={puntos.pantallaIzq_mano.cx} cy={puntos.pantallaIzq_mano.cy} rx={puntos.pantallaIzq_mano.rx} ry={puntos.pantallaIzq_mano.ry} tabIndex={0} role="button" aria-label="Mano derecha" onClick={() => handle("Mano derecha")} onKeyDown={onKey("Mano derecha")} />
+        <ellipse className="hit" cx={puntos.pantallaDer_mano.cx} cy={puntos.pantallaDer_mano.cy} rx={puntos.pantallaDer_mano.rx} ry={puntos.pantallaDer_mano.ry} tabIndex={0} role="button" aria-label="Mano izquierda" onClick={() => handle("Mano izquierda")} onKeyDown={onKey("Mano izquierda")} />
 
         {/* ===== TOBILLOS ===== */}
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaIzq_tobillo.cx}
-          cy={puntos.pantallaIzq_tobillo.cy}
-          rx={puntos.pantallaIzq_tobillo.rx}
-          ry={puntos.pantallaIzq_tobillo.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Tobillo derecho"
-          onClick={() => handle("Tobillo derecho")}
-          onKeyDown={onKey("Tobillo derecho")}
-        />
-        <ellipse
-          className="hit"
-          cx={puntos.pantallaDer_tobillo.cx}
-          cy={puntos.pantallaDer_tobillo.cy}
-          rx={puntos.pantallaDer_tobillo.rx}
-          ry={puntos.pantallaDer_tobillo.ry}
-          tabIndex={0}
-          role="button"
-          aria-label="Tobillo izquierdo"
-          onClick={() => handle("Tobillo izquierdo")}
-          onKeyDown={onKey("Tobillo izquierdo")}
-        />
+        <ellipse className="hit" cx={puntos.pantallaIzq_tobillo.cx} cy={puntos.pantallaIzq_tobillo.cy} rx={puntos.pantallaIzq_tobillo.rx} ry={puntos.pantallaIzq_tobillo.ry} tabIndex={0} role="button" aria-label="Tobillo derecho" onClick={() => handle("Tobillo derecho")} onKeyDown={onKey("Tobillo derecho")} />
+        <ellipse className="hit" cx={puntos.pantallaDer_tobillo.cx} cy={puntos.pantallaDer_tobillo.cy} rx={puntos.pantallaDer_tobillo.rx} ry={puntos.pantallaDer_tobillo.ry} tabIndex={0} role="button" aria-label="Tobillo izquierdo" onClick={() => handle("Tobillo izquierdo")} onKeyDown={onKey("Tobillo izquierdo")} />
       </svg>
     </div>
   );
