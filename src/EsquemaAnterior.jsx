@@ -34,12 +34,12 @@ export default function EsquemaAnterior({
 
     // ===== Nuevos (ajustados con el mismo delta en altura) =====
     // Hombros (igual a rodilla) — MÁS ARRIBA (cy 0.215)
-    pantallaIzq_hombro: { cx: VB * 0.34, cy: VB * 0.05, rx: 44, ry: 44 },
-    pantallaDer_hombro: { cx: VB * 0.66, cy: VB * 0.05, rx: 44, ry: 44 },
+    pantallaIzq_hombro: { cx: VB * 0.34, cy: VB * 0.065, rx: 44, ry: 44 },
+    pantallaDer_hombro: { cx: VB * 0.66, cy: VB * 0.065, rx: 44, ry: 44 },
 
     // Codos (más chico que hombro) — MÁS ARRIBA (cy 0.45)
-    pantallaIzq_codo: { cx: VB * 0.28, cy: VB * 0.3, rx: 38, ry: 38 },
-    pantallaDer_codo: { cx: VB * 0.72, cy: VB * 0.3, rx: 38, ry: 38 },
+    pantallaIzq_codo: { cx: VB * 0.30, cy: VB * 0.3, rx: 38, ry: 38 },
+    pantallaDer_codo: { cx: VB * 0.70, cy: VB * 0.3, rx: 38, ry: 38 },
 
     // Manos (más chicas que codo) — MÁS ARRIBA (cy 0.63)
     pantallaIzq_mano: { cx: VB * 0.24, cy: VB * 0.4, rx: 32, ry: 32 },
