@@ -17,6 +17,13 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
   const [previewIA, setPreviewIA] = useState("");
   const [generando, setGenerando] = useState(false);
 
+  // ===== Estados RM (mismo patrón que Trauma)
+  const [requiereRM, setRequiereRM] = useState(false);
+  const [bloqueaRM, setBloqueaRM] = useState(false);
+  const [resonanciaChecklist, setResonanciaChecklist] = useState(null);
+  const [resonanciaResumenTexto, setResonanciaResumenTexto] = useState("");
+  const [ordenAlternativa, setOrdenAlternativa] = useState("");
+
   // Pago/descarga
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [descargando, setDescargando] = useState(false);
@@ -46,6 +53,14 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
       if (savedPrev) setPreviewIA(savedPrev);
       const savedId = sessionStorage.getItem("idPago");
       if (savedId) setIdPago(savedId);
+
+      // restaurar checklist/alternativa si existían
+      const ck = sessionStorage.getItem("resonanciaChecklist");
+      const rs = sessionStorage.getItem("resonanciaResumenTexto");
+      const alt = sessionStorage.getItem("ordenAlternativa");
+      if (ck) setResonanciaChecklist(JSON.parse(ck));
+      if (rs) setResonanciaResumenTexto(rs);
+      if (alt) setOrdenAlternativa(alt);
     } catch {}
 
     const params = new URLSearchParams(window.location.search);
@@ -108,8 +123,8 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
   };
 
   // Primero backend (si falla, fallback local)
-  const requiereRM = async () => {
-    const examenTexto = previewIA || datos.consulta || "";
+  const detectarRM = async (textoBase) => {
+    const examenTexto = textoBase || previewIA || datos.consulta || "";
     if (!examenTexto.trim()) return false;
 
     try {
@@ -180,11 +195,61 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
       setPreviewIA(resp);
       sessionStorage.setItem("previewIA", resp);
       window.scrollTo({ top: 0, behavior: "smooth" });
+
+      // Detectar si el preview sugiere RM (sin abrir checklist aún)
+      try {
+        const pide = await detectarRM(resp);
+        setRequiereRM(!!pide);
+        setBloqueaRM(false);
+        setResonanciaChecklist(null);
+        setResonanciaResumenTexto("");
+        setOrdenAlternativa("");
+      } catch {}
     } catch (err) {
       console.error("Preview IA error:", err);
       alert("Error al generar el preview de IA.");
     } finally {
       setGenerando(false);
+    }
+  };
+
+  // Lanzar checklist RM tras confirmación
+  const lanzarChecklistRM = async () => {
+    if (!requiereRM || typeof pedirChecklistResonancia !== "function") return;
+    const res = await pedirChecklistResonancia();
+    if (res?.canceled) return;
+
+    if (res.bloquea) {
+      setBloqueaRM(true);
+      const alternativa =
+        "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
+      setOrdenAlternativa(alternativa);
+      sessionStorage.setItem("ordenAlternativa", alternativa);
+      // persistir en backend
+      fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idPago, ordenAlternativa: alternativa }),
+      }).catch(() => {});
+      setResonanciaChecklist(null);
+      setResonanciaResumenTexto("");
+    } else {
+      setBloqueaRM(false);
+      const resumen = res.resumen || "";
+      setResonanciaChecklist(res.data || {});
+      setResonanciaResumenTexto(resumen);
+      sessionStorage.setItem("resonanciaChecklist", JSON.stringify(res.data || {}));
+      sessionStorage.setItem("resonanciaResumenTexto", resumen);
+      // persistir en backend
+      fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idPago,
+          resonanciaChecklist: res.data || {},
+          resonanciaResumenTexto: resumen,
+        }),
+      }).catch(() => {});
     }
   };
 
@@ -211,53 +276,17 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
       return;
     }
 
+    // Gate: si requiere RM y aún NO hay checklist ni bloqueo → pedirlo antes de pagar
+    if (requiereRM && !resonanciaChecklist && !bloqueaRM) {
+      alert("Antes de pagar, complete el checklist de RM (presione Continuar).");
+      return;
+    }
+
     try {
       sessionStorage.setItem("idPago", idPago);
       sessionStorage.setItem("modulo", "ia");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify(base));
 
-      // ======== Gate de Resonancia (backend + fallback) ========
-      if (typeof pedirChecklistResonancia === "function") {
-        const pideRM = await requiereRM();
-        if (pideRM) {
-          const res = await pedirChecklistResonancia();
-          if (res?.canceled) return; // usuario cerró
-
-          if (res.bloquea) {
-            // Red flags → cambiar RM por examen alternativo
-            const alternativa =
-              "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
-            sessionStorage.setItem("ordenAlternativa", alternativa);
-            await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ idPago, ordenAlternativa: alternativa }),
-            }).catch(() => {});
-          } else {
-            // Sin red flags → adjuntar resumen del checklist para firma
-            sessionStorage.setItem(
-              "resonanciaChecklist",
-              JSON.stringify(res.data || {})
-            );
-            sessionStorage.setItem(
-              "resonanciaResumenTexto",
-              res.resumen || ""
-            );
-            await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                idPago,
-                resonanciaChecklist: res.data || {},
-                resonanciaResumenTexto: res.resumen || "",
-              }),
-            }).catch(() => {});
-          }
-        }
-      }
-      // =========================================================
-
-      // Mismo flujo que otros módulos: irAPagoKhipu
       await irAPagoKhipu({ ...base, edad: edadNum }, { idPago, modulo: "ia" });
     } catch (err) {
       console.error("No se pudo generar el link de pago (IA):", err);
@@ -524,7 +553,8 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
 
       {/* Datos Paciente */}
       <div style={{ marginBottom: 10 }}>
-        <div style={S.grid2}>
+        {/* Stacked para evitar que RUT/Edad se salgan del margen */}
+        <div style={S.grid1}>
           <label style={S.label}>
             Nombre
             <input
@@ -547,20 +577,19 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
               style={S.input}
             />
           </label>
+          <label style={S.label}>
+            Edad
+            <input
+              type="number"
+              value={datos.edad || ""}
+              onChange={(e) =>
+                setDatos((p) => ({ ...p, edad: e.target.value }))
+              }
+              placeholder="Edad"
+              style={S.input}
+            />
+          </label>
         </div>
-
-        <label style={S.label}>
-          Edad
-          <input
-            type="number"
-            value={datos.edad || ""}
-            onChange={(e) =>
-              setDatos((p) => ({ ...p, edad: e.target.value }))
-            }
-            placeholder="Edad"
-            style={S.input}
-          />
-        </label>
       </div>
 
       {/* Consulta Libre */}
@@ -592,22 +621,49 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
         </div>
       )}
 
+      {/* Mensajes de estado RM */}
+      {previewIA && requiereRM && !resonanciaChecklist && !bloqueaRM && (
+        <div style={S.hint}>
+          La IA sugiere Resonancia Magnética. Presione “Continuar” para completar el checklist de seguridad.
+        </div>
+      )}
+      {previewIA && bloqueaRM && (
+        <div style={S.hint}>
+          RM contraindicada por checklist. {ordenAlternativa || "Se sugiere alternativa."}
+        </div>
+      )}
+
       {/* Controles de pago/descarga */}
       {!pagoRealizado && previewIA && (
         <>
-          <button
-            style={{ ...S.btnPrimary, marginTop: 12 }}
-            onClick={handlePagarIA}
-          >
-            Pagar ahora (Informe IA)
-          </button>
-          <button
-            style={{ ...S.btnSecondary, marginTop: 8 }}
-            onClick={handleSimularPagoGuest}
-            title="Simular retorno pagado (solo pruebas)"
-          >
-            Simular Pago (Guest)
-          </button>
+          {/* Si requiere RM y aún no hay checklist ni bloqueo → CONTINUAR */}
+          {requiereRM && !resonanciaChecklist && !bloqueaRM && (
+            <button
+              style={{ ...S.btnPrimary, marginTop: 12 }}
+              onClick={lanzarChecklistRM}
+            >
+              Continuar
+            </button>
+          )}
+
+          {/* Si NO requiere RM, o ya completó checklist, o quedó bloqueada → Pagar */}
+          {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
+            <>
+              <button
+                style={{ ...S.btnPrimary, marginTop: 12 }}
+                onClick={handlePagarIA}
+              >
+                Pagar ahora (Informe IA)
+              </button>
+              <button
+                style={{ ...S.btnSecondary, marginTop: 8 }}
+                onClick={handleSimularPagoGuest}
+                title="Simular retorno pagado (solo pruebas)"
+              >
+                Simular Pago (Guest)
+              </button>
+            </>
+          )}
         </>
       )}
 
@@ -652,19 +708,22 @@ function makeStyles(T) {
       border: `1px solid ${T.border ?? "#e8e8e8"}`,
       color: T.text ?? "#1b1b1b",
     },
-    grid2: {
+    // Usamos 1 columna para evitar que RUT/Edad se salgan del margen en el panel derecho
+    grid1: {
       display: "grid",
-      gridTemplateColumns: "1fr 1fr",
+      gridTemplateColumns: "1fr",
       gap: 12,
     },
     label: { display: "flex", flexDirection: "column", gap: 6 },
     input: {
+      width: "100%",
       padding: "10px",
       borderRadius: 8,
       border: `1px solid ${T.border ?? "#ddd"}`,
       background: T.bg ?? "#fff",
       color: T.text ?? "#1b1b1b",
       fontSize: 16,
+      boxSizing: "border-box",
     },
     textarea: {
       width: "100%",
@@ -675,6 +734,7 @@ function makeStyles(T) {
       color: T.text ?? "#1b1b1b",
       fontSize: 16,
       marginTop: 6,
+      boxSizing: "border-box",
     },
     btnPrimary: {
       backgroundColor: T.primary ?? "#0072CE",
@@ -707,5 +767,6 @@ function makeStyles(T) {
       border: `1px solid ${T.border ?? "#e8e8e8"}`,
       color: T.text ?? "#1b1b1b",
     },
+    hint: { marginTop: 10, fontStyle: "italic", color: T.textMuted ?? "#666" },
   };
 }
