@@ -453,39 +453,40 @@ function App() {
     let dolor = "";
     let lado = "";
     const z = String(zona || "");
+    const zl = z.toLowerCase();
 
     // --- Columna: respetar cervical/dorsal/lumbar, sin lado ---
-    if (z.includes("Columna cervical")) {
+    if (zl.includes("columna cervical")) {
       dolor = "Columna cervical";
       lado = "";
-    } else if (z.includes("Columna dorsal")) {
+    } else if (zl.includes("columna dorsal")) {
       dolor = "Columna dorsal";
       lado = "";
-    } else if (z.includes("Columna lumbar") || z.includes("Columna")) {
+    } else if (zl.includes("columna lumbar") || zl.includes("columna")) {
       // Mantiene tu comportamiento previo si llega "Columna" sin subtipo
       dolor = "Columna lumbar";
       lado = "";
     }
-    else if (z.includes("Cadera")) {
+    else if (zl.includes("cadera")) {
       dolor = "Cadera";
-      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (z.includes("Rodilla")) {
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("rodilla")) {
       dolor = "Rodilla";
-      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
     }
     // === NUEVAS ZONAS (igual que arriba) ===
-    else if (z.includes("Hombro")) {
+    else if (zl.includes("hombro")) {
       dolor = "Hombro";
-      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (z.includes("Codo")) {
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("codo")) {
       dolor = "Codo";
-      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (z.includes("Mano")) {
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("mano")) {
       dolor = "Mano";
-      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (z.includes("Tobillo")) {
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("tobillo")) {
       dolor = "Tobillo";
-      lado = z.toLowerCase().includes("izquierda") ? "Izquierda" : "Derecha";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
     }
 
     setDatosPaciente((prev) => {
