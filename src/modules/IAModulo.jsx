@@ -3,10 +3,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
+import FormularioResonancia from "../components/FormularioResonancia.jsx"; // ← NUEVO
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
+export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistResonancia */ }) {
   const T = getTheme();
   const S = makeStyles(T);
 
@@ -23,6 +24,9 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
   const [resonanciaChecklist, setResonanciaChecklist] = useState(null);
   const [resonanciaResumenTexto, setResonanciaResumenTexto] = useState("");
   const [ordenAlternativa, setOrdenAlternativa] = useState("");
+
+  // Modal local del FormularioResonancia
+  const [showRM, setShowRM] = useState(false);
 
   // Pago/descarga
   const [pagoRealizado, setPagoRealizado] = useState(false);
@@ -213,49 +217,85 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
     }
   };
 
-  // Lanzar checklist RM tras confirmación
-  const lanzarChecklistRM = async () => {
-    if (!requiereRM || typeof pedirChecklistResonancia !== "function") return;
-    const res = await pedirChecklistResonancia();
-    if (res?.canceled) return;
+  // ====== Checklist RM (modal local) ======
+  const construirResumenRM = (f = {}) => {
+    const labels = {
+      marcapasos: "Marcapasos/DAI",
+      coclear_o_neuro: "Implante coclear/neuroestimulador",
+      clips_aneurisma: "Clips de aneurisma",
+      valvula_cardiaca_metal: "Implante metálico intracraneal",
+      fragmentos_metalicos: "Fragmentos metálicos/balas",
+      protesis_placas_tornillos: "Prótesis/placas/tornillos",
+      cirugia_reciente_3m: "Cirugía reciente (<3m) con implante",
+      embarazo: "Embarazo o sospecha",
+      claustrofobia: "Claustrofobia importante",
+      peso_mayor_150: "Peso > 150 kg",
+      no_permanece_inmovil: "Dificultad para inmovilidad",
+      tatuajes_recientes: "Tatuajes/PMU < 6 semanas",
+      piercings_no_removibles: "Piercings no removibles",
+      bomba_insulina_u_otro: "Dispositivo externo activo",
+      requiere_contraste: "Requiere contraste",
+      erc_o_egfr_bajo: "Insuficiencia renal / eGFR < 30",
+      alergia_gadolinio: "Alergia a gadolinio",
+      reaccion_contrastes: "Reacción a contrastes previos",
+      requiere_sedacion: "Requiere sedación",
+      ayuno_6h: "Ayuno 6h (si sedación)",
+    };
 
-    if (res.bloquea) {
-      setBloqueaRM(true);
-      const alternativa =
-        "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
-      setOrdenAlternativa(alternativa);
-      sessionStorage.setItem("ordenAlternativa", alternativa);
-      // persistir en backend
-      fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idPago, ordenAlternativa: alternativa }),
-      }).catch(() => {});
-      setResonanciaChecklist(null);
-      setResonanciaResumenTexto("");
+    const marcadas = Object.keys(labels)
+      .filter((k) => f[k] === true)
+      .map((k) => `• ${labels[k]}`);
+
+    const obs = (f.observaciones || "").trim();
+
+    const partes = [];
+    if (marcadas.length) {
+      partes.push(marcadas.join("\n"));
     } else {
-      setBloqueaRM(false);
-      const resumen = res.resumen || "";
-      setResonanciaChecklist(res.data || {});
-      setResonanciaResumenTexto(resumen);
-      sessionStorage.setItem("resonanciaChecklist", JSON.stringify(res.data || {}));
-      sessionStorage.setItem("resonanciaResumenTexto", resumen);
-      // persistir en backend
-      fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPago,
-          resonanciaChecklist: res.data || {},
-          resonanciaResumenTexto: resumen,
-        }),
-      }).catch(() => {});
+      partes.push("• Sin alertas marcadas en checklist.");
     }
+    if (obs) partes.push(`Observaciones: ${obs}`);
+
+    return partes.join("\n");
+  };
+
+  // Abrir modal
+  const lanzarChecklistRM = () => {
+    if (!requiereRM) return;
+    setShowRM(true);
+  };
+
+  // Guardado desde el modal
+  const handleSaveRM = (form /*, { riesgos } */) => {
+    // Aquí podrías activar bloqueos automáticos si lo decides (p.ej. marcapasos)
+    setBloqueaRM(false);
+
+    const resumen = construirResumenRM(form);
+    setResonanciaChecklist(form);
+    setResonanciaResumenTexto(resumen);
+
+    // Persistimos local
+    try {
+      sessionStorage.setItem("resonanciaChecklist", JSON.stringify(form));
+      sessionStorage.setItem("resonanciaResumenTexto", resumen);
+    } catch {}
+
+    // Persistimos en backend
+    fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        idPago,
+        resonanciaChecklist: form,
+        resonanciaResumenTexto: resumen,
+      }),
+    }).catch(() => {});
+
+    setShowRM(false);
   };
 
   // ===== Pagar (IA)
   const handlePagarIA = async () => {
-    // Tomar exactamente los datos guardados por el formulario inicial
     const saved = sessionStorage.getItem("datosPacienteJSON");
     const base =
       saved ? JSON.parse(saved) : { ...datos, edad: Number(datos.edad) };
@@ -266,8 +306,8 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
       !base.rut?.trim() ||
       !Number.isFinite(edadNum) ||
       edadNum <= 0 ||
-      !base.dolor?.trim() || // Dolor/lado vienen del formulario principal
-      !datos.consulta?.trim() || // Asegurar que ya generaste preview
+      !base.dolor?.trim() ||
+      !datos.consulta?.trim() ||
       !previewIA?.trim()
     ) {
       alert(
@@ -553,7 +593,6 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
 
       {/* Datos Paciente */}
       <div style={{ marginBottom: 10 }}>
-        {/* Stacked para evitar que RUT/Edad se salgan del margen */}
         <div style={S.grid1}>
           <label style={S.label}>
             Nombre
@@ -693,6 +732,19 @@ export default function IAModulo({ initialDatos, pedirChecklistResonancia }) {
           </button>
         </>
       )}
+
+      {/* ===== Modal local del Formulario de Resonancia ===== */}
+      {showRM && (
+        <div style={S.modalBackdrop} role="dialog" aria-modal="true">
+          <div style={S.modalCard}>
+            <FormularioResonancia
+              initial={resonanciaChecklist || {}}
+              onSave={handleSaveRM}
+              onCancel={() => setShowRM(false)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -708,7 +760,7 @@ function makeStyles(T) {
       border: `1px solid ${T.border ?? "#e8e8e8"}`,
       color: T.text ?? "#1b1b1b",
     },
-    // Usamos 1 columna para evitar que RUT/Edad se salgan del margen en el panel derecho
+    // 1 columna para que RUT/Edad no se salgan del panel lateral
     grid1: {
       display: "grid",
       gridTemplateColumns: "1fr",
@@ -768,5 +820,27 @@ function makeStyles(T) {
       color: T.text ?? "#1b1b1b",
     },
     hint: { marginTop: 10, fontStyle: "italic", color: T.textMuted ?? "#666" },
+
+    // Modal simple
+    modalBackdrop: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.35)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+      zIndex: 50,
+    },
+    modalCard: {
+      width: "min(920px, 100%)",
+      maxHeight: "90vh",
+      overflow: "auto",
+      background: T.surface ?? "#fff",
+      borderRadius: 12,
+      boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
+      border: `1px solid ${T.border ?? "#e8e8e8"}`,
+      padding: 12,
+    },
   };
 }
