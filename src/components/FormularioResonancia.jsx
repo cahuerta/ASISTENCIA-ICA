@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import { getTheme } from "../theme.js"; // <- corregido: subir un nivel
+import { getTheme } from "./src/theme.js"; // <- corregido: subir un nivel
 
 /** ====== Preguntas Sí/No (claves estables para backend) ====== */
 const ITEMS = [
