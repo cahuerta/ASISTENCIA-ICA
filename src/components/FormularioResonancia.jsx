@@ -1,72 +1,8 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
+import { getTheme } from "./theme.js";
 
-/** ====== Estilos (en línea, como tu app) ====== */
-const S = {
-  card: {
-    background:"#fff",
-    borderRadius:12,
-    padding:16,
-    boxShadow:"0 2px 10px rgba(0,0,0,0.06)",
-    // Scroller interno para permitir bajar hasta los botones
-    maxHeight:"80vh",
-    overflowY:"auto",
-  },
-  title: { fontWeight:800, fontSize:18, marginBottom:10 },
-  grid: { display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))" },
-  row: { display:"grid", gap:6 },
-  label: { fontWeight:600, fontSize:13, lineHeight:1.2 },
-  seg: { display:"flex", gap:6 },
-  segBtn: (active) => ({
-    flex:1,
-    padding:"10px 12px",
-    borderRadius:8,
-    border:"1px solid #d0d7de",
-    background: active ? "#0072CE" : "#fff",
-    color: active ? "#fff" : "#111",
-    cursor:"pointer",
-    fontWeight:700,
-    textAlign:"center"
-  }),
-  // Acciones pegadas al borde inferior del scroller
-  actions:{
-    position:"sticky",
-    bottom:0,
-    background:"linear-gradient(transparent, #fff 40%)",
-    paddingTop:12,
-    display:"flex",
-    gap:10,
-    marginTop:14,
-    flexWrap:"wrap"
-  },
-  btn: {
-    flex:"1 0 200px",
-    background:"#0072CE",
-    color:"#fff",
-    border:"none",
-    padding:"12px 14px",
-    borderRadius:8,
-    cursor:"pointer",
-    fontWeight:700
-  },
-  btnGray: {
-    flex:"1 0 200px",
-    background:"#667085",
-    color:"#fff",
-    border:"none",
-    padding:"12px 14px",
-    borderRadius:8,
-    cursor:"pointer",
-    fontWeight:700
-  },
-  hint:{ fontSize:12, color:"#555" },
-  warnCard:{ background:"#fff8e1", border:"1px solid #ffe08a", borderRadius:8, padding:10, marginBottom:10, color:"#5f370e" },
-  okCard:{ background:"#e6fffa", border:"1px solid #b2f5ea", borderRadius:8, padding:10, marginBottom:10, color:"#234e52" },
-};
-
-/** ====== Preguntas Sí/No (claves estables para backend) ======
- *  Marca "true" cuando la respuesta es SÍ (existe el factor), "false" cuando NO.
- */
+/** ====== Preguntas Sí/No (claves estables para backend) ====== */
 const ITEMS = [
   // Dispositivos y metales (riesgo alto si SÍ)
   { key:"marcapasos", label:"¿Tiene marcapasos o desfibrilador implantado (DAI)?" },
@@ -75,7 +11,7 @@ const ITEMS = [
   { key:"valvula_cardiaca_metal", label:"¿Tiene válvula cardíaca u otro implante metálico intracraneal?" },
   { key:"fragmentos_metalicos", label:"¿Tiene fragmentos metálicos/balas (en ojos o cuerpo)?" },
 
-  // Cirugías / prótesis (generalmente compatibles, pero se registra)
+  // Cirugías / prótesis
   { key:"protesis_placas_tornillos", label:"¿Tiene prótesis, placas o tornillos metálicos?" },
   { key:"cirugia_reciente_3m", label:"¿Cirugía reciente (< 3 meses) con implante?" },
 
@@ -103,16 +39,119 @@ const ITEMS = [
   { key:"ayuno_6h", label:"¿Ha cumplido ayuno de 6 horas? (si habrá sedación)" },
 ];
 
-/** ====== Utilidad para inicializar y validar ====== */
+/** ====== Utilidad ====== */
 const baseState = () => ITEMS.reduce((acc, it) => ({ ...acc, [it.key]: null }), {});
 
-/** ====== Componente ====== */
-export default function FormularioResonancia({ initial = {}, onSave, onCancel }) {
+function makeStyles(T){
+  return {
+    card: {
+      background: T.surface || "#fff",
+      borderRadius: 12,
+      padding: 16,
+      boxShadow: T.shadowSm || "0 2px 10px rgba(0,0,0,0.06)",
+      maxHeight: "80vh",
+      overflowY: "auto",
+      color: T.text || "#0f172a",
+      border: `1px solid ${T.border || "#e5e7eb"}`
+    },
+    title: { fontWeight: 800, fontSize: 18, marginBottom: 10, color: T.primaryDark || T.primary },
+    grid: { display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" },
+    row: { display: "grid", gap: 6 },
+    label: { fontWeight: 600, fontSize: 13, lineHeight: 1.2, color: T.textMuted || "#475569" },
+    seg: { display: "flex", gap: 6 },
+    segBtn: (active) => ({
+      flex: 1,
+      padding: "10px 12px",
+      borderRadius: 8,
+      border: `1px solid ${T.border || "#d0d7de"}`,
+      background: active ? (T.primary || "#0072CE") : (T.surface || "#fff"),
+      color: active ? (T.onPrimary || "#fff") : (T.text || "#111"),
+      cursor: "pointer",
+      fontWeight: 700,
+      textAlign: "center"
+    }),
+    actions: {
+      position: "sticky",
+      bottom: 0,
+      background: `linear-gradient(transparent, ${(T.surface || "#fff")} 40%)`,
+      paddingTop: 12,
+      display: "flex",
+      gap: 10,
+      marginTop: 14,
+      flexWrap: "wrap",
+      borderTop: `1px solid ${T.border || "#e5e7eb"}`
+    },
+    btn: {
+      flex: "1 0 200px",
+      background: T.primary || "#0072CE",
+      color: T.onPrimary || "#fff",
+      border: "none",
+      padding: "12px 14px",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontWeight: 700,
+      boxShadow: T.shadowSm,
+    },
+    btnGray: {
+      flex: "1 0 200px",
+      background: T.muted || "#667085",
+      color: T.onMuted || "#fff",
+      border: "none",
+      padding: "12px 14px",
+      borderRadius: 8,
+      cursor: "pointer",
+      fontWeight: 700
+    },
+    hint: { fontSize: 12, color: T.textMuted || "#555" },
+    warnCard: {
+      background: T.warningBg || "#fff8e1",
+      border: `1px solid ${T.warningBorder || "#ffe08a"}`,
+      borderRadius: 8,
+      padding: 10,
+      marginBottom: 10,
+      color: T.warningText || "#5f370e"
+    },
+    okCard: {
+      background: T.successBg || "#e6fffa",
+      border: `1px solid ${T.successBorder || "#b2f5ea"}`,
+      borderRadius: 8,
+      padding: 10,
+      marginBottom: 10,
+      color: T.successText || "#234e52"
+    },
+    textarea: {
+      width: "100%",
+      padding: 10,
+      borderRadius: 8,
+      border: `1px solid ${T.border || "#d0d7de"}`,
+      minHeight: 84,
+      background: T.surface || "#fff",
+      color: T.text || "#0f172a"
+    }
+  };
+}
+
+/**
+ * FormularioResonancia
+ * - Usa tema desde theme.json (getTheme)
+ * - Guarda en sessionStorage y persiste en backend (/guardar-rm)
+ */
+export default function FormularioResonancia({
+  idPago,                 // ← mismo id usado para la orden
+  apiBase = "",           // ← ej. process.env.NEXT_PUBLIC_API_BASE
+  initial = {},
+  onSave,
+  onCancel,
+}) {
+  const T = getTheme();
+  const S = makeStyles(T);
+
   const [form, setForm] = useState({
     ...baseState(),
     observaciones: "",
     ...initial,
   });
+  const [saving, setSaving] = useState(false);
 
   // Carga desde sessionStorage si existe
   useEffect(() => {
@@ -120,24 +159,23 @@ export default function FormularioResonancia({ initial = {}, onSave, onCancel })
       const saved = sessionStorage.getItem("resonanciaJSON");
       if (saved && !initial.__skipLoad) {
         const data = JSON.parse(saved);
-        setForm(prev => ({ ...prev, ...data }));
+        setForm((prev) => ({ ...prev, ...data }));
       }
     } catch {}
   }, [initial]);
 
   // Helpers
-  const setYN = (key, val) => setForm(f => ({ ...f, [key]: !!val }));
-
+  const setYN = (key, val) => setForm((f) => ({ ...f, [key]: !!val }));
   const responderTodoNo = () => {
     const allNo = ITEMS.reduce((a, it) => ({ ...a, [it.key]: false }), {});
-    setForm(f => ({ ...f, ...allNo }));
+    setForm((f) => ({ ...f, ...allNo }));
   };
 
-  const faltantes = useMemo(() => {
-    return ITEMS.filter(it => form[it.key] === null).map(it => it.key);
-  }, [form]);
+  const faltantes = useMemo(
+    () => ITEMS.filter((it) => form[it.key] === null).map((it) => it.key),
+    [form]
+  );
 
-  // Riesgos o flags relevantes (para mostrar un resumen)
   const riesgos = useMemo(() => {
     const r = [];
     const si = (k) => form[k] === true;
@@ -173,14 +211,42 @@ export default function FormularioResonancia({ initial = {}, onSave, onCancel })
     return r;
   }, [form]);
 
-  const guardar = () => {
-    // Validación mínima: todas las preguntas Sí/No respondidas
+  async function persistirRMEnBackend() {
+    if (!idPago) throw new Error("Falta idPago para guardar el formulario.");
+    const base = (apiBase || "").replace(/\/+$/, "");
+    const url = `${base}/guardar-rm`;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        idPago,
+        rmForm: form,
+        observaciones: form.observaciones || ""
+      }),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j?.error || `Error HTTP ${r.status}`);
+    }
+  }
+
+  const guardar = async () => {
     if (faltantes.length) {
       alert("Responde todas las preguntas (Sí/No) antes de guardar.");
       return;
     }
-    sessionStorage.setItem("resonanciaJSON", JSON.stringify(form));
-    onSave?.(form, { riesgos });
+    try {
+      setSaving(true);
+      // 1) Persistencia local para UX
+      sessionStorage.setItem("resonanciaJSON", JSON.stringify(form));
+      // 2) Persistencia en backend (index lo podrá leer para PDF)
+      await persistirRMEnBackend();
+      onSave?.(form, { riesgos });
+    } catch (e) {
+      alert(`No se pudo guardar en el servidor: ${e.message}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -215,6 +281,7 @@ export default function FormularioResonancia({ initial = {}, onSave, onCancel })
                 style={S.segBtn(form[key] === true)}
                 onClick={() => setYN(key, true)}
                 aria-pressed={form[key] === true}
+                disabled={saving}
               >
                 Sí
               </button>
@@ -223,6 +290,7 @@ export default function FormularioResonancia({ initial = {}, onSave, onCancel })
                 style={S.segBtn(form[key] === false)}
                 onClick={() => setYN(key, false)}
                 aria-pressed={form[key] === false}
+                disabled={saving}
               >
                 No
               </button>
@@ -236,31 +304,25 @@ export default function FormularioResonancia({ initial = {}, onSave, onCancel })
         <div style={S.row}>
           <label style={S.label}>Observaciones (opcional)</label>
           <textarea
-            style={{
-              width:"100%",
-              padding:10,
-              borderRadius:8,
-              border:"1px solid #d0d7de",
-              minHeight:84,
-              background:"#fff"
-            }}
+            style={S.textarea}
             value={form.observaciones}
             onChange={(e)=>setForm(f=>({ ...f, observaciones: e.target.value }))}
             placeholder="Notas: fechas de cirugía, tipo de dispositivo, documentación adjunta, etc."
+            disabled={saving}
           />
         </div>
       </div>
 
       {/* Acciones */}
       <div style={S.actions}>
-        <button type="button" style={S.btnGray} onClick={responderTodoNo}>
+        <button type="button" style={S.btnGray} onClick={responderTodoNo} disabled={saving}>
           Marcar todo en No
         </button>
-        <button type="button" style={S.btnGray} onClick={()=>onCancel?.()}>
+        <button type="button" style={S.btnGray} onClick={()=>onCancel?.()} disabled={saving}>
           Cancelar
         </button>
-        <button type="button" style={S.btn} onClick={guardar}>
-          Guardar
+        <button type="button" style={S.btn} onClick={guardar} disabled={saving}>
+          {saving ? "Guardando..." : "Guardar"}
         </button>
       </div>
 
