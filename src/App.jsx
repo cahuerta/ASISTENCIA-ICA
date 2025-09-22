@@ -537,6 +537,68 @@ function App() {
     setPendingPreview(false);
   };
 
+  /* ====== Botón REINICIAR ====== */
+  const handleReiniciar = () => {
+    const ok = window.confirm(
+      "¿Deseas borrar los datos y empezar de cero? Se perderán los cambios no guardados."
+    );
+    if (!ok) return;
+
+    try {
+      // Limpia SOLO las claves usadas por la app
+      const keys = [
+        "datosPacienteJSON",
+        "modulo",
+        "vistaEsquema",
+        "idPago",
+        "solicitaResonancia",
+        "preop_aviso_ok",
+        "generales_aviso_ok",
+        "preop_comorbilidades_ok",
+        "generales_comorbilidades_ok",
+        "preop_comorbilidades_data",
+        "generales_comorbilidades_data",
+        "preop_tipoCirugia",
+        "preop_tipoCirugia_otro",
+        "preop_ia_examenes",
+        "preop_ia_resumen",
+        "generales_ia_examenes",
+        "generales_ia_resumen",
+      ];
+      keys.forEach((k) => sessionStorage.removeItem(k));
+    } catch {}
+
+    // Detener polling si existe
+    if (pollerRef.current) {
+      clearInterval(pollerRef.current);
+      pollerRef.current = null;
+    }
+
+    // Resetear flags refs
+    avisoOkRef.current = { preop: false, generales: false };
+    comorbOkRef.current = { preop: false, generales: false };
+
+    // Resetear estado React
+    setDatosPaciente({
+      nombre: "",
+      rut: "",
+      edad: "",
+      genero: "",
+      dolor: "",
+      lado: "",
+    });
+    setModulo("trauma");
+    setVista("anterior");
+    setMostrarVistaPrevia(false);
+    setPagoRealizado(false);
+    setPendingPreview(false);
+    setMostrarAviso(false);
+    setMostrarComorbilidades(false);
+    setComorbilidades(null);
+    setShowReso(false);
+    setResolverReso(null);
+  };
+
   // ====== UI ======
   return (
     <div style={styles.page}>
@@ -576,6 +638,16 @@ function App() {
               </button>
             );
           })}
+
+          {/* Botón REINICIAR siempre visible */}
+          <button
+            type="button"
+            onClick={handleReiniciar}
+            aria-label="Reiniciar asistente"
+            style={{ ...styles.topBtn, ...styles.topBtnIdle }}
+          >
+            REINICIAR
+          </button>
         </div>
       </div>
 
@@ -713,7 +785,7 @@ const styles = {
     margin: "0 auto",
     padding: "12px 16px",
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
+    gridTemplateColumns: "repeat(5, 1fr)", // ← ahora 5 columnas (4 módulos + Reiniciar)
     gap: 12,
   },
   topBtn: {
