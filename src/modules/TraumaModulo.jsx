@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
+import FormularioResonancia from "../components/FormularioResonancia.jsx"; // ← NUEVO: abrimos el formulario como modal local
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
@@ -34,13 +35,11 @@ function resumenInicialTrauma(datos = {}) {
 /** Normaliza y detecta si un texto hace referencia a resonancia magnética */
 function isResonanciaTexto(t = "") {
   if (!t) return false;
-  // quitar tildes y bajar a minúsculas
   const s = t
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
 
-  // patrones robustos (palabras y abreviaturas habituales)
   const includes = [
     "resonancia magnetica",
     "resonancia nuclear",
@@ -48,7 +47,6 @@ function isResonanciaTexto(t = "") {
   ];
   if (includes.some((p) => s.includes(p))) return true;
 
-  // variantes y abreviaturas: RM, RMN, RNM, MRI, IRM (francés)
   const regexes = [/\brm\b/i, /\brmn\b/i, /\brnm\b/i, /\bmri\b/i, /\birm\b/i];
   return regexes.some((re) => re.test(t));
 }
@@ -57,8 +55,8 @@ function isResonanciaTexto(t = "") {
 export default function TraumaModulo({
   initialDatos,
   onDetectarResonancia, // (datos)-> boolean | Promise<boolean>
-  onPedirChecklistResonancia, // () -> Promise<{canceled, bloquea, data, resumen}>
-  resumenResoTexto, // (data)-> string
+  // onPedirChecklistResonancia,  // ← DEJAMOS DE USAR ESTE PROP (abrimos modal local)
+  resumenResoTexto, // (data)-> string (opcional para personalizar resumen)
 }) {
   const T = getTheme();
   const S = makeStyles(T);
@@ -71,7 +69,7 @@ export default function TraumaModulo({
   const [diagnosticoIA, setDiagnosticoIA] = useState("");
   const [justificacionIA, setJustificacionIA] = useState("");
 
-  // Checklist RM
+  // Checklist RM (persistido por el PADRE)
   const [resonanciaChecklist, setResonanciaChecklist] = useState(null);
   const [resonanciaResumenTexto, setResonanciaResumenTexto] = useState("");
   const [ordenAlternativa, setOrdenAlternativa] = useState("");
@@ -84,6 +82,9 @@ export default function TraumaModulo({
   const [descargando, setDescargando] = useState(false);
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
+
+  // Modal local del FormularioResonancia
+  const [showRM, setShowRM] = useState(false);
 
   // Restaurar estado
   useEffect(() => {
@@ -184,15 +185,13 @@ export default function TraumaModulo({
       setDiagnosticoIA(dx);
       setJustificacionIA(just);
 
-      // ===== Detección de RM en la lista sugerida por IA (sin abrir checklist aún) =====
+      // ===== Detección de RM en la lista sugerida por IA =====
       const textoEx = ex.join("\n");
       let solicitaRM = false;
 
       if (typeof onDetectarResonancia === "function") {
-        // usa backend (incluye fallback server-side si examen vacío)
         solicitaRM = await onDetectarResonancia({ ...datos, edad: edadNum, examen: textoEx });
       } else {
-        // fallback local robusto
         solicitaRM = isResonanciaTexto(textoEx);
       }
 
@@ -209,29 +208,76 @@ export default function TraumaModulo({
     }
   };
 
-  // Lanzar checklist RM tras confirmación en el segundo preview
+  // Lanzar checklist RM: ahora abrimos el modal del FormularioResonancia (como Comorbilidades)
   const lanzarChecklistRM = async () => {
-    if (!requiereRM || typeof onPedirChecklistResonancia !== "function") return;
-    const res = await onPedirChecklistResonancia();
-    if (res?.canceled) return;
+    if (!requiereRM) return;
+    setShowRM(true);
+  };
 
-    if (res.bloquea) {
-      setBloqueaRM(true);
-      const alt = "Sugerencia: TAC según protocolo (RM bloqueada por checklist de seguridad).";
-      setOrdenAlternativa(alt);
-      sessionStorage.setItem("ordenAlternativa", alt);
-      setResonanciaChecklist(null);
-      setResonanciaResumenTexto("");
-    } else {
-      setBloqueaRM(false);
-      const resumen =
-        res.resumen ||
-        (typeof resumenResoTexto === "function" ? resumenResoTexto(res.data) : "");
-      setResonanciaChecklist(res.data || {});
-      setResonanciaResumenTexto(resumen);
-      sessionStorage.setItem("resonanciaChecklist", JSON.stringify(res.data || {}));
+  // Guardado desde el modal del FormularioResonancia
+  const handleSaveRM = (form /*, { riesgos } */) => {
+    // Si necesitas bloquear por algún criterio duro, puedes setear `bloqueaRM` aquí.
+    // Por ahora, no bloqueamos automáticamente: dejamos la decisión clínica fuera.
+    setBloqueaRM(false);
+
+    // Resumen para vista previa / PDF
+    const resumen =
+      typeof resumenResoTexto === "function"
+        ? resumenResoTexto(form)
+        : construirResumenRM(form);
+
+    setResonanciaChecklist(form);
+    setResonanciaResumenTexto(resumen);
+
+    // Persistimos en sessionStorage para consistencia con lo ya usado
+    try {
+      sessionStorage.setItem("resonanciaChecklist", JSON.stringify(form));
       sessionStorage.setItem("resonanciaResumenTexto", resumen);
+    } catch {}
+
+    setShowRM(false);
+  };
+
+  const construirResumenRM = (f = {}) => {
+    // Listamos solo las claves marcadas en true, más observaciones
+    const labels = {
+      marcapasos: "Marcapasos/DAI",
+      coclear_o_neuro: "Implante coclear/neuroestimulador",
+      clips_aneurisma: "Clips de aneurisma",
+      valvula_cardiaca_metal: "Implante metálico intracraneal",
+      fragmentos_metalicos: "Fragmentos metálicos/balas",
+      protesis_placas_tornillos: "Prótesis/placas/tornillos",
+      cirugia_reciente_3m: "Cirugía reciente (<3m) con implante",
+      embarazo: "Embarazo o sospecha",
+      claustrofobia: "Claustrofobia importante",
+      peso_mayor_150: "Peso > 150 kg",
+      no_permanece_inmovil: "Dificultad para inmovilidad",
+      tatuajes_recientes: "Tatuajes/PMU < 6 semanas",
+      piercings_no_removibles: "Piercings no removibles",
+      bomba_insulina_u_otro: "Dispositivo externo activo",
+      requiere_contraste: "Requiere contraste",
+      erc_o_egfr_bajo: "Insuficiencia renal / eGFR < 30",
+      alergia_gadolinio: "Alergia a gadolinio",
+      reaccion_contrastes: "Reacción a contrastes previos",
+      requiere_sedacion: "Requiere sedación",
+      ayuno_6h: "Ayuno 6h (si sedación)",
+    };
+
+    const marcadas = Object.keys(labels)
+      .filter((k) => f[k] === true)
+      .map((k) => `• ${labels[k]}`);
+
+    const obs = (f.observaciones || "").trim();
+
+    const partes = [];
+    if (marcadas.length) {
+      partes.push(marcadas.join("\n"));
+    } else {
+      partes.push("• Sin alertas marcadas en checklist.");
     }
+    if (obs) partes.push(`Observaciones: ${obs}`);
+
+    return partes.join("\n");
   };
 
   /* -------- Pago -------- */
@@ -265,6 +311,9 @@ export default function TraumaModulo({
             examenesIA,
             diagnosticoIA,
             justificacionIA,
+            // (opcional) guardar también en el mismo objeto si lo deseas:
+            rmForm: resonanciaChecklist,
+            rmObservaciones: resonanciaChecklist?.observaciones || "",
           },
           resonanciaChecklist,
           resonanciaResumenTexto,
@@ -339,6 +388,8 @@ export default function TraumaModulo({
                   examenesIA,
                   diagnosticoIA,
                   justificacionIA,
+                  rmForm: resonanciaChecklist,
+                  rmObservaciones: resonanciaChecklist?.observaciones || "",
                 },
                 resonanciaChecklist,
                 resonanciaResumenTexto,
@@ -494,6 +545,8 @@ export default function TraumaModulo({
                             examenesIA,
                             diagnosticoIA,
                             justificacionIA,
+                            rmForm: resonanciaChecklist,
+                            rmObservaciones: resonanciaChecklist?.observaciones || "",
                           },
                           resonanciaChecklist,
                           resonanciaResumenTexto,
@@ -523,6 +576,19 @@ export default function TraumaModulo({
             </button>
           )}
         </>
+      )}
+
+      {/* ===== Modal local del Formulario de Resonancia ===== */}
+      {showRM && (
+        <div style={S.modalBackdrop} role="dialog" aria-modal="true">
+          <div style={S.modalCard}>
+            <FormularioResonancia
+              initial={resonanciaChecklist || {}}
+              onSave={handleSaveRM}
+              onCancel={() => setShowRM(false)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
@@ -574,5 +640,27 @@ function makeStyles(T) {
       color: T.text ?? "#1b1b1b",
     },
     hint: { marginTop: 6, fontStyle: "italic", color: T.textMuted ?? "#666" },
+
+    // Modal simple
+    modalBackdrop: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.35)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+      zIndex: 50,
+    },
+    modalCard: {
+      width: "min(920px, 100%)",
+      maxHeight: "90vh",
+      overflow: "auto",
+      background: T.surface ?? "#fff",
+      borderRadius: 12,
+      boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
+      border: `1px solid ${T.border ?? "#e8e8e8"}`,
+      padding: 12,
+    },
   };
 }
