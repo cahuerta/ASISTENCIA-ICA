@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import { getTheme } from "./src/theme.js"; // <- corregido: subir un nivel
+import { getTheme } from "../theme.js"; // ← ruta correcta para src/components/*
 
 /** ====== Preguntas Sí/No (claves estables para backend) ====== */
 const ITEMS = [
@@ -134,11 +134,9 @@ function makeStyles(T) {
 /**
  * FormularioResonancia
  * - Usa tema desde theme.json (getTheme)
- * - Guarda en sessionStorage y persiste en backend (/guardar-rm)
+ * - Solo valida y entrega datos al padre vía onSave(form)
  */
 export default function FormularioResonancia({
-  idPago, // ← mismo id usado para la orden
-  apiBase = "", // ← ej. process.env.NEXT_PUBLIC_API_BASE
   initial = {},
   onSave,
   onCancel,
@@ -151,9 +149,8 @@ export default function FormularioResonancia({
     observaciones: "",
     ...initial,
   });
-  const [saving, setSaving] = useState(false);
 
-  // Carga desde sessionStorage si existe
+  // Carga desde sessionStorage si existe (opcional UX)
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("resonanciaJSON");
@@ -211,42 +208,15 @@ export default function FormularioResonancia({
     return r;
   }, [form]);
 
-  async function persistirRMEnBackend() {
-    if (!idPago) throw new Error("Falta idPago para guardar el formulario.");
-    const base = (apiBase || "").replace(/\/+$/, "");
-    const url = `${base}/guardar-rm`;
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        idPago,
-        rmForm: form,
-        observaciones: form.observaciones || "",
-      }),
-    });
-    if (!r.ok) {
-      const j = await r.json().catch(() => ({}));
-      throw new Error(j?.error || `Error HTTP ${r.status}`);
-    }
-  }
-
-  const guardar = async () => {
+  const guardar = () => {
     if (faltantes.length) {
       alert("Responde todas las preguntas (Sí/No) antes de guardar.");
       return;
     }
-    try {
-      setSaving(true);
-      // 1) Persistencia local para UX
-      sessionStorage.setItem("resonanciaJSON", JSON.stringify(form));
-      // 2) Persistencia en backend (index lo podrá leer para PDF)
-      await persistirRMEnBackend();
-      onSave?.(form, { riesgos });
-    } catch (e) {
-      alert(`No se pudo guardar en el servidor: ${e.message}`);
-    } finally {
-      setSaving(false);
-    }
+    // Persistencia local (opcional UX)
+    sessionStorage.setItem("resonanciaJSON", JSON.stringify(form));
+    // Entregar al padre (él persiste en backend junto con el resto)
+    onSave?.(form, { riesgos });
   };
 
   return (
@@ -283,7 +253,6 @@ export default function FormularioResonancia({
                 style={S.segBtn(form[key] === true)}
                 onClick={() => setYN(key, true)}
                 aria-pressed={form[key] === true}
-                disabled={saving}
               >
                 Sí
               </button>
@@ -292,7 +261,6 @@ export default function FormularioResonancia({
                 style={S.segBtn(form[key] === false)}
                 onClick={() => setYN(key, false)}
                 aria-pressed={form[key] === false}
-                disabled={saving}
               >
                 No
               </button>
@@ -310,21 +278,20 @@ export default function FormularioResonancia({
             value={form.observaciones}
             onChange={(e) => setForm((f) => ({ ...f, observaciones: e.target.value }))}
             placeholder="Notas: fechas de cirugía, tipo de dispositivo, documentación adjunta, etc."
-            disabled={saving}
           />
         </div>
       </div>
 
       {/* Acciones */}
       <div style={S.actions}>
-        <button type="button" style={S.btnGray} onClick={responderTodoNo} disabled={saving}>
+        <button type="button" style={S.btnGray} onClick={responderTodoNo}>
           Marcar todo en No
         </button>
-        <button type="button" style={S.btnGray} onClick={() => onCancel?.()} disabled={saving}>
+        <button type="button" style={S.btnGray} onClick={() => onCancel?.()}>
           Cancelar
         </button>
-        <button type="button" style={S.btn} onClick={guardar} disabled={saving}>
-          {saving ? "Guardando..." : "Guardar"}
+        <button type="button" style={S.btn} onClick={guardar}>
+          Guardar
         </button>
       </div>
 
