@@ -538,65 +538,71 @@ function App() {
   };
 
   /* ====== Botón REINICIAR ====== */
-  const handleReiniciar = () => {
+  const handleReiniciar = async () => {
     const ok = window.confirm(
-      "¿Deseas borrar los datos y empezar de cero? Se perderán los cambios no guardados."
+      "Esto reiniciará completamente la aplicación (datos, estados, caches). ¿Continuar?"
     );
     if (!ok) return;
 
+    // 0) Detener polling local conocido
     try {
-      // Limpia SOLO las claves usadas por la app
-      const keys = [
-        "datosPacienteJSON",
-        "modulo",
-        "vistaEsquema",
-        "idPago",
-        "solicitaResonancia",
-        "preop_aviso_ok",
-        "generales_aviso_ok",
-        "preop_comorbilidades_ok",
-        "generales_comorbilidades_ok",
-        "preop_comorbilidades_data",
-        "generales_comorbilidades_data",
-        "preop_tipoCirugia",
-        "preop_tipoCirugia_otro",
-        "preop_ia_examenes",
-        "preop_ia_resumen",
-        "generales_ia_examenes",
-        "generales_ia_resumen",
-      ];
-      keys.forEach((k) => sessionStorage.removeItem(k));
+      if (pollerRef.current) {
+        clearInterval(pollerRef.current);
+        pollerRef.current = null;
+      }
     } catch {}
 
-    // Detener polling si existe
-    if (pollerRef.current) {
-      clearInterval(pollerRef.current);
-      pollerRef.current = null;
+    // 1) Cancelar TODOS los timeouts/intervalos del documento
+    try {
+      const maxId = setTimeout(() => {}, 0);
+      for (let i = 0; i <= maxId; i++) {
+        clearTimeout(i);
+        clearInterval(i);
+      }
+    } catch {}
+
+    // 2) Limpiar storages (todo)
+    try {
+      sessionStorage.clear();
+    } catch {}
+    try {
+      localStorage.clear();
+    } catch {}
+
+    // 3) Borrar caches (PWA/Fetch Cache)
+    try {
+      if ("caches" in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map((n) => caches.delete(n)));
+      }
+    } catch {}
+
+    // 4) Desregistrar Service Workers
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch {}
+
+    // 5) Construir URL limpia (sin query ni hash)
+    let cleanUrl = window.location.href;
+    try {
+      const url = new URL(window.location.href);
+      url.search = ""; // quita ?pago=...&idPago=...
+      url.hash = "";   // por si algo usa #...
+      cleanUrl = url.toString();
+      // Reemplaza en el historial para no dejar “colas” de retorno
+      window.history.replaceState(null, "", cleanUrl);
+    } catch {}
+
+    // 6) Recarga dura: estado React limpio, sin params, sin SW, sin caches
+    try {
+      window.location.replace(cleanUrl);
+    } catch {
+      // fallback
+      window.location.reload();
     }
-
-    // Resetear flags refs
-    avisoOkRef.current = { preop: false, generales: false };
-    comorbOkRef.current = { preop: false, generales: false };
-
-    // Resetear estado React
-    setDatosPaciente({
-      nombre: "",
-      rut: "",
-      edad: "",
-      genero: "",
-      dolor: "",
-      lado: "",
-    });
-    setModulo("trauma");
-    setVista("anterior");
-    setMostrarVistaPrevia(false);
-    setPagoRealizado(false);
-    setPendingPreview(false);
-    setMostrarAviso(false);
-    setMostrarComorbilidades(false);
-    setComorbilidades(null);
-    setShowReso(false);
-    setResolverReso(null);
   };
 
   // ====== UI ======
