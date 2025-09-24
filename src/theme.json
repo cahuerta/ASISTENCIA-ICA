@@ -26,5 +26,17 @@
   "/* --- Sombras y overlay --- */": "",
   "shadowSm": "0 2px 10px rgba(0,0,0,0.08)",
   "shadowMd": "0 6px 18px rgba(0,0,0,0.12)",
-  "overlay": "rgba(0,0,0,0.50)"
+  "overlay": "rgba(0,0,0,0.50)",
+
+  "/* --- Rodilla (marcadores y chips) --- */": "",
+  "rodilla": {
+    "markerStroke": "#1E262E",           // usa primaryDark
+    "markerFill": "#FFFFFF",             // relleno claro sobre foto
+    "markerActive": "#2F3A45",           // usa primary
+    "markerShadow": "rgba(0,0,0,0.20)",  // sombra sutil
+
+    "chipBg": "rgba(47,58,69,0.55)",     // primary con alpha
+    "chipActiveBg": "#1E262E",           // primaryDark
+    "chipColor": "#F1F5F9"               // onPrimary
+  }
 }
