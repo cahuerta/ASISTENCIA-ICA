@@ -1,36 +1,30 @@
 // src/rodilla/rodilla.jsx
+"use client";
 import React, { useMemo, useState } from "react";
 import { RODILLA_PUNTOS_BY_VISTA, RODILLA_LABELS } from "./rodillapuntos.js";
 import { useKneeState } from "./usekneestate.js";
 
-/* === Imágenes locales (nombres EXACTOS en tu repo) === */
-import imgFrenteDerecha     from "./rodillafrentederecha.jpg";
-import imgFrenteIzquierda   from "./rodillafrenteizquierda.jpg";
-import imgLateral           from "./rodillalateral.jpg";
-import imgPosteriorDerecha  from "./rodillaposteriorderecha.jpg"; // ← exacto
+/* === Imágenes locales (según tu repo) === */
+import imgFrenteDerecha from "./rodillafrentederecha.jpg";
+import imgFrenteIzquierda from "./rodillafrenteizquierda.jpg";
+import imgLateral from "./rodillalateral.jpg";
+/* nombre exacto del repo: 'rodillaposteriorderecha.jpg' */
+import imgPosterioDerecha from "./rodillaposteriorderecha.jpg";
 
-/* Normaliza import de imagen a URL (Vite/Next) */
+/* Normaliza import de imagen a URL (Next/Vite) */
 const toUrl = (img) => (typeof img === "string" ? img : img?.src || "");
 
 /* Mapa por vista/lado (URLs ya normalizadas) */
 const IMG = {
-  frontal:   { derecha: toUrl(imgFrenteDerecha),   izquierda: toUrl(imgFrenteIzquierda) },
-  lateral:   { derecha: toUrl(imgLateral),         izquierda: toUrl(imgLateral) },
-  posterior: { derecha: toUrl(imgPosteriorDerecha),izquierda: toUrl(imgPosteriorDerecha) }, // placeholder
+  frontal:  { derecha: toUrl(imgFrenteDerecha),  izquierda: toUrl(imgFrenteIzquierda) },
+  lateral:  { derecha: toUrl(imgLateral),        izquierda: toUrl(imgLateral) },
+  posterior:{ derecha: toUrl(imgPosterioDerecha),izquierda: toUrl(imgPosterioDerecha) }, // placeholder
 };
 
-/* Soporta claves alternativas en RODILLA_PUNTOS_BY_VISTA */
+/* Alias posibles para los puntos (por si en rodillapuntos usaste 'frente'/'anterior') */
 const getVistaKey = (obj, vista) => {
-  const v = String(vista || "");
-  const vLower = v.toLowerCase();
-  const cands = new Set([
-    v, vLower, v.toUpperCase(),
-    ...(vLower === "frontal"   ? ["frente", "anterior", "FRENTE", "ANTERIOR", "FRONTAL"] : []),
-    ...(vLower === "lateral"   ? ["LATERAL"] : []),
-    ...(vLower === "posterior" ? ["POSTERIOR"] : []),
-  ]);
-  for (const k of cands) if (obj && Object.prototype.hasOwnProperty.call(obj, k)) return k;
-  return v; // fallback
+  const cands = [vista, vista === "frontal" ? "frente" : "", vista === "frontal" ? "anterior" : ""].filter(Boolean);
+  return cands.find((k) => obj && Object.prototype.hasOwnProperty.call(obj, k)) || vista;
 };
 
 export default function RodillaMapper({
@@ -43,23 +37,23 @@ export default function RodillaMapper({
   const [vista, setVista] = useState(vistaInicial);
   const lado = (ladoInicial || "").toLowerCase();
 
-  // Ruta final de imagen: prioridad a la del padre; si no, mapa local
+  // Ruta final de imagen: primero la del padre, si no el mapa local
   const imgSrc =
-    (typeof imagenSrc === "string" && imagenSrc) ||
+    imagenSrc ||
     (typeof IMG[vista] === "object" ? IMG[vista]?.[lado] : IMG[vista]) ||
     toUrl(imgFrenteDerecha);
 
-  /* Estado y acciones de puntos */
+  /* Estado de puntos */
   const { activos, toggle, clearAll } = useKneeState({ lado, vista });
 
-  /* Normaliza coordenadas de puntos a % para el SVG */
+  /* Normaliza coordenadas de puntos a % */
   const puntos = useMemo(() => {
     const key = getVistaKey(RODILLA_PUNTOS_BY_VISTA, vista);
     const tabla = RODILLA_PUNTOS_BY_VISTA?.[key] || [];
     return tabla.map((p) => {
       let { x, y } = p;
-      if (x <= 1 && y <= 1) { x *= 100; y *= 100; }                 // 0–1 → %
-      else if (x > 100 || y > 100) { x = (x / 1000) * 100; y = (y / 1000) * 100; } // px → % (base 1000)
+      if (x <= 1 && y <= 1) { x *= 100; y *= 100; }          // 0–1 → %
+      else if (x > 100 || y > 100) { x = (x/1000)*100; y = (y/1000)*100; } // px → % (base 1000)
       return { ...p, x, y };
     });
   }, [vista]);
@@ -69,6 +63,7 @@ export default function RodillaMapper({
       modulo: "rodilla",
       lado,
       vistaSeleccionada: vista,
+      // ⬇️ usamos la CLAVE correcta de cada punto
       puntosActivos: activos[vista] ? Array.from(activos[vista]) : [],
     });
   };
@@ -82,7 +77,7 @@ export default function RodillaMapper({
         </span>
       </div>
 
-      {/* === Ratio-box (3:4) con hijos absolutos: imagen y SVG alineados === */}
+      {/* === Contenedor fijo por ratio con hijos absolutos === */}
       <div
         style={{
           position:"relative",
@@ -93,10 +88,10 @@ export default function RodillaMapper({
           background:"#f2f2f2",
         }}
       >
-        {/* altura = 133.333% del ancho → 3:4 vertical */}
-        <div style={{ paddingTop:"133.333%" }} />
+        {/* ratio-box: asegura altura independ. del load de la imagen */}
+        <div style={{ paddingTop:"133.333%" /* 4:3 */, pointerEvents:"none" }} />
 
-        {/* Imagen base absoluta */}
+        {/* Imagen absoluta llenando el contenedor */}
         <img
           src={imgSrc}
           alt={`Rodilla ${vista} ${lado}`}
@@ -109,13 +104,13 @@ export default function RodillaMapper({
           draggable={false}
         />
 
-        {/* Botones de vista (arriba, vistosos) */}
+        {/* Chips de vista (arriba) */}
         <div
           style={{
             position:"absolute",
             top:10, left:"50%", transform:"translateX(-50%)",
             display:"flex", gap:8, zIndex:3,
-            pointerEvents:"auto", backdropFilter:"blur(6px)",
+            pointerEvents:"auto", backdropFilter:"blur(6px)"
           }}
         >
           {["frontal","lateral","posterior"].map((v) => (
@@ -128,21 +123,23 @@ export default function RodillaMapper({
           ))}
         </div>
 
-        {/* Overlay de puntos (absoluto y clickeable) */}
+        {/* Overlay de puntos absoluto (recibe clicks) */}
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
           style={{ position:"absolute", inset:0, width:"100%", height:"100%", pointerEvents:"auto" }}
         >
           {puntos.map((p) => {
-            const isOn = activos[vista]?.has?.(p.id);
+            // ⬇️ usar p.key (NO p.id)
+            const puntoKey = p.key;
+            const isOn = activos[vista]?.has?.(puntoKey);
             return (
               <Marker
-                key={p.id}
+                key={puntoKey}               // React key
                 cx={p.x}
                 cy={p.y}
                 active={!!isOn}
-                onClick={() => toggle(vista, p.id)}
+                onClick={() => toggle(vista, puntoKey)}  // ← toggle por key
               />
             );
           })}
@@ -163,6 +160,7 @@ export default function RodillaMapper({
 function VistaChip({ active, onClick, label }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       style={{
         pointerEvents:"auto",
@@ -189,7 +187,11 @@ function Button({ children, onClick, outline, subtle }) {
   if (subtle) style = { background:"rgba(0,0,0,0.06)", color:"#111", borderColor:"rgba(0,0,0,0.08)" };
   else if (outline) style = { background:"transparent", color:"#111", borderColor:"rgba(0,0,0,0.25)" };
   else style = { background:"#111", color:"#fff", borderColor:"#111", boxShadow:"0 6px 18px rgba(0,0,0,0.18)" };
-  return <button onClick={onClick} style={{ ...base, ...style }}>{children}</button>;
+  return (
+    <button type="button" onClick={onClick} style={{ ...base, ...style }}>
+      {children}
+    </button>
+  );
 }
 
 function Marker({ cx, cy, active, onClick }) {
@@ -200,17 +202,8 @@ function Marker({ cx, cy, active, onClick }) {
       style={{ pointerEvents:"auto", cursor:"pointer" }}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick?.(); }}
     >
-      {/* halo para click cómodo */}
       <circle r={5.8} fill="transparent" />
-      {/* borde */}
-      <circle
-        r={r + 1.2}
-        fill={active ? "#0f0f0f" : "#ffffff"}
-        stroke="#0f0f0f"
-        strokeWidth="0.6"
-        opacity={active ? 1 : 0.9}
-      />
-      {/* centro activo */}
+      <circle r={r + 1.2} fill={active ? "#0f0f0f" : "#ffffff"} stroke="#0f0f0f" strokeWidth="0.6" opacity={active ? 1 : 0.9} />
       {active && <circle r={r - 1.2} fill="#ffffff" opacity={0.95} />}
     </g>
   );
