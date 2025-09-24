@@ -7,11 +7,10 @@ import { useKneeState } from "./usekneestate.js";
 import { getTheme } from "../theme.js";
 const T = getTheme();
 const THEME = {
-  markerStroke: T?.primaryDark,   // borde
-  // ↓ NUEVO esquema igual al padre (sin blanco):
+  markerStroke: T?.primaryDark,   // borde del aro
   dotInactive:  T?.accentAlpha,   // centro inactivo (translúcido)
   dotActive:    T?.primary,       // centro activo (sólido)
-  markerShadow: T?.overlay,       // sombra
+  markerShadow: T?.overlay,       // sombra ligera del aro
   chipBg:       T?.accentAlpha,   // chip inactivo
   chipActiveBg: T?.primaryDark,   // chip activo
   chipColor:    T?.onPrimary      // texto chip
@@ -35,11 +34,11 @@ function normVista(v) {
   return "frente";
 }
 
-/* Mapa imagen por vista/lado: frente | lateral | posterior */
+/* Mapa imagen por vista/lado */
 const IMG = {
   frente:    { derecha: toUrl(imgFrenteDerecha),    izquierda: toUrl(imgFrenteIzquierda) },
   lateral:   { derecha: toUrl(imgLateral),          izquierda: toUrl(imgLateral) },
-  posterior: { derecha: toUrl(imgPosteriorDerecha), izquierda: toUrl(imgPosteriorDerecha) } // placeholder
+  posterior: { derecha: toUrl(imgPosteriorDerecha), izquierda: toUrl(imgPosteriorDerecha) }
 };
 
 /* Etiquetas tabs */
@@ -67,7 +66,7 @@ function savePersisted(lado, data) {
 
 export default function RodillaMapper({
   ladoInicial = "derecha",
-  vistaInicial = "frente",   // "anterior" o "frontal" se normaliza a "frente"
+  vistaInicial = "frente",   // "anterior"/"frontal" → "frente"
   imagenSrc,                 // opcional: el padre puede sobreescribir la imagen
   onSave,
   onVolver,                  // debe VOLVER sin grabar
@@ -76,7 +75,7 @@ export default function RodillaMapper({
   const vistaInicialNorm = normVista(vistaInicial);
   const [vista, setVista] = useState(vistaInicialNorm);
 
-  /* Estado de puntos: arranca con puntos de la vista inicial (ya visibles) */
+  /* Estado de puntos: arranca con la vista inicial (ya visibles) */
   const {
     puntos,        // [{key, x, y, selected, label?}]
     setPuntos,
@@ -93,7 +92,7 @@ export default function RodillaMapper({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Cambio de vista → cargar puntos base + restaurar selección persistida si existe */
+  /* Cambio de vista → cargar puntos base + restaurar selección persistida */
   useEffect(() => {
     const base = puntosDeVista(vista);
     const persisted = loadPersisted(lado);
@@ -110,15 +109,12 @@ export default function RodillaMapper({
     savePersisted(lado, persisted);
   }, [puntos, vista, lado]);
 
-  /* Toggle index (mantiene persistencia por efecto anterior) */
-  const handleToggle = useCallback(
-    (index) => {
-      togglePunto(index);
-    },
-    [togglePunto]
-  );
+  /* Toggle index (persistencia la maneja el efecto) */
+  const handleToggle = useCallback((index) => {
+    togglePunto(index);
+  }, [togglePunto]);
 
-  /* Botón Volver: NO guarda; robusto */
+  /* Botón Volver: NO guarda; con fallbacks y sin import.meta */
   const handleVolver = useCallback((e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
@@ -128,21 +124,17 @@ export default function RodillaMapper({
       return;
     }
 
-    // intentamos notificar globalmente
+    // Notificación global opcional
     try { window.dispatchEvent(new CustomEvent("rodilla:volver")); } catch {}
 
-    // si hay historial, volver
+    // Si hay historial, retrocede
     if (typeof window !== "undefined" && window.history && window.history.length > 1) {
       window.history.back();
       return;
     }
 
-    // fallback final
-    const base =
-      (typeof window !== "undefined" && window.__RETURN_BASE) ||
-      (typeof import !== "undefined" && import.meta?.env?.VITE_RETURN_BASE) ||
-      "/";
-    if (typeof window !== "undefined") window.location.assign(base);
+    // Fallback final seguro (sin import.meta)
+    if (typeof window !== "undefined") window.location.assign("/");
   }, [onVolver]);
 
   /* Imagen final */
@@ -154,13 +146,12 @@ export default function RodillaMapper({
 
   /* Puntos render (coords %) + etiqueta (usa p.label o key) */
   const puntosRender = useMemo(
-    () =>
-      puntos.map((p) => ({
-        ...p,
-        cx: p.x * 100,
-        cy: p.y * 100,
-        labelText: p.label || p.key || "",
-      })),
+    () => puntos.map((p) => ({
+      ...p,
+      cx: p.x * 100,
+      cy: p.y * 100,
+      labelText: p.label || p.key || "",
+    })),
     [puntos]
   );
 
@@ -315,7 +306,7 @@ function Button({ children, onClick, outline, subtle, type = "button" }) {
   );
 }
 
-/* Marcador igual al esquema del padre (sin blanco) */
+/* Marcador: aro solo borde; centro siempre visible (accentAlpha / primary); sin blanco */
 function Marker({ cx, cy, active, label, onClick }) {
   const r = 2.9; // tamaño cómodo
   const textLen = Math.max(3, Math.min(30, (label || "").length));
@@ -334,7 +325,7 @@ function Marker({ cx, cy, active, label, onClick }) {
       {/* halo grande para click (invisible) */}
       <circle r={6.5} fill="transparent" />
 
-      {/* aro exterior (solo borde, SIN relleno blanco) */}
+      {/* aro exterior (SIN relleno) */}
       <circle
         r={r + 1.0}
         fill="none"
@@ -376,4 +367,4 @@ function Marker({ cx, cy, active, label, onClick }) {
       )}
     </g>
   );
-}
+      }
