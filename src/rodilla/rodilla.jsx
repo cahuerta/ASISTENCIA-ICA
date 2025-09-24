@@ -1,7 +1,7 @@
 // src/rodilla/rodilla.jsx
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import { RODILLA_PUNTOS_BY_VISTA } from "./rodillapuntos.js";
+import { RODILLA_PUNTOS_BY_VISTA, RODILLA_LABELS } from "./rodillapuntos.js";
 import { useKneeState } from "./usekneestate.js";
 
 /**
@@ -35,6 +35,7 @@ export default function RodillaMapper({
   onSave = () => {},
   onClose = () => {},
 }) {
+  // normaliza vista inicial ("anterior" -> "frente")
   const v0 = String(vistaInicial).toLowerCase();
   const [vista, setVista] = useState(v0 === "anterior" ? "frente" : v0); // "frente" | "posterior" | "lateral"
   const [lado, setLado] = useState(
@@ -43,10 +44,10 @@ export default function RodillaMapper({
 
   const { puntos, setPuntos } = useKneeState([]);
 
-  // cargar puntos predispuestos para la vista actual (sin restauraciones, tal como pediste)
+  // Precargar puntos predispuestos para la vista actual
   useEffect(() => {
     const base = RODILLA_PUNTOS_BY_VISTA[vista] || [];
-    // cada punto: { key, x, y } → estado: { x, y, key, selected:false }
+    // { key, x, y } → estado: { x, y, key, selected:false }
     setPuntos(base.map((p) => ({ x: p.x, y: p.y, key: p.key, selected: false })));
   }, [vista, setPuntos]);
 
@@ -63,10 +64,41 @@ export default function RodillaMapper({
   };
 
   const save = () => {
+    // Solo puntos activados
     const activos = puntos
       .map((p, i) => ({ id: `p${i + 1}`, x: p.x, y: p.y, key: p.key, selected: p.selected }))
       .filter((p) => p.selected === true);
 
+    // === Resumen legible por personas (por lado y vista) ===
+    // Ej: sessionStorage["rodilla_resumen_derecha"] = { frente: ["Rótula", ...], posterior: [...], lateral: [...] }
+    const SSKEY = `rodilla_resumen_${lado}`;
+    let prev = {};
+    try {
+      const raw = sessionStorage.getItem(SSKEY);
+      prev = raw ? JSON.parse(raw) : {};
+    } catch {
+      prev = {};
+    }
+
+    const labelsVista = activos
+      .map((p) => RODILLA_LABELS[p.key] || p.key)
+      .filter(Boolean);
+
+    const merged = {
+      frente: Array.isArray(prev.frente) ? prev.frente.slice() : [],
+      posterior: Array.isArray(prev.posterior) ? prev.posterior.slice() : [],
+      lateral: Array.isArray(prev.lateral) ? prev.lateral.slice() : [],
+    };
+
+    // fusiona (evita duplicados)
+    const set = new Set([...(merged[vista] || []), ...labelsVista]);
+    merged[vista] = Array.from(set);
+
+    try {
+      sessionStorage.setItem(SSKEY, JSON.stringify(merged));
+    } catch {}
+
+    // Callback ascendente
     onSave({
       modulo: "rodilla",
       lado,                         // "derecha" | "izquierda"
@@ -79,15 +111,22 @@ export default function RodillaMapper({
     <div className="w-full h-full flex flex-col gap-3 p-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold">Módulo Rodilla — puntos predispuestos (click = activar/desactivar)</div>
+        <div className="text-sm font-semibold">
+          Módulo Rodilla — puntos predispuestos (click = activar/desactivar)
+        </div>
         <div className="flex items-center gap-2">
-          <button className={`${BTN}`} onClick={() => setPuntos((_) => _.map(p => ({ ...p, selected: false })))}>
+          <button
+            className={BTN}
+            onClick={() => setPuntos((arr) => arr.map((p) => ({ ...p, selected: false })))}
+          >
             Desactivar todos
           </button>
           <button className={`${BTN} bg-black text-white`} onClick={save}>
             Guardar / Enviar
           </button>
-          <button className={BTN} onClick={onClose}>Cerrar</button>
+          <button className={BTN} onClick={onClose}>
+            Cerrar
+          </button>
         </div>
       </div>
 
@@ -127,7 +166,11 @@ export default function RodillaMapper({
           draggable={false}
         />
 
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+        <svg
+          className="absolute inset-0 w-full h-full"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="xMidYMid meet"
+        >
           {puntos.map((p, idx) => (
             <circle
               key={idx}
