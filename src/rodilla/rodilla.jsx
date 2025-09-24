@@ -1,28 +1,27 @@
 // src/rodilla/rodilla.jsx
 "use client";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { RODILLA_PUNTOS_BY_VISTA } from "./rodillapuntos.js";
+import { useKneeState } from "./usekneestate.js";
 
 /**
- * RodillaMapper (PNG + SVG overlay, SIN snap, SOLO puntos)
- *
- * Requiere en esta carpeta:
- *  - rodillafrentederecha.jpg
- *  - rodillafrenteizquierda.jpg
- *  - rodillaposterieroderecha.jpg   (se usa también para izquierda-posterior)
- *  - rodillalateral.jpg
+ * RodillaMapper — PNG + SVG
+ * - Puntos predispuestos (no se agregan ni mueven)
+ * - Un click en el punto: activa/desactiva
+ * - Sin textos, sin snap, sin drag, sin doble-click
  *
  * Props:
  *  - ladoInicial: "derecha" | "izquierda"
- *  - vistaInicial: "anterior" | "posterior" | "lateral"
- *  - onSave(payload): callback con {modulo, lado, vistaSeleccionada, puntos:[{x,y}]}
- *  - onClose(): cerrar modal
+ *  - vistaInicial: "anterior" | "posterior" | "lateral"  (internamente "anterior" → "frente")
+ *  - onSave(payload): { modulo:"rodilla", lado, vistaSeleccionada, puntos:[{id,x,y,key}] }
+ *  - onClose(): cerrar
  */
 
 const IMG_BY_KEY = {
   "derecha:frente": new URL("./rodillafrentederecha.jpg", import.meta.url).href,
   "izquierda:frente": new URL("./rodillafrenteizquierda.jpg", import.meta.url).href,
   "derecha:posterior": new URL("./rodillaposterieroderecha.jpg", import.meta.url).href,
-  "izquierda:posterior": new URL("./rodillaposterieroderecha.jpg", import.meta.url).href,
+  "izquierda:posterior": new URL("./rodillaposterieroderecha.jpg", import.meta.url).href, // misma base
   "derecha:lateral": new URL("./rodillalateral.jpg", import.meta.url).href,
   "izquierda:lateral": new URL("./rodillalateral.jpg", import.meta.url).href,
 };
@@ -36,59 +35,58 @@ export default function RodillaMapper({
   onSave = () => {},
   onClose = () => {},
 }) {
-  // normaliza vista inicial ("anterior" -> "frente")
   const v0 = String(vistaInicial).toLowerCase();
-  const [vista, setVista] = useState(v0 === "anterior" ? "frente" : v0);
-  const [lado, setLado] = useState(String(ladoInicial).toLowerCase() === "izquierda" ? "izquierda" : "derecha");
+  const [vista, setVista] = useState(v0 === "anterior" ? "frente" : v0); // "frente" | "posterior" | "lateral"
+  const [lado, setLado] = useState(
+    String(ladoInicial).toLowerCase() === "izquierda" ? "izquierda" : "derecha"
+  );
 
-  const [puntos, setPuntos] = useState([]); // [{x:0..1, y:0..1}]
-  const boxRef = useRef(null);
+  const { puntos, setPuntos } = useKneeState([]);
+
+  // cargar puntos predispuestos para la vista actual (sin restauraciones, tal como pediste)
+  useEffect(() => {
+    const base = RODILLA_PUNTOS_BY_VISTA[vista] || [];
+    // cada punto: { key, x, y } → estado: { x, y, key, selected:false }
+    setPuntos(base.map((p) => ({ x: p.x, y: p.y, key: p.key, selected: false })));
+  }, [vista, setPuntos]);
 
   const imgSrc = useMemo(() => {
     const key = `${lado}:${vista}`;
     return IMG_BY_KEY[key] || IMG_BY_KEY["derecha:frente"];
   }, [lado, vista]);
 
-  // click en SVG -> agrega punto (coords normalizadas)
-  function addPointFromEvent(e) {
-    const svg = e.currentTarget;
-    const rect = svg.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    setPuntos((arr) => [...arr, { x: clamp01(x), y: clamp01(y) }]);
-  }
+  // alternar activo/inactivo con un click
+  const togglePoint = (idx) => {
+    setPuntos((arr) =>
+      arr.map((p, i) => (i === idx ? { ...p, selected: !p.selected } : p))
+    );
+  };
 
-  function clamp01(v) {
-    if (v < 0) return 0;
-    if (v > 1) return 1;
-    return v;
-  }
+  const save = () => {
+    const activos = puntos
+      .map((p, i) => ({ id: `p${i + 1}`, x: p.x, y: p.y, key: p.key, selected: p.selected }))
+      .filter((p) => p.selected === true);
 
-  function removePoint(i) {
-    setPuntos((arr) => arr.filter((_, idx) => idx !== i));
-  }
-
-  function resetAll() {
-    setPuntos([]);
-  }
-
-  function save() {
     onSave({
       modulo: "rodilla",
       lado,                         // "derecha" | "izquierda"
       vistaSeleccionada: vista,     // "frente" | "posterior" | "lateral"
-      puntos: puntos.map((p, i) => ({ id: `p${i + 1}`, x: p.x, y: p.y })),
+      puntos: activos,              // solo los activados
     });
-  }
+  };
 
   return (
     <div className="w-full h-full flex flex-col gap-3 p-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="text-sm font-semibold">Módulo Rodilla — PNG + SVG (solo puntos)</div>
+        <div className="text-sm font-semibold">Módulo Rodilla — puntos predispuestos (click = activar/desactivar)</div>
         <div className="flex items-center gap-2">
-          <button className={BTN} onClick={resetAll}>Reiniciar</button>
-          <button className={`${BTN} bg-black text-white`} onClick={save}>Guardar / Enviar IA</button>
+          <button className={`${BTN}`} onClick={() => setPuntos((_) => _.map(p => ({ ...p, selected: false })))}>
+            Desactivar todos
+          </button>
+          <button className={`${BTN} bg-black text-white`} onClick={save}>
+            Guardar / Enviar
+          </button>
           <button className={BTN} onClick={onClose}>Cerrar</button>
         </div>
       </div>
@@ -117,14 +115,11 @@ export default function RodillaMapper({
             </button>
           ))}
         </div>
-        <span className="text-xs opacity-60">Click sobre la imagen para añadir puntos. (Sin validaciones)</span>
+        <span className="text-xs opacity-60">Un click en el punto: activar / desactivar.</span>
       </div>
 
-      {/* Contenedor imagen PNG + overlay SVG */}
-      <div
-        ref={boxRef}
-        className="relative w-full max-w-[720px] aspect-[3/4] border rounded-xl overflow-hidden"
-      >
+      {/* Imagen PNG + overlay SVG */}
+      <div className="relative w-full max-w-[720px] aspect-[3/4] border rounded-xl overflow-hidden">
         <img
           src={imgSrc}
           alt={`rodilla ${lado} ${vista}`}
@@ -132,42 +127,21 @@ export default function RodillaMapper({
           draggable={false}
         />
 
-        {/* SVG overlay */}
-        <svg
-          className="absolute inset-0 w-full h-full"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="xMidYMid meet"
-          onClick={addPointFromEvent}
-        >
-          {/* puntos */}
-          {puntos.map((p, i) => (
-            <g key={i}>
-              <circle cx={p.x * 100} cy={p.y * 100} r={1.8} stroke="black" strokeWidth="0.6" fill="white" />
-              {/* botón borrar (pequeña X) */}
-              <text
-                x={p.x * 100 + 2.8}
-                y={p.y * 100 - 2.8}
-                fontSize="4"
-                fill="black"
-                style={{ cursor: "pointer", userSelect: "none" }}
-                onClick={(e) => { e.stopPropagation(); removePoint(i); }}
-              >
-                ×
-              </text>
-            </g>
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+          {puntos.map((p, idx) => (
+            <circle
+              key={idx}
+              cx={p.x * 100}
+              cy={p.y * 100}
+              r={2.2}
+              stroke="black"
+              strokeWidth="0.7"
+              fill={p.selected ? "black" : "white"}
+              style={{ cursor: "pointer" }}
+              onClick={() => togglePoint(idx)}
+            />
           ))}
         </svg>
-      </div>
-
-      {/* Lista simple de puntos (opcional) */}
-      <div className="w-full max-w-[720px] text-xs opacity-70">
-        {puntos.length === 0 ? "Sin puntos aún." : (
-          <ul className="list-disc pl-4">
-            {puntos.map((p, i) => (
-              <li key={i}>#{i + 1} — x: {p.x.toFixed(3)}, y: {p.y.toFixed(3)}</li>
-            ))}
-          </ul>
-        )}
       </div>
     </div>
   );
