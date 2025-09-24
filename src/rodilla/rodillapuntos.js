@@ -1,32 +1,33 @@
 // src/rodilla/rodillapuntos.js
 // Puntos predispuestos (x,y normalizados). SIN textos en PNG/SVG, solo pins.
+// Se agrega `label` (nombre coloquial) para usar directo en resúmenes.
 
 export const RODILLA_PUNTOS_FRENTE = [
-  { key: "rotula", x: 0.50, y: 0.42 },
-  { key: "interlinea_medial", x: 0.44, y: 0.52 },
-  { key: "interlinea_lateral", x: 0.56, y: 0.52 },
-  { key: "tendon_rotuliano", x: 0.50, y: 0.62 },
-  { key: "tuberosidad_anterior_tibial", x: 0.50, y: 0.78 },
-  { key: "retinaculo_medial", x: 0.40, y: 0.45 },
-  { key: "retinaculo_lateral", x: 0.60, y: 0.45 },
-  { key: "pes_anserina", x: 0.43, y: 0.84 },
-  { key: "tracto_iliotibial", x: 0.64, y: 0.68 },
+  { key: "rotula", x: 0.50, y: 0.42, label: "Rótula" },
+  { key: "interlinea_medial", x: 0.44, y: 0.52, label: "Interlínea medial" },
+  { key: "interlinea_lateral", x: 0.56, y: 0.52, label: "Interlínea lateral" },
+  { key: "tendon_rotuliano", x: 0.50, y: 0.62, label: "Tendón rotuliano" },
+  { key: "tuberosidad_anterior_tibial", x: 0.50, y: 0.78, label: "Tuberosidad anterior tibial" },
+  { key: "retinaculo_medial", x: 0.40, y: 0.45, label: "Retináculo medial" },
+  { key: "retinaculo_lateral", x: 0.60, y: 0.45, label: "Retináculo lateral" },
+  { key: "pes_anserina", x: 0.43, y: 0.84, label: "Pes anserina" },
+  { key: "tracto_iliotibial", x: 0.64, y: 0.68, label: "Tracto iliotibial" },
 ];
 
 export const RODILLA_PUNTOS_POSTERIOR = [
-  { key: "fosa_poplitea", x: 0.50, y: 0.48 },
-  { key: "interlinea_medial_posterior", x: 0.44, y: 0.53 },
-  { key: "interlinea_lateral_posterior", x: 0.56, y: 0.53 },
-  { key: "biceps_femoral", x: 0.62, y: 0.60 },
-  { key: "gastrocnemios", x: 0.50, y: 0.70 },
+  { key: "fosa_poplitea", x: 0.50, y: 0.48, label: "Fosa poplítea" },
+  { key: "interlinea_medial_posterior", x: 0.44, y: 0.53, label: "Interlínea medial (posterior)" },
+  { key: "interlinea_lateral_posterior", x: 0.56, y: 0.53, label: "Interlínea lateral (posterior)" },
+  { key: "biceps_femoral", x: 0.62, y: 0.60, label: "Bíceps femoral" },
+  { key: "gastrocnemios", x: 0.50, y: 0.70, label: "Gastrocnemios" },
 ];
 
 export const RODILLA_PUNTOS_LATERAL = [
-  { key: "tendon_rotuliano", x: 0.52, y: 0.60 },
-  { key: "tuberosidad_tibial", x: 0.55, y: 0.78 },
-  { key: "rotula", x: 0.50, y: 0.42 },
-  { key: "cuadriceps", x: 0.52, y: 0.30 },
-  { key: "gastrocnemios", x: 0.45, y: 0.72 },
+  { key: "tendon_rotuliano", x: 0.52, y: 0.60, label: "Tendón rotuliano" },
+  { key: "tuberosidad_tibial", x: 0.55, y: 0.78, label: "Tuberosidad tibial" },
+  { key: "rotula", x: 0.50, y: 0.42, label: "Rótula" },
+  { key: "cuadriceps", x: 0.52, y: 0.30, label: "Cuádriceps" },
+  { key: "gastrocnemios", x: 0.45, y: 0.72, label: "Gastrocnemios" },
 ];
 
 export const RODILLA_PUNTOS_BY_VISTA = {
@@ -41,3 +42,8 @@ export const RODILLA_PUNTOS = [
   ...RODILLA_PUNTOS_POSTERIOR,
   ...RODILLA_PUNTOS_LATERAL,
 ];
+
+// Mapa rápido: key → label (para usar en resúmenes)
+export const RODILLA_LABELS = Object.fromEntries(
+  RODILLA_PUNTOS.map(({ key, label }) => [key, label])
+);
