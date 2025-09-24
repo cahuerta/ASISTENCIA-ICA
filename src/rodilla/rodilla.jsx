@@ -8,8 +8,9 @@ import { getTheme } from "../theme.js";
 const T = getTheme();
 const THEME = {
   markerStroke: T?.primaryDark,   // borde
-  markerFill:   T?.surface,       // relleno base
-  markerActive: T?.primary,       // relleno activo
+  // ↓ NUEVO esquema igual al padre (sin blanco):
+  dotInactive:  T?.accentAlpha,   // centro inactivo (translúcido)
+  dotActive:    T?.primary,       // centro activo (sólido)
   markerShadow: T?.overlay,       // sombra
   chipBg:       T?.accentAlpha,   // chip inactivo
   chipActiveBg: T?.primaryDark,   // chip activo
@@ -117,13 +118,31 @@ export default function RodillaMapper({
     [togglePunto]
   );
 
-  /* Botón Volver: NO guarda; fallback a history.back si no hay handler */
-  const handleVolver = useCallback(() => {
+  /* Botón Volver: NO guarda; robusto */
+  const handleVolver = useCallback((e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+
     if (typeof onVolver === "function") {
       onVolver(); // salir sin grabar
-    } else if (typeof window !== "undefined" && window.history?.back) {
-      window.history.back();
+      return;
     }
+
+    // intentamos notificar globalmente
+    try { window.dispatchEvent(new CustomEvent("rodilla:volver")); } catch {}
+
+    // si hay historial, volver
+    if (typeof window !== "undefined" && window.history && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    // fallback final
+    const base =
+      (typeof window !== "undefined" && window.__RETURN_BASE) ||
+      (typeof import !== "undefined" && import.meta?.env?.VITE_RETURN_BASE) ||
+      "/";
+    if (typeof window !== "undefined") window.location.assign(base);
   }, [onVolver]);
 
   /* Imagen final */
@@ -269,9 +288,7 @@ function VistaChip({ active, onClick, label }) {
         fontWeight: 700,
         letterSpacing: 0.6,
         textTransform: "uppercase",
-        boxShadow: active
-          ? (T?.shadowSm || "0 4px 14px rgba(0,0,0,0.25)")
-          : (T?.shadowSm || "0 2px 6px rgba(0,0,0,0.12)"),
+        boxShadow: T?.shadowSm || "0 2px 6px rgba(0,0,0,0.12)",
         background: active ? THEME.chipActiveBg : THEME.chipBg,
         color: THEME.chipColor,
         opacity: active ? 1 : 0.92,
@@ -298,7 +315,7 @@ function Button({ children, onClick, outline, subtle, type = "button" }) {
   );
 }
 
-/* Marcador con estilo desde la paleta PADRE + etiqueta cuando está activo */
+/* Marcador igual al esquema del padre (sin blanco) */
 function Marker({ cx, cy, active, label, onClick }) {
   const r = 2.9; // tamaño cómodo
   const textLen = Math.max(3, Math.min(30, (label || "").length));
@@ -317,18 +334,17 @@ function Marker({ cx, cy, active, label, onClick }) {
       {/* halo grande para click (invisible) */}
       <circle r={6.5} fill="transparent" />
 
-      {/* aro exterior (SIEMPRE visible) */}
+      {/* aro exterior (solo borde, SIN relleno blanco) */}
       <circle
         r={r + 1.0}
-        fill={THEME.markerFill}
+        fill="none"
         stroke={THEME.markerStroke}
         strokeWidth="0.6"
-        opacity={1}
         style={{ filter: `drop-shadow(0 0.5px 1.2px ${THEME.markerShadow || "rgba(0,0,0,0.18)"})` }}
       />
 
-      {/* centro activo */}
-      {active && <circle r={r - 0.6} fill={THEME.markerActive} opacity="0.98" />}
+      {/* centro SIEMPRE visible: inactivo=accentAlpha, activo=primary */}
+      <circle r={r - 1.0} fill={active ? THEME.dotActive : THEME.dotInactive} />
 
       {/* etiqueta cuando activo */}
       {active && !!label && (
