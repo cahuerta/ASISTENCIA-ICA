@@ -14,6 +14,9 @@ import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import IAModulo from "./modules/IAModulo.jsx";
 import TraumaModulo from "./modules/TraumaModulo.jsx";
 
+/* >>> NUEVO: módulo de rodilla (PNG + SVG) */
+import RodillaMapper from "./rodilla/rodilla.jsx";
+
 /* Utilidades existentes */
 import AvisoLegal from "./components/AvisoLegal.jsx";
 import FormularioResonancia from "./components/FormularioResonancia.jsx";
@@ -52,6 +55,9 @@ function App() {
 
   // Vista esquema (frontal/posterior)
   const [vista, setVista] = useState("anterior");
+
+  // >>> NUEVO: control del modal RodillaMapper
+  const [mostrarRodilla, setMostrarRodilla] = useState(false);
 
   // ====== Flags persistentes (por módulo: preop / generales) ======
   const avisoOkRef = useRef({ preop: false, generales: false });
@@ -248,7 +254,7 @@ function App() {
     try {
       let resp = await postIA("/preop-ia");
       if (!resp.ok) resp = await postIA("/ia-preop");
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      if (!resp.ok) throw new Error(`HTTP ${r.status}`);
 
       const j = await resp.json();
       const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
@@ -496,6 +502,11 @@ function App() {
       } catch {}
       return next;
     });
+
+    // >>> NUEVO: abrir RodillaMapper cuando se selecciona Rodilla
+    if (dolor === "Rodilla") {
+      setMostrarRodilla(true);
+    }
   };
 
   // ====== Submit del formulario principal ======
@@ -683,6 +694,22 @@ function App() {
                   {datosPaciente.dolor}
                   {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
                 </strong>
+                {datosPaciente.dolor === "Rodilla" && (
+                  <button
+                    type="button"
+                    onClick={() => setMostrarRodilla(true)}
+                    style={{
+                      marginLeft: 8,
+                      padding: "4px 8px",
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 6,
+                      background: T.surface,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Marcar puntos
+                  </button>
+                )}
               </>
             ) : (
               "Seleccione una zona en el esquema"
@@ -746,6 +773,20 @@ function App() {
                 const bloquea = hasRedFlags(data);
                 resolverReso?.({ canceled: false, bloquea, data, riesgos, resumen });
               }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ===== NUEVO Modal Rodilla (PNG+SVG) ===== */}
+      {mostrarRodilla && (
+        <div style={styles.modalOverlay}>
+          <div style={{ width: "min(900px, 96vw)" }}>
+            <RodillaMapper
+              ladoInicial={(datosPaciente?.lado || "").toLowerCase().includes("izq") ? "izquierda" : "derecha"}
+              vistaInicial={vista} // "anterior" | "posterior" (RodillaMapper convierte "anterior" → "frente")
+              onSave={() => setMostrarRodilla(false)} // guarda en sessionStorage dentro del componente
+              onClose={() => setMostrarRodilla(false)}
             />
           </div>
         </div>
