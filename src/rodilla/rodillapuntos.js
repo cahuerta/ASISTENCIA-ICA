@@ -1,42 +1,41 @@
 // src/rodilla/rodillapuntos.js
-// Solo los puntos solicitados, organizados por vista.
+// Puntos predispuestos (x,y normalizados). SIN textos en PNG/SVG, solo pins.
 
 export const RODILLA_PUNTOS_FRENTE = [
-  { key: "rotula", label: "Rótula" },
-  { key: "interlinea_medial", label: "Interlínea medial" },
-  { key: "interlinea_lateral", label: "Interlínea lateral" },
-  { key: "tendon_rotuliano", label: "Tendón rotuliano" },
-  { key: "tuberosidad_tibial_anterior", label: "Tuberosidad anterior tibial" },
-  { key: "retinaculo_medial", label: "Retináculo medial" },
-  { key: "retinaculo_lateral", label: "Retináculo lateral" },
-  { key: "pes_anserina", label: "Pes anserina" },
-  { key: "tracto_iliotibial", label: "Tracto iliotibial" },
+  { key: "rotula", x: 0.50, y: 0.42 },
+  { key: "interlinea_medial", x: 0.44, y: 0.52 },
+  { key: "interlinea_lateral", x: 0.56, y: 0.52 },
+  { key: "tendon_rotuliano", x: 0.50, y: 0.62 },
+  { key: "tuberosidad_anterior_tibial", x: 0.50, y: 0.78 },
+  { key: "retinaculo_medial", x: 0.40, y: 0.45 },
+  { key: "retinaculo_lateral", x: 0.60, y: 0.45 },
+  { key: "pes_anserina", x: 0.43, y: 0.84 },
+  { key: "tracto_iliotibial", x: 0.64, y: 0.68 },
 ];
 
 export const RODILLA_PUNTOS_POSTERIOR = [
-  { key: "fosa_poplitea", label: "Fosa poplítea" },
-  { key: "interlinea_medial_posterior", label: "Interlínea medial (posterior)" },
-  { key: "interlinea_lateral_posterior", label: "Interlínea lateral (posterior)" },
-  { key: "biceps_femoral", label: "Bíceps femoral" },
-  { key: "gastrocnemios", label: "Gastrocnemios" },
+  { key: "fosa_poplitea", x: 0.50, y: 0.48 },
+  { key: "interlinea_medial_posterior", x: 0.44, y: 0.53 },
+  { key: "interlinea_lateral_posterior", x: 0.56, y: 0.53 },
+  { key: "biceps_femoral", x: 0.62, y: 0.60 },
+  { key: "gastrocnemios", x: 0.50, y: 0.70 },
 ];
 
 export const RODILLA_PUNTOS_LATERAL = [
-  { key: "tendon_rotuliano", label: "Tendón rotuliano" },
-  { key: "tuberosidad_tibial", label: "Tuberosidad tibial" },
-  { key: "rotula", label: "Rótula" },
-  { key: "cuadriceps", label: "Cuádriceps" },
-  { key: "gastrocnemios", label: "Gastrocnemios" },
+  { key: "tendon_rotuliano", x: 0.52, y: 0.60 },
+  { key: "tuberosidad_tibial", x: 0.55, y: 0.78 },
+  { key: "rotula", x: 0.50, y: 0.42 },
+  { key: "cuadriceps", x: 0.52, y: 0.30 },
+  { key: "gastrocnemios", x: 0.45, y: 0.72 },
 ];
 
-// Acceso por vista
 export const RODILLA_PUNTOS_BY_VISTA = {
   frente: RODILLA_PUNTOS_FRENTE,
   posterior: RODILLA_PUNTOS_POSTERIOR,
   lateral: RODILLA_PUNTOS_LATERAL,
 };
 
-// (Opcional) Lista plana si la necesitas en algún selector global.
+// Lista plana (si te sirve)
 export const RODILLA_PUNTOS = [
   ...RODILLA_PUNTOS_FRENTE,
   ...RODILLA_PUNTOS_POSTERIOR,
