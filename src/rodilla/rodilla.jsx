@@ -8,8 +8,8 @@ import { useKneeState } from "./usekneestate.js";
 import imgFrenteDerecha from "./rodillafrentederecha.jpg";
 import imgFrenteIzquierda from "./rodillafrenteizquierda.jpg";
 import imgLateral from "./rodillalateral.jpg";
-/* nombre exacto del repo: 'rodillaposterioderecha.jpg' */
-import imgPosterioDerecha from "./rodillaposterioderecha.jpg";
+/* nombre exacto del repo: 'rodillaposteriorderecha.jpg' */
+import imgPosterioDerecha from "./rodillaposteriorderecha.jpg";
 
 /* Normaliza import de imagen a URL (Next/Vite) */
 const toUrl = (img) => (typeof img === "string" ? img : img?.src || "");
