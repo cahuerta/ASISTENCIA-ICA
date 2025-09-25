@@ -157,13 +157,44 @@ export default function RodillaMapper({
 
   /* Guardar */
   const handleSave = () => {
-    const activos = puntos.filter((p) => p.selected).map((p) => p.key);
-    onSave?.({
+    const activos = puntos.filter((p) => p.selected);
+    const activosKeys = activos.map((p) => p.key);
+    const activosLabels = activos.map((p) => p.label || p.key);
+
+    // Bloque para PREVIEW (visual)
+    const seccionesExtra = activosLabels.length
+      ? [{ title: "Zonas marcadas", lines: activosLabels }]
+      : [];
+
+    // Bloque para BACKEND (Trauma/IA)
+    const rodilla = {
+      lado,
+      vistaSeleccionada: vista,
+      puntosSeleccionados: activosLabels,
+      puntosKeys: activosKeys,
+      count: activosLabels.length,
+    };
+
+    // Payload unificado (el padre puede ignorar o consumir; no rompemos nada)
+    const r = {
       modulo: "rodilla",
       lado,
       vistaSeleccionada: vista,
-      puntosActivos: activos
-    });
+      // compatibilidad
+      puntosActivos: activosKeys,
+      puntosSeleccionados: activosLabels,
+      // contratos acordados
+      seccionesExtra,
+      rodilla,
+    };
+
+    // Persistencia opcional para flujos que lean directo del storage
+    try {
+      sessionStorage.setItem("rodilla_data", JSON.stringify(rodilla));
+      sessionStorage.setItem("rodilla_seccionesExtra", JSON.stringify(seccionesExtra));
+    } catch {}
+
+    onSave?.(r);
   };
 
   return (
@@ -367,4 +398,4 @@ function Marker({ cx, cy, active, label, onClick }) {
       )}
     </g>
   );
-      }
+                 }
