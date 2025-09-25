@@ -503,8 +503,8 @@ function App() {
       return next;
     });
 
-    // >>> NUEVO: abrir RodillaMapper cuando se selecciona Rodilla
-    if (dolor === "Rodilla") {
+    // >>> Abrir RodillaMapper solo en Trauma o IA
+    if ((modulo === "trauma" || modulo === "ia") && dolor === "Rodilla") {
       setMostrarRodilla(true);
     }
   };
@@ -694,7 +694,7 @@ function App() {
                   {datosPaciente.dolor}
                   {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
                 </strong>
-                {datosPaciente.dolor === "Rodilla" && (
+                {datosPaciente.dolor === "Rodilla" && (modulo === "trauma" || modulo === "ia") && (
                   <button
                     type="button"
                     onClick={() => setMostrarRodilla(true)}
@@ -778,8 +778,8 @@ function App() {
         </div>
       )}
 
-      {/* ===== NUEVO Modal Rodilla (PNG+SVG) ===== */}
-      {mostrarRodilla && (
+      {/* ===== Modal Rodilla (PNG+SVG) ===== */}
+      {(modulo === "trauma" || modulo === "ia") && mostrarRodilla && (
         <div style={styles.modalOverlay}>
           <div style={{ width: "min(900px, 96vw)" }}>
             <RodillaMapper
