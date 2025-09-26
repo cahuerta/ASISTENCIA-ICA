@@ -1,34 +1,23 @@
 // src/App.jsx
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-
-/* Esquema corporal */
 import EsquemaAnterior from "./EsquemaAnterior.jsx";
 import EsquemaPosterior from "./EsquemaPosterior.jsx";
 import EsquemaToggleTabs from "./EsquemaToggleTabs.jsx";
-
-/* Formularios y módulos */
 import FormularioPaciente from "./FormularioPaciente.jsx";
 import PreopModulo from "./modules/PreopModulo.jsx";
 import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import IAModulo from "./modules/IAModulo.jsx";
 import TraumaModulo from "./modules/TraumaModulo.jsx";
-
-/* Módulo de rodilla (PNG + SVG) */
 import RodillaMapper from "./rodilla/rodilla.jsx";
-
-/* Utilidades existentes */
 import AvisoLegal from "./components/AvisoLegal.jsx";
 import FormularioResonancia from "./components/FormularioResonancia.jsx";
 import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx";
-
-/* Tema (JSON + helper) */
 import { getTheme } from "./theme.js";
-const T = getTheme();
 
+const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* === Normaliza solo para el backend (UI sigue: MASCULINO / FEMENINO) === */
 const normalizarGenero = (g = "") => {
   const s = String(g).trim().toLowerCase();
   if (s === "masculino" || s === "hombre") return "hombre";
@@ -46,20 +35,13 @@ function App() {
     lado: "",
   });
 
-  // Módulo activo: 'trauma' | 'preop' | 'generales' | 'ia'
   const [modulo, setModulo] = useState("trauma");
-
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const pollerRef = useRef(null);
-
-  // Vista esquema (frontal/posterior)
   const [vista, setVista] = useState("anterior");
-
-  // Control del modal RodillaMapper
   const [mostrarRodilla, setMostrarRodilla] = useState(false);
 
-  // Guardar selección de rodilla (payload del RodillaMapper)
   const [rodillaSeleccion, setRodillaSeleccion] = useState(() => {
     try {
       const raw = sessionStorage.getItem("rodilla_mapper_payload");
@@ -69,7 +51,6 @@ function App() {
     }
   });
 
-  // ====== Flags persistentes (por módulo: preop / generales) ======
   const avisoOkRef = useRef({ preop: false, generales: false });
   const comorbOkRef = useRef({ preop: false, generales: false });
 
@@ -104,7 +85,6 @@ function App() {
     } catch {}
   };
 
-  // ====== Aviso Legal ======
   const [mostrarAviso, setMostrarAviso] = useState(false);
   const [pendingPreview, setPendingPreview] = useState(false);
 
@@ -127,7 +107,6 @@ function App() {
     }, 0);
   };
 
-  // ====== RNM (checklist) centralizado en App para compartirlo ======
   const [showReso, setShowReso] = useState(false);
   const [resolverReso, setResolverReso] = useState(null);
   const RED_FLAGS = new Set([
@@ -164,7 +143,6 @@ function App() {
     ].join("\n");
   };
 
-  // Expuesto para módulos que lo necesiten
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
@@ -190,7 +168,6 @@ function App() {
     }
   };
 
-  // ====== Comorbilidades (modal suelto) ======
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(() => {
     try {
@@ -201,7 +178,6 @@ function App() {
     }
   });
 
-  // Mantener comorbilidades del scope al cambiar de módulo
   useEffect(() => {
     if (modulo !== "preop" && modulo !== "generales") return;
     try {
@@ -212,7 +188,6 @@ function App() {
     }
   }, [modulo]);
 
-  // ---- IA PREOP ----
   const llamarPreopIA = async (payloadComorb) => {
     let idPago = "";
     try {
@@ -284,7 +259,6 @@ function App() {
     }
   };
 
-  // ---- IA GENERALES ----
   const llamarGeneralesIA = async (payloadComorb) => {
     let idPago = "";
     try {
@@ -357,7 +331,6 @@ function App() {
     }
   };
 
-  // Guardar comorbilidades → marcar ok → llamar IA del scope
   const handleSaveComorbilidades = async (payload) => {
     setComorbilidades(payload);
     setMostrarComorbilidades(false);
@@ -367,7 +340,6 @@ function App() {
     else await llamarGeneralesIA(payload);
   };
 
-  // ====== Restauración de estado en montaje ======
   useEffect(() => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
     if (saved) {
@@ -430,7 +402,6 @@ function App() {
     };
   }, []);
 
-  // Persistir vista de esquema
   useEffect(() => {
     try {
       sessionStorage.setItem("vistaEsquema", vista);
@@ -447,7 +418,6 @@ function App() {
     });
   };
 
-  // ====== Selección de zona ======
   const onSeleccionZona = (zona) => {
     let dolor = "";
     let lado = "";
@@ -496,7 +466,6 @@ function App() {
     }
   };
 
-  // ====== Submit del formulario principal ======
   const handleSubmit = async (e) => {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
@@ -532,7 +501,6 @@ function App() {
     setPendingPreview(false);
   };
 
-  /* ====== Botón REINICIAR ====== */
   const handleReiniciar = async () => {
     const ok = window.confirm(
       "Esto reiniciará completamente la aplicación (datos, estados, caches). ¿Continuar?"
@@ -591,7 +559,6 @@ function App() {
     }
   };
 
-  /* ====== RESET de preview/modales al cambiar de módulo ====== */
   const resetPreviewForModuleChange = () => {
     setMostrarVistaPrevia(false);
     setPagoRealizado(false);
@@ -629,7 +596,6 @@ function App() {
     }
   };
 
-  // ====== UI ======
   return (
     <div style={styles.page}>
       <div style={styles.topBarWrap}>
@@ -813,7 +779,6 @@ function App() {
   );
 }
 
-/* ================== Styles (solo variables del theme.json) ================== */
 const styles = {
   page: {
     fontFamily: "Arial, sans-serif",
