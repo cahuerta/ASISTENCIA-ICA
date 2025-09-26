@@ -84,7 +84,6 @@ function App() {
     try {
       avisoOkRef.current.preop = sessionStorage.getItem("preop_aviso_ok") === "1";
       avisoOkRef.current.generales = sessionStorage.getItem("generales_aviso_ok") === "1";
-
       comorbOkRef.current.preop = sessionStorage.getItem("preop_comorbilidades_ok") === "1";
       comorbOkRef.current.generales = sessionStorage.getItem("generales_comorbilidades_ok") === "1";
     } catch {}
@@ -107,7 +106,7 @@ function App() {
 
   // ====== Aviso Legal ======
   const [mostrarAviso, setMostrarAviso] = useState(false);
-  const [pendingPreview, setPendingPreview] = useState(false); // preview sólo tras IA + aceptar
+  const [pendingPreview, setPendingPreview] = useState(false);
 
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
@@ -492,7 +491,6 @@ function App() {
       return next;
     });
 
-    // Abrir RodillaMapper solo en Trauma o IA
     if ((modulo === "trauma" || modulo === "ia") && dolor === "Rodilla") {
       setMostrarRodilla(true);
     }
@@ -634,7 +632,6 @@ function App() {
   // ====== UI ======
   return (
     <div style={styles.page}>
-      {/* Barra superior fija */}
       <div style={styles.topBarWrap}>
         <div style={styles.topBar}>
           {[
@@ -660,7 +657,6 @@ function App() {
             );
           })}
 
-          {/* Botón REINICIAR */}
           <button
             type="button"
             onClick={handleReiniciar}
@@ -672,7 +668,6 @@ function App() {
         </div>
       </div>
 
-      {/* Modal Aviso Legal */}
       <AvisoLegal
         visible={mostrarAviso}
         persist={false}
@@ -681,7 +676,6 @@ function App() {
       />
 
       <div style={styles.content}>
-        {/* Columna 1 - Esquema */}
         <div style={styles.esquemaCol}>
           <EsquemaToggleTabs vista={vista} onChange={setVista} />
           {vista === "anterior" ? (
@@ -722,7 +716,6 @@ function App() {
           </div>
         </div>
 
-        {/* Columna 2 - Formulario Paciente */}
         <div style={styles.formCol}>
           <FormularioPaciente
             datos={datosPaciente}
@@ -732,7 +725,6 @@ function App() {
           />
         </div>
 
-        {/* Columna 3 - Previews / Acciones */}
         <div style={styles.previewCol} data-preview-col>
           {mostrarVistaPrevia && modulo === "trauma" && (
             <TraumaModulo
@@ -764,7 +756,6 @@ function App() {
         </div>
       </div>
 
-      {/* ===== Modal RNM ===== */}
       {showReso && (
         <div style={styles.modalOverlay}>
           <div style={{ width: "min(900px, 96vw)" }}>
@@ -784,7 +775,6 @@ function App() {
         </div>
       )}
 
-      {/* ===== Modal Rodilla (PNG+SVG) ===== */}
       {(modulo === "trauma" || modulo === "ia") && mostrarRodilla && (
         <div style={styles.modalOverlay}>
           <div style={{ width: "min(900px, 96vw)" }}>
@@ -796,7 +786,6 @@ function App() {
                 : "derecha"}
               vistaInicial={vista}
               onSave={(payload) => {
-                // payload: { lado, vistaSeleccionada, puntosSeleccionados, porVista, count, ... }
                 setRodillaSeleccion(payload);
                 try {
                   sessionStorage.setItem("rodilla_mapper_payload", JSON.stringify(payload));
@@ -809,7 +798,6 @@ function App() {
         </div>
       )}
 
-      {/* ===== Modal Comorbilidades ===== */}
       {mostrarComorbilidades && (
         <div style={styles.modalOverlay}>
           <div style={{ width: "min(900px, 96vw)" }}>
@@ -832,8 +820,6 @@ const styles = {
     backgroundColor: T.bg,
     minHeight: "100vh",
   },
-
-  /* Top bar */
   topBarWrap: {
     position: "sticky",
     top: 0,
@@ -875,8 +861,6 @@ const styles = {
     color: T.primary,
     borderColor: T.primary,
   },
-
-  /* Layout */
   content: {
     display: "grid",
     gridTemplateColumns: "400px 400px 1fr",
@@ -886,8 +870,6 @@ const styles = {
     padding: "0 16px 24px",
   },
   esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
-
-  /* Stacking para que los modales siempre queden arriba */
   formCol: {
     flex: "0 0 400px",
     maxWidth: 400,
@@ -900,7 +882,6 @@ const styles = {
     zIndex: 0,
     overflow: "hidden",
   },
-
   statusBox: {
     marginTop: 8,
     fontSize: 14,
@@ -913,8 +894,6 @@ const styles = {
     borderColor: T.border,
     minHeight: 30,
   },
-
-  /* Modals */
   modalOverlay: {
     position: "fixed",
     inset: 0,
