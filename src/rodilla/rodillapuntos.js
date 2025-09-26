@@ -15,19 +15,19 @@ export const RODILLA_PUNTOS_FRENTE = [
 ];
 
 export const RODILLA_PUNTOS_POSTERIOR = [
-  { key: "fosa_poplitea", x: 0.50, y: 0.48, label: "Fosa poplítea" },
-  { key: "interlinea_medial_posterior", x: 0.44, y: 0.53, label: "Interlínea medial (posterior)" },
-  { key: "interlinea_lateral_posterior", x: 0.56, y: 0.53, label: "Interlínea lateral (posterior)" },
-  { key: "biceps_femoral", x: 0.62, y: 0.60, label: "Bíceps femoral" },
+  { key: "fosa_poplitea", x: 0.50, y: 0.45, label: "Fosa poplítea" },
+  { key: "interlinea_medial_posterior", x: 0.40, y: 0.50, label: "Interlínea medial (posterior)" },
+  { key: "interlinea_lateral_posterior", x: 0.60, y: 0.50, label: "Interlínea lateral (posterior)" },
+  { key: "biceps_femoral", x: 0.62, y: 0.30, label: "Bíceps femoral" },
   { key: "gastrocnemios", x: 0.50, y: 0.70, label: "Gastrocnemios" },
 ];
 
 export const RODILLA_PUNTOS_LATERAL = [
   { key: "tendon_rotuliano", x: 0.15, y: 0.45, label: "Tendón rotuliano" },
-  { key: "tuberosidad_tibial", x: 0.15, y: 0.78, label: "Tuberosidad tibial" },
+  { key: "tuberosidad_tibial", x: 0.17, y: 0.70, label: "Tuberosidad tibial" },
   { key: "rotula", x: 0.15, y: 0.30, label: "Rótula" },
-  { key: "cuadriceps", x: 0.52, y: 0.010, label: "Cuádriceps" },
-  { key: "gastrocnemios", x: 0.70, y: 0.72, label: "Gastrocnemios" },
+  { key: "cuadriceps", x: 0.52, y: 0.08, label: "Cuádriceps" },
+  { key: "gastrocnemios", x: 0.70, y: 0.65, label: "Gastrocnemios" },
 ];
 
 export const RODILLA_PUNTOS_BY_VISTA = {
