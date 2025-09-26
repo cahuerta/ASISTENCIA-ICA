@@ -16,9 +16,8 @@ const THEME = {
   chipColor:    T?.onPrimary
 };
 
-/* Imágenes locales */
+/* Imágenes locales (solo derechas; izquierda se espeja) */
 import imgFrenteDerecha from "./rodillafrentederecha.jpg";
-import imgFrenteIzquierda from "./rodillafrenteizquierda.jpg";
 import imgLateral from "./rodillalateral.jpg";
 import imgPosteriorDerecha from "./rodillaposteriorderecha.jpg";
 
@@ -34,11 +33,11 @@ function normVista(v) {
   return "frente";
 }
 
-/* Mapa imagen por vista/lado */
+/* Mapa imagen por vista (si lado = izquierda y vista = frente/posterior → espejo) */
 const IMG = {
-  frente:    { derecha: toUrl(imgFrenteDerecha),    izquierda: toUrl(imgFrenteIzquierda) },
-  lateral:   { derecha: toUrl(imgLateral),          izquierda: toUrl(imgLateral) },
-  posterior: { derecha: toUrl(imgPosteriorDerecha), izquierda: toUrl(imgPosteriorDerecha) }
+  frente: toUrl(imgFrenteDerecha),
+  lateral: toUrl(imgLateral),
+  posterior: toUrl(imgPosteriorDerecha),
 };
 
 /* Etiquetas tabs */
@@ -138,22 +137,28 @@ export default function RodillaMapper({
     if (typeof window !== "undefined") window.location.assign("/");
   }, [onVolver]);
 
-  /* Imagen final */
+  /* Imagen final + flag de espejo */
   const imgSrcFinal =
     (typeof imagenSrc === "string" && imagenSrc) ||
-    IMG?.[vista]?.[lado] ||
-    IMG?.[vista]?.derecha ||
-    toUrl(imgFrenteDerecha);
+    IMG[vista] ||
+    IMG.frente;
 
-  /* Puntos render */
+  const debeEspejar = (lado === "izquierda") && (vista === "frente" || vista === "posterior");
+
+  /* Puntos render (espejar cx cuando corresponde) */
   const puntosRender = useMemo(
-    () => puntos.map((p) => ({
-      ...p,
-      cx: p.x * 100,
-      cy: p.y * 100,
-      labelText: p.label || p.key || "",
-    })),
-    [puntos]
+    () => puntos.map((p) => {
+      const rawCx = p.x * 100;
+      const cx = debeEspejar ? (100 - rawCx) : rawCx;
+      const cy = p.y * 100;
+      return {
+        ...p,
+        cx,
+        cy,
+        labelText: p.label || p.key || "",
+      };
+    }),
+    [puntos, debeEspejar]
   );
 
   /* Guardar (suma 3 vistas) */
@@ -219,7 +224,7 @@ export default function RodillaMapper({
   };
 
   /* === Tamaño (proporcional, 4:3, más pequeño) === */
-  const WRAP_MAX_W = 480; // antes 520; ahora más compacto pero cómodo
+  const WRAP_MAX_W = 480; // compacto pero cómodo
 
   return (
     <div
@@ -230,7 +235,7 @@ export default function RodillaMapper({
         fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
       }}
     >
-      {/* Label del lado — alto contraste (solo este label) */}
+      {/* Label del lado — alto contraste */}
       <div style={{ marginBottom: 8 }}>
         <span
           style={{
@@ -250,7 +255,7 @@ export default function RodillaMapper({
         </span>
       </div>
 
-      {/* Contenedor 4:3 proporcional (como al principio, pero más chico) */}
+      {/* Contenedor 4:3 */}
       <div
         style={{
           position: "relative",
@@ -264,15 +269,24 @@ export default function RodillaMapper({
         {/* Ratio 4:3 */}
         <div style={{ paddingTop: "133.333%" }} />
 
-        {/* Imagen base */}
+        {/* Imagen base (espejo por CSS si corresponde) */}
         <img
           src={imgSrcFinal}
           alt={`Rodilla ${vista} ${lado}`}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+            transform: debeEspejar ? "scaleX(-1)" : "none",
+            transformOrigin: "center",
+          }}
           draggable={false}
         />
 
-        {/* Tabs de vista (NO tocados) */}
+        {/* Tabs de vista (sin cambios) */}
         <div
           style={{
             position: "absolute",
@@ -317,7 +331,7 @@ export default function RodillaMapper({
 
       {/* Acciones — alto contraste y proporcionales */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 10 }}>
-        <Button type="button" subtle onClick={handleClearAll}>Desactivar todos</Button>
+        <Button type="button" subtle onClick={clearSelection}>Desactivar todos</Button>
         <Button type="button" onClick={handleSave}>Guardar / Enviar</Button>
         <Button type="button" outline onClick={handleVolver}>Volver</Button>
       </div>
