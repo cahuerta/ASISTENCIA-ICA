@@ -4,14 +4,14 @@
 
 export const RODILLA_PUNTOS_FRENTE = [
   { key: "rotula", x: 0.50, y: 0.50, label: "Rótula" },
-  { key: "interlinea_medial", x: 0.44, y: 0.52, label: "Interlínea medial" },
-  { key: "interlinea_lateral", x: 0.56, y: 0.52, label: "Interlínea lateral" },
+  { key: "interlinea_medial", x: 0.70, y: 0.60, label: "Interlínea medial" },
+  { key: "interlinea_lateral", x: 0.30, y: 0.60, label: "Interlínea lateral" },
   { key: "tendon_rotuliano", x: 0.60, y: 0.62, label: "Tendón rotuliano" },
   { key: "tuberosidad_anterior_tibial", x: 0.50, y: 0.82, label: "Tuberosidad anterior tibial" },
-  { key: "retinaculo_medial", x: 0.70, y: 0.45, label: "Retináculo medial" },
-  { key: "retinaculo_lateral", x: 0.30, y: 0.45, label: "Retináculo lateral" },
-  { key: "pes_anserina", x: 0.43, y: 0.84, label: "Pes anserina" },
-  { key: "tracto_iliotibial", x: 0.64, y: 0.68, label: "Tracto iliotibial" },
+  { key: "retinaculo_medial", x: 0.70, y: 0.35, label: "Retináculo medial" },
+  { key: "retinaculo_lateral", x: 0.30, y: 0.35, label: "Retináculo lateral" },
+  { key: "pes_anserina", x: 0.64, y: 0.95, label: "Pes anserina" },
+  { key: "tracto_iliotibial", x: 0.20, y: 0.75, label: "Tracto iliotibial" },
 ];
 
 export const RODILLA_PUNTOS_POSTERIOR = [
