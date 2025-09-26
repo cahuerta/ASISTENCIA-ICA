@@ -155,43 +155,78 @@ export default function RodillaMapper({
     [puntos]
   );
 
-  /* Guardar */
+  /* Guardar (AHORA suma FRONTAL + LATERAL + POSTERIOR) */
   const handleSave = () => {
-    const activos = puntos.filter((p) => p.selected);
-    const activosKeys = activos.map((p) => p.key);
-    const activosLabels = activos.map((p) => p.label || p.key);
+    // 1) Cargar la selección booleana de TODAS las vistas desde localStorage
+    const persisted = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
 
-    // Bloque para PREVIEW (visual)
-    const seccionesExtra = activosLabels.length
-      ? [{ title: "Zonas marcadas", lines: activosLabels }]
-      : [];
+    // 2) Helper: booleans → etiquetas por vista
+    const labelsForView = (v) => {
+      const pts = RODILLA_PUNTOS_BY_VISTA?.[v] || [];
+      const sel = persisted?.[v] || [];
+      const out = [];
+      for (let i = 0; i < pts.length; i++) {
+        if (sel[i]) out.push(pts[i].label || pts[i].key || String(i + 1));
+      }
+      return out;
+    };
 
-    // Bloque para BACKEND (Trauma/IA)
+    // 3) Resumen por todas las vistas
+    const resumenPorVista = {
+      frente: labelsForView("frente"),
+      lateral: labelsForView("lateral"),
+      posterior: labelsForView("posterior"),
+    };
+
+    // 4) Secciones extra para Preview (una por vista si tiene ítems)
+    const seccionesExtra = [];
+    if (resumenPorVista.frente.length) {
+      seccionesExtra.push({
+        title: `Rodilla ${RODILLA_LABELS?.[lado] || lado} — FRONTAL`,
+        lines: resumenPorVista.frente,
+      });
+    }
+    if (resumenPorVista.lateral.length) {
+      seccionesExtra.push({
+        title: `Rodilla ${RODILLA_LABELS?.[lado] || lado} — LATERAL`,
+        lines: resumenPorVista.lateral,
+      });
+    }
+    if (resumenPorVista.posterior.length) {
+      seccionesExtra.push({
+        title: `Rodilla ${RODILLA_LABELS?.[lado] || lado} — POSTERIOR`,
+        lines: resumenPorVista.posterior,
+      });
+    }
+
+    // 5) Bloque para backend (resumen total + vista seleccionada como compat)
+    const countTotal =
+      resumenPorVista.frente.length +
+      resumenPorVista.lateral.length +
+      resumenPorVista.posterior.length;
+
     const rodilla = {
       lado,
       vistaSeleccionada: vista,
-      puntosSeleccionados: activosLabels,
-      puntosKeys: activosKeys,
-      count: activosLabels.length,
+      resumen: resumenPorVista,
+      count: countTotal,
     };
 
-    // Payload unificado (el padre puede ignorar o consumir; no rompemos nada)
+    // 6) Payload unificado al padre
     const r = {
       modulo: "rodilla",
       lado,
       vistaSeleccionada: vista,
-      // compatibilidad
-      puntosActivos: activosKeys,
-      puntosSeleccionados: activosLabels,
-      // contratos acordados
       seccionesExtra,
       rodilla,
     };
 
-    // Persistencia opcional para flujos que lean directo del storage
+    // 7) Persistencias esperadas por otros módulos (TraumaModulo, etc.)
     try {
       sessionStorage.setItem("rodilla_data", JSON.stringify(rodilla));
       sessionStorage.setItem("rodilla_seccionesExtra", JSON.stringify(seccionesExtra));
+      const ladoKey = lado.includes("izquierda") ? "izquierda" : "derecha";
+      sessionStorage.setItem(`rodilla_resumen_${ladoKey}`, JSON.stringify(resumenPorVista));
     } catch {}
 
     onSave?.(r);
@@ -398,4 +433,4 @@ function Marker({ cx, cy, active, label, onClick }) {
       )}
     </g>
   );
-                 }
+}
