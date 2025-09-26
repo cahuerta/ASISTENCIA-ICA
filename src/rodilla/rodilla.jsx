@@ -3,7 +3,7 @@ import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { RODILLA_PUNTOS_BY_VISTA, RODILLA_LABELS } from "./rodillapuntos.js";
 import { useKneeState } from "./usekneestate.js";
 
-/* Tema (solo paleta padre; SIN bloque "rodilla") */
+/* Tema (solo paleta padre) */
 import { getTheme } from "../theme.js";
 const T = getTheme();
 const THEME = {
@@ -218,9 +218,8 @@ export default function RodillaMapper({
     onSave?.(r);
   };
 
-  /* === Layout sizing reducido (para que todo entre en pantalla) === */
-  const WRAP_MAX_W = 420;
-  const BOX_HEIGHT = "min(60vh, 360px)"; // ajusta alto para pantallas pequeñas
+  /* === Tamaño (proporcional, 4:3, más pequeño) === */
+  const WRAP_MAX_W = 480; // antes 520; ahora más compacto pero cómodo
 
   return (
     <div
@@ -231,7 +230,7 @@ export default function RodillaMapper({
         fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
       }}
     >
-      {/* Label del lado — alto contraste */}
+      {/* Label del lado — alto contraste (solo este label) */}
       <div style={{ marginBottom: 8 }}>
         <span
           style={{
@@ -251,18 +250,20 @@ export default function RodillaMapper({
         </span>
       </div>
 
-      {/* Contenedor de imagen reducido (alto fijo responsive) */}
+      {/* Contenedor 4:3 proporcional (como al principio, pero más chico) */}
       <div
         style={{
           position: "relative",
           width: "100%",
-          height: BOX_HEIGHT,
           borderRadius: 16,
           overflow: "hidden",
           boxShadow: T?.shadowMd || "0 8px 24px rgba(0,0,0,0.15)",
           background: T?.bg || "#f2f2f2",
         }}
       >
+        {/* Ratio 4:3 */}
+        <div style={{ paddingTop: "133.333%" }} />
+
         {/* Imagen base */}
         <img
           src={imgSrcFinal}
@@ -314,7 +315,7 @@ export default function RodillaMapper({
         </svg>
       </div>
 
-      {/* Acciones — alto contraste y compactas */}
+      {/* Acciones — alto contraste y proporcionales */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 10 }}>
         <Button type="button" subtle onClick={handleClearAll}>Desactivar todos</Button>
         <Button type="button" onClick={handleSave}>Guardar / Enviar</Button>
