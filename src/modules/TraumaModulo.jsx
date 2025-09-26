@@ -1,6 +1,6 @@
 // src/modules/TraumaModulo.jsx
 "use client";
-import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 import FormularioResonancia from "../components/FormularioResonancia.jsx";
@@ -51,38 +51,6 @@ function isResonanciaTexto(t = "") {
   return regexes.some((re) => re.test(t));
 }
 
-/* ====== NUEVOS helpers genéricos para módulos (NO rompen nada) ====== */
-// Junta TODAS las secciones extra guardadas por módulos (clave: "<modulo>_seccionesExtra")
-function collectAllSeccionesExtra() {
-  const out = [];
-  try {
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const k = sessionStorage.key(i);
-      if (k && k.endsWith("_seccionesExtra")) {
-        const arr = JSON.parse(sessionStorage.getItem(k) || "[]");
-        if (Array.isArray(arr) && arr.length) out.push(...arr);
-      }
-    }
-  } catch {}
-  return out;
-}
-
-// Junta TODOS los bloques de datos por módulo (clave: "<modulo>_data"), p.ej. { rodilla: {...}, hombro: {...} }
-function collectAllModuleData() {
-  const out = {};
-  try {
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const k = sessionStorage.key(i);
-      if (k && k.endsWith("_data")) {
-        const mod = k.replace(/_data$/, ""); // "rodilla_data" -> "rodilla"
-        const val = JSON.parse(sessionStorage.getItem(k) || "null");
-        if (val != null) out[mod] = val;
-      }
-    }
-  } catch {}
-  return out;
-}
-
 /* ================= Componente ================= */
 export default function TraumaModulo({
   initialDatos,
@@ -116,9 +84,6 @@ export default function TraumaModulo({
 
   // Modal local del FormularioResonancia
   const [showRM, setShowRM] = useState(false);
-
-  // NUEVO: secciones extra recogidas de cualquier módulo (rodilla, hombro, etc.)
-  const [seccionesExtra, setSeccionesExtra] = useState([]);
 
   // Restaurar estado
   useEffect(() => {
@@ -165,9 +130,6 @@ export default function TraumaModulo({
       }, 2000);
     }
 
-    // NUEVO: al montar, recolectar secciones extra (de todos los módulos)
-    setSeccionesExtra(collectAllSeccionesExtra());
-
     // cleanup
     return () => {
       if (pollerRef.current) {
@@ -177,21 +139,29 @@ export default function TraumaModulo({
     };
   }, []);
 
-  /* -------- Sección de rodilla para el preview inicial (tu lógica original) -------- */
+  /* -------- Sección de rodilla para el preview inicial (compatible) -------- */
   const seccionRodilla = useMemo(() => {
-    const lado = (datos?.lado || "").toLowerCase();
-    if (!lado) return null;
     try {
-      const key = `rodilla_resumen_${lado.includes("izquierda") ? "izquierda" : "derecha"}`;
-      const raw = sessionStorage.getItem(key);
-      if (!raw) return null;
-      const r = JSON.parse(raw); // { frente?: string[], posterior?: string[], lateral?: string[] }
-      const lines = [];
-      if (Array.isArray(r.frente) && r.frente.length) lines.push(`Frente: ${r.frente.join(", ")}`);
-      if (Array.isArray(r.posterior) && r.posterior.length) lines.push(`Posterior: ${r.posterior.join(", ")}`);
-      if (Array.isArray(r.lateral) && r.lateral.length) lines.push(`Lateral: ${r.lateral.join(", ")}`);
-      if (!lines.length) return null;
-      return { title: `Rodilla ${datos?.lado || ""} — puntos marcados`, lines };
+      // 1) Preferir lo que guarda el componente: "rodilla_seccionesExtra"
+      const rawExtra = sessionStorage.getItem("rodilla_seccionesExtra");
+      if (rawExtra) {
+        const arr = JSON.parse(rawExtra);
+        const sec = Array.isArray(arr) && arr[0];
+        if (sec && Array.isArray(sec.lines) && sec.lines.length) {
+          const titulo = `Rodilla ${datos?.lado || ""} — puntos marcados`;
+          return { title: titulo, lines: sec.lines };
+        }
+      }
+      // 2) Fallback a "rodilla_data" → usar puntosSeleccionados
+      const rawData = sessionStorage.getItem("rodilla_data");
+      if (rawData) {
+        const rod = JSON.parse(rawData); // { puntosSeleccionados: [...], lado, ... }
+        if (Array.isArray(rod?.puntosSeleccionados) && rod.puntosSeleccionados.length) {
+          const titulo = `Rodilla ${rod?.lado || datos?.lado || ""} — puntos marcados`;
+          return { title: titulo, lines: rod.puntosSeleccionados };
+        }
+      }
+      return null;
     } catch {
       return null;
     }
@@ -213,7 +183,7 @@ export default function TraumaModulo({
 
       const edadNum = Number(datos.edad) || datos.edad;
 
-      // Cargar marcadores de rodilla para enviar a la IA (tu lógica original)
+      // 🚀 Cargar marcadores de rodilla para enviar a la IA
       let rodillaMarcadores = null;
       try {
         const lado = (datos?.lado || "").toLowerCase();
@@ -224,17 +194,14 @@ export default function TraumaModulo({
         }
       } catch {}
 
-      // NUEVO: enviar también TODOS los *_data de módulos (hombro, muñeca, etc.)
-      const modulesData = collectAllModuleData();
-
       const body = {
         idPago,
         paciente: {
           ...datos,
           edad: edadNum,
         },
-        rodillaMarcadores, // se mantiene
-        ...modulesData,    // NUEVO: módulos extra viajan automáticamente
+        // ← se envían a la IA
+        rodillaMarcadores,
       };
 
       const resp = await fetch(`${BACKEND_BASE}/ia-trauma`, {
@@ -351,8 +318,6 @@ export default function TraumaModulo({
   };
 
   /* -------- Pago -------- */
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
   const handlePagar = async () => {
     const edadNum = Number(datos.edad);
     if (
@@ -382,9 +347,6 @@ export default function TraumaModulo({
         }
       } catch {}
 
-      // NUEVO: incluir también módulos extra en guardar-datos (para PDF/registro) — opcional pero recomendado
-      const extraModules = collectAllModuleData();
-
       // Guardar datos + IA + checklist para que el PDF quede consistente
       await fetch(`${BACKEND_BASE}/guardar-datos`, {
         method: "POST",
@@ -400,7 +362,6 @@ export default function TraumaModulo({
             rmForm: resonanciaChecklist,
             rmObservaciones: resonanciaChecklist?.observaciones || "",
             rodillaMarcadores, // persistimos para PDF
-            extraModules,      // NUEVO: módulos adicionales
           },
           resonanciaChecklist,
           resonanciaResumenTexto,
@@ -416,6 +377,7 @@ export default function TraumaModulo({
   };
 
   /* -------- Descargar PDF -------- */
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const handleDescargar = async () => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) {
@@ -475,9 +437,6 @@ export default function TraumaModulo({
               }
             } catch {}
 
-            // NUEVO: también reinyectar módulos extra (si existían)
-            const extraModules = collectAllModuleData();
-
             await fetch(`${BACKEND_BASE}/guardar-datos`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -491,7 +450,6 @@ export default function TraumaModulo({
                   rmForm: resonanciaChecklist,
                   rmObservaciones: resonanciaChecklist?.observaciones || "",
                   rodillaMarcadores: rodillaMarcadoresReiny,
-                  extraModules, // NUEVO
                 },
                 resonanciaChecklist,
                 resonanciaResumenTexto,
@@ -550,50 +508,29 @@ export default function TraumaModulo({
         </div>
       </div>
 
-      {/* Primer preview: resumen plano */}
-      {!stepStarted && (
-        <>
-          <div style={{ ...S.mono, marginTop: 6 }}>{resumenInicialTrauma(datos)}</div>
+      {/* Primer preview: SIEMPRE visible */}
+      <div style={{ ...S.mono, marginTop: 6 }}>{resumenInicialTrauma(datos)}</div>
 
-          {/* Sección Rodilla — puntos marcados (tu lógica original) */}
-          {seccionRodilla && (
-            <div style={S.block}>
-              <strong>{seccionRodilla.title}</strong>
-              <ul style={{ marginTop: 6 }}>
-                {seccionRodilla.lines.map((l, i) => (
-                  <li key={i}>{l}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* NUEVO: Otras secciones extra (de cualquier módulo) */}
-          {Array.isArray(seccionesExtra) && seccionesExtra.length > 0 && (
-            <div style={S.block}>
-              {seccionesExtra.map((sec, idx) => (
-                <div key={idx} style={{ marginBottom: 8 }}>
-                  <strong>{sec?.title || "Sección"}</strong>
-                  {Array.isArray(sec?.lines) && sec.lines.length > 0 ? (
-                    <ul style={{ marginTop: 6 }}>
-                      {sec.lines.map((line, j) => (
-                        <li key={`${idx}-${j}`}>{line}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div style={S.hint}>—</div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-
-          <button style={S.btnPrimary} onClick={handleContinuar} disabled={loadingIA}>
-            {loadingIA ? "Analizando con IA…" : "Continuar"}
-          </button>
-        </>
+      {/* Sección Rodilla — puntos marcados (compatible) */}
+      {seccionRodilla && (
+        <div style={S.block}>
+          <strong>{seccionRodilla.title}</strong>
+          <ul style={{ marginTop: 6 }}>
+            {seccionRodilla.lines.map((l, i) => (
+              <li key={i}>{l}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
-      {/* Segundo preview: IA + confirmación/pago */}
+      {/* Botón Continuar SOLO antes de iniciar IA */}
+      {!stepStarted && (
+        <button style={S.btnPrimary} onClick={handleContinuar} disabled={loadingIA}>
+          {loadingIA ? "Analizando con IA…" : "Continuar"}
+        </button>
+      )}
+
+      {/* Segundo preview: IA + confirmación/pago (aparece debajo, no borra el anterior) */}
       {stepStarted && (
         <>
           <div style={S.block}>
@@ -671,8 +608,6 @@ export default function TraumaModulo({
                       );
 
                       // Guest: NO enviamos rodillaMarcadores (según indicaste)
-                      const extraModules = collectAllModuleData(); // por consistencia
-
                       await fetch(`${BACKEND_BASE}/guardar-datos`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -685,8 +620,6 @@ export default function TraumaModulo({
                             justificacionIA,
                             rmForm: resonanciaChecklist,
                             rmObservaciones: resonanciaChecklist?.observaciones || "",
-                            // sin rodillaMarcadores en guest
-                            extraModules,
                           },
                           resonanciaChecklist,
                           resonanciaResumenTexto,
