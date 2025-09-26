@@ -7,18 +7,18 @@ import { useKneeState } from "./usekneestate.js";
 import { getTheme } from "../theme.js";
 const T = getTheme();
 const THEME = {
-  markerStroke: T?.primaryDark,
-  dotInactive:  T?.accentAlpha,
-  dotActive:    T?.primary,
-  markerShadow: T?.overlay,
-  chipBg:       T?.accentAlpha,
-  chipActiveBg: T?.primaryDark,
-  chipColor:    T?.onPrimary,
+  markerStroke: T?.primaryDark,   // borde del aro
+  dotInactive:  T?.accentAlpha,   // centro inactivo (translúcido)
+  dotActive:    T?.primary,       // centro activo (sólido)
+  markerShadow: T?.overlay,       // sombra ligera del aro
+  chipBg:       T?.accentAlpha,   // chip inactivo
+  chipActiveBg: T?.primaryDark,   // chip activo
+  chipColor:    T?.onPrimary      // texto chip
 };
 
-/* Imágenes locales */
+/* Imágenes locales (solo derechas; izquierda se espeja) */
 import imgFrenteDerecha from "./rodillafrentederecha.jpg";
-import imgFrenteIzquierda from "./rodillafrenteizquierda.jpg";
+// import imgFrenteIzquierda from "./rodillafrenteizquierda.jpg";  // ← ya no se usa
 import imgLateral from "./rodillalateral.jpg";
 import imgPosteriorDerecha from "./rodillaposteriorderecha.jpg";
 
@@ -34,11 +34,11 @@ function normVista(v) {
   return "frente";
 }
 
-/* Mapa imagen por vista/lado */
+/* Mapa imagen por vista/lado (izquierda reutiliza derecha + espejo) */
 const IMG = {
-  frente:    { derecha: toUrl(imgFrenteDerecha),    izquierda: toUrl(imgFrenteIzquierda) },
+  frente:    { derecha: toUrl(imgFrenteDerecha),    izquierda: toUrl(imgFrenteDerecha) },
   lateral:   { derecha: toUrl(imgLateral),          izquierda: toUrl(imgLateral) },
-  posterior: { derecha: toUrl(imgPosteriorDerecha), izquierda: toUrl(imgPosteriorDerecha) },
+  posterior: { derecha: toUrl(imgPosteriorDerecha), izquierda: toUrl(imgPosteriorDerecha) }
 };
 
 /* Etiquetas tabs */
@@ -48,11 +48,11 @@ const VISTA_LABEL = { frente: "FRONTAL", lateral: "LATERAL", posterior: "POSTERI
 const puntosDeVista = (vista) =>
   (RODILLA_PUNTOS_BY_VISTA?.[vista] || []).map((p) => ({ ...p, selected: !!p.selected }));
 
-/* === Persistencia en sessionStorage (por lado y vista) === */
+/* === Persistencia en localStorage (por lado y vista) === */
 const storageKey = (lado) => `rodilla:${lado}`;
 function loadPersisted(lado) {
   try {
-    const raw = sessionStorage.getItem(storageKey(lado));
+    const raw = localStorage.getItem(storageKey(lado));
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -60,14 +60,8 @@ function loadPersisted(lado) {
 }
 function savePersisted(lado, data) {
   try {
-    sessionStorage.setItem(storageKey(lado), JSON.stringify(data));
+    localStorage.setItem(storageKey(lado), JSON.stringify(data));
   } catch {}
-}
-
-/* Etiquetas desde booleans */
-function labelsFromBools(vista, bools) {
-  const base = RODILLA_PUNTOS_BY_VISTA?.[vista] || [];
-  return (Array.isArray(bools) ? bools : []).map((on, i) => (on ? (base[i]?.label || base[i]?.key) : null)).filter(Boolean);
 }
 
 export default function RodillaMapper({
@@ -78,20 +72,9 @@ export default function RodillaMapper({
   onVolver,                  // debe VOLVER sin grabar
 }) {
   const lado = (ladoInicial || "").toLowerCase();
+  const isLeft = lado === "izquierda";
   const vistaInicialNorm = normVista(vistaInicial);
   const [vista, setVista] = useState(vistaInicialNorm);
-
-  // Si la página fue recargada, limpia selecciones de rodilla (no persistir a través de reload)
-  useEffect(() => {
-    try {
-      const nav = performance.getEntriesByType?.("navigation")?.[0];
-      const isReload = nav ? nav.type === "reload" : (performance?.navigation?.type === 1);
-      if (isReload) {
-        sessionStorage.removeItem(storageKey(lado));
-        sessionStorage.removeItem(`rodilla_resumen_${lado.includes("izquierda") ? "izquierda" : "derecha"}`);
-      }
-    } catch {}
-  }, [lado]);
 
   /* Estado de puntos: arranca con la vista inicial (ya visibles) */
   const {
@@ -120,7 +103,7 @@ export default function RodillaMapper({
     setPuntos(withSelection);
   }, [vista, lado, setPuntos]);
 
-  /* Persistir cada vez que cambian los puntos en esta vista (en sessionStorage) */
+  /* Persistir cada vez que cambian los puntos en esta vista */
   useEffect(() => {
     const persisted = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
     persisted[vista] = puntos.map((p) => !!p.selected);
@@ -142,102 +125,79 @@ export default function RodillaMapper({
       return;
     }
 
+    // Notificación global opcional
     try { window.dispatchEvent(new CustomEvent("rodilla:volver")); } catch {}
 
+    // Si hay historial, retrocede
     if (typeof window !== "undefined" && window.history && window.history.length > 1) {
       window.history.back();
       return;
     }
 
+    // Fallback final seguro (sin import.meta)
     if (typeof window !== "undefined") window.location.assign("/");
   }, [onVolver]);
 
-  /* Imagen final */
+  /* Imagen final + espejo si izquierda */
   const imgSrcFinal =
     (typeof imagenSrc === "string" && imagenSrc) ||
     IMG?.[vista]?.[lado] ||
     IMG?.[vista]?.derecha ||
     toUrl(imgFrenteDerecha);
 
-  /* ¿Debemos espejar X? (cuando la imagen izquierda es distinta a la derecha) */
-  const needMirrorX = useMemo(() => {
-    const map = IMG?.[vista];
-    return lado === "izquierda" && map?.izquierda && map?.derecha && map.izquierda !== map.derecha;
-  }, [vista, lado]);
-
-  /* Puntos render (coords %) + etiqueta (usa p.label o key), aplicando espejo si corresponde */
+  /* Puntos render (coords %) + etiqueta (usa p.label o key)
+     Si lado es izquierda, reflejamos X: x' = 1 - x. */
   const puntosRender = useMemo(
-    () => puntos.map((p) => {
-      const x = p.x; // 0..1
-      const y = p.y; // 0..1
-      const px = needMirrorX ? (1 - x) : x;
-      return {
-        ...p,
-        cx: px * 100,
-        cy: y * 100,
-        labelText: p.label || p.key || "",
-      };
-    }),
-    [puntos, needMirrorX]
+    () =>
+      puntos.map((p) => {
+        const xNorm = isLeft ? (1 - p.x) : p.x;
+        return {
+          ...p,
+          cx: xNorm * 100,
+          cy: p.y * 100,
+          labelText: p.label || p.key || "",
+        };
+      }),
+    [puntos, isLeft]
   );
 
-  /* Guardar: consolida las TRES vistas + deja resumen por vista en sessionStorage */
+  /* Guardar */
   const handleSave = () => {
-    // 1) Asegura que lo actual quede persistido
-    const now = puntos.map((p) => !!p.selected);
-    const persisted = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
-    persisted[vista] = now;
-    savePersisted(lado, persisted);
-
-    // 2) Arma resumen por vista
-    const resumen = {
-      frente: labelsFromBools("frente", persisted.frente),
-      lateral: labelsFromBools("lateral", persisted.lateral),
-      posterior: labelsFromBools("posterior", persisted.posterior),
-    };
-
-    // 3) Para PREVIEW visual: una sección con todas las vistas no vacías
-    const lines = [];
-    if (resumen.frente?.length)    lines.push(`Frente: ${resumen.frente.join(", ")}`);
-    if (resumen.lateral?.length)   lines.push(`Lateral: ${resumen.lateral.join(", ")}`);
-    if (resumen.posterior?.length) lines.push(`Posterior: ${resumen.posterior.join(", ")}`);
-
-    const seccionesExtra = lines.length
-      ? [{ title: "Zonas marcadas", lines }]
-      : [];
-
-    // 4) Para BACKEND y contrato unificado
     const activos = puntos.filter((p) => p.selected);
     const activosKeys = activos.map((p) => p.key);
     const activosLabels = activos.map((p) => p.label || p.key);
 
+    // Bloque para PREVIEW (visual)
+    const seccionesExtra = activosLabels.length
+      ? [{ title: "Zonas marcadas", lines: activosLabels }]
+      : [];
+
+    // Bloque para BACKEND (Trauma/IA)
     const rodilla = {
       lado,
       vistaSeleccionada: vista,
       puntosSeleccionados: activosLabels,
       puntosKeys: activosKeys,
       count: activosLabels.length,
-      resumenPorVista: resumen, // ← nuevo
     };
 
+    // Payload unificado (el padre puede ignorar o consumir)
     const r = {
       modulo: "rodilla",
       lado,
       vistaSeleccionada: vista,
+      // compatibilidad
       puntosActivos: activosKeys,
       puntosSeleccionados: activosLabels,
+      // contratos acordados
       seccionesExtra,
       rodilla,
     };
 
-    // 5) Persistencia para módulos que leen directo del storage
+    // Persistencia opcional para flujos que lean directo del storage
     try {
       sessionStorage.setItem("rodilla_data", JSON.stringify(rodilla));
       sessionStorage.setItem("rodilla_seccionesExtra", JSON.stringify(seccionesExtra));
-      sessionStorage.setItem(
-        `rodilla_resumen_${lado.includes("izquierda") ? "izquierda" : "derecha"}`,
-        JSON.stringify(resumen)
-      );
     } catch {}
 
     onSave?.(r);
@@ -280,15 +240,23 @@ export default function RodillaMapper({
       >
         <div style={{ paddingTop: "133.333%" }} />
 
-        {/* Imagen base */}
+        {/* Imagen base (espejar si izquierda) */}
         <img
           src={imgSrcFinal}
           alt={`Rodilla ${vista} ${lado}`}
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+            transform: isLeft ? "scaleX(-1)" : "none", // ← espejo para izquierda
+          }}
           draggable={false}
         />
 
-        {/* Tabs de vista */}
+        {/* Tabs de vista (marcan la activa) */}
         <div
           style={{
             position: "absolute",
@@ -383,9 +351,9 @@ function Button({ children, onClick, outline, subtle, type = "button" }) {
   );
 }
 
-/* Marcador */
+/* Marcador: aro solo borde; centro siempre visible (accentAlpha / primary); sin blanco */
 function Marker({ cx, cy, active, label, onClick }) {
-  const r = 2.9;
+  const r = 2.9; // tamaño cómodo
   const textLen = Math.max(3, Math.min(30, (label || "").length));
   const padX = 2.2;
   const charW = 1.3;
@@ -399,7 +367,10 @@ function Marker({ cx, cy, active, label, onClick }) {
       style={{ pointerEvents: "auto", cursor: "pointer" }}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick?.(); }}
     >
+      {/* halo grande para click (invisible) */}
       <circle r={6.5} fill="transparent" />
+
+      {/* aro exterior (SIN relleno) */}
       <circle
         r={r + 1.0}
         fill="none"
@@ -407,7 +378,11 @@ function Marker({ cx, cy, active, label, onClick }) {
         strokeWidth="0.6"
         style={{ filter: `drop-shadow(0 0.5px 1.2px ${THEME.markerShadow || "rgba(0,0,0,0.18)"})` }}
       />
+
+      {/* centro SIEMPRE visible: inactivo=accentAlpha, activo=primary */}
       <circle r={r - 1.0} fill={active ? THEME.dotActive : THEME.dotInactive} />
+
+      {/* etiqueta cuando activo */}
       {active && !!label && (
         <g transform={`translate(${-tagW / 2} ${-offsetY})`}>
           <rect
