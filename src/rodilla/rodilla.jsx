@@ -7,13 +7,13 @@ import { useKneeState } from "./usekneestate.js";
 import { getTheme } from "../theme.js";
 const T = getTheme();
 const THEME = {
-  markerStroke: T?.primaryDark,   // borde del aro
-  dotInactive:  T?.accentAlpha,   // centro inactivo (translúcido)
-  dotActive:    T?.primary,       // centro activo (sólido)
-  markerShadow: T?.overlay,       // sombra ligera del aro
-  chipBg:       T?.accentAlpha,   // chip inactivo
-  chipActiveBg: T?.primaryDark,   // chip activo
-  chipColor:    T?.onPrimary      // texto chip
+  markerStroke: T?.primaryDark,
+  dotInactive:  T?.accentAlpha,
+  dotActive:    T?.primary,
+  markerShadow: T?.overlay,
+  chipBg:       T?.accentAlpha,
+  chipActiveBg: T?.primaryDark,
+  chipColor:    T?.onPrimary
 };
 
 /* Imágenes locales */
@@ -66,24 +66,24 @@ function savePersisted(lado, data) {
 
 export default function RodillaMapper({
   ladoInicial = "derecha",
-  vistaInicial = "frente",   // "anterior"/"frontal" → "frente"
-  imagenSrc,                 // opcional: el padre puede sobreescribir la imagen
+  vistaInicial = "frente",
+  imagenSrc,
   onSave,
-  onVolver,                  // debe VOLVER sin grabar
+  onVolver,
 }) {
   const lado = (ladoInicial || "").toLowerCase();
   const vistaInicialNorm = normVista(vistaInicial);
   const [vista, setVista] = useState(vistaInicialNorm);
 
-  /* Estado de puntos: arranca con la vista inicial (ya visibles) */
+  /* Estado de puntos */
   const {
-    puntos,        // [{key, x, y, selected, label?}]
+    puntos,
     setPuntos,
     togglePunto,
     clearSelection
   } = useKneeState(puntosDeVista(vistaInicialNorm));
 
-  /* Al montar: restaurar selección para la vista inicial si existe */
+  /* Restaurar selección inicial */
   useEffect(() => {
     const persisted = loadPersisted(lado);
     if (persisted?.[vistaInicialNorm]?.length) {
@@ -92,7 +92,7 @@ export default function RodillaMapper({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* Cambio de vista → cargar puntos base + restaurar selección persistida */
+  /* Cambio de vista → base + persistido */
   useEffect(() => {
     const base = puntosDeVista(vista);
     const persisted = loadPersisted(lado);
@@ -102,19 +102,17 @@ export default function RodillaMapper({
     setPuntos(withSelection);
   }, [vista, lado, setPuntos]);
 
-  /* Persistir cada vez que cambian los puntos en esta vista (en sessionStorage) */
+  /* Persistir cambios por vista */
   useEffect(() => {
     const persisted = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
     persisted[vista] = puntos.map((p) => !!p.selected);
     savePersisted(lado, persisted);
   }, [puntos, vista, lado]);
 
-  /* Toggle index (persistencia la maneja el efecto) */
   const handleToggle = useCallback((index) => {
     togglePunto(index);
   }, [togglePunto]);
 
-  /* Limpiar TODO (3 vistas) + borrar resumen en sesión */
   const handleClearAll = useCallback(() => {
     setPuntos((arr) => arr.map((p) => ({ ...p, selected: false })));
     savePersisted(lado, { frente: [], lateral: [], posterior: [] });
@@ -125,26 +123,18 @@ export default function RodillaMapper({
     } catch {}
   }, [lado, setPuntos]);
 
-  /* Botón Volver: NO guarda; con fallbacks y sin import.meta */
   const handleVolver = useCallback((e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
-
     if (typeof onVolver === "function") {
-      onVolver(); // salir sin grabar
+      onVolver();
       return;
     }
-
-    // Notificación global opcional
     try { window.dispatchEvent(new CustomEvent("rodilla:volver")); } catch {}
-
-    // Si hay historial, retrocede
     if (typeof window !== "undefined" && window.history && window.history.length > 1) {
       window.history.back();
       return;
     }
-
-    // Fallback final seguro (sin import.meta)
     if (typeof window !== "undefined") window.location.assign("/");
   }, [onVolver]);
 
@@ -155,7 +145,7 @@ export default function RodillaMapper({
     IMG?.[vista]?.derecha ||
     toUrl(imgFrenteDerecha);
 
-  /* Puntos render (coords %) + etiqueta (usa p.label o key) */
+  /* Puntos render */
   const puntosRender = useMemo(
     () => puntos.map((p) => ({
       ...p,
@@ -166,13 +156,13 @@ export default function RodillaMapper({
     [puntos]
   );
 
-  /* Guardar: SUMA las 3 vistas, genera secciones y guarda resumen en sessionStorage */
+  /* Guardar (suma 3 vistas) */
   const handleSave = () => {
     const persisted = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
 
-    const labelsDe = (vista) => {
-      const base = (RODILLA_PUNTOS_BY_VISTA?.[vista] || []);
-      const flags = Array.isArray(persisted[vista]) ? persisted[vista] : [];
+    const labelsDe = (v) => {
+      const base = (RODILLA_PUNTOS_BY_VISTA?.[v] || []);
+      const flags = Array.isArray(persisted[v]) ? persisted[v] : [];
       const out = [];
       for (let i = 0; i < base.length; i++) {
         if (flags[i]) out.push(base[i].label || base[i].key);
@@ -228,16 +218,20 @@ export default function RodillaMapper({
     onSave?.(r);
   };
 
+  /* === Layout sizing reducido (para que todo entre en pantalla) === */
+  const WRAP_MAX_W = 420;
+  const BOX_HEIGHT = "min(60vh, 360px)"; // ajusta alto para pantallas pequeñas
+
   return (
     <div
       style={{
         width: "100%",
-        maxWidth: 520,
+        maxWidth: WRAP_MAX_W,
         margin: "0 auto",
         fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
       }}
     >
-      {/* Label informativo del lado — alto contraste */}
+      {/* Label del lado — alto contraste */}
       <div style={{ marginBottom: 8 }}>
         <span
           style={{
@@ -257,19 +251,18 @@ export default function RodillaMapper({
         </span>
       </div>
 
-      {/* Contenedor con ratio 4:3 */}
+      {/* Contenedor de imagen reducido (alto fijo responsive) */}
       <div
         style={{
           position: "relative",
           width: "100%",
+          height: BOX_HEIGHT,
           borderRadius: 16,
           overflow: "hidden",
           boxShadow: T?.shadowMd || "0 8px 24px rgba(0,0,0,0.15)",
           background: T?.bg || "#f2f2f2",
         }}
       >
-        <div style={{ paddingTop: "133.333%" }} />
-
         {/* Imagen base */}
         <img
           src={imgSrcFinal}
@@ -278,7 +271,7 @@ export default function RodillaMapper({
           draggable={false}
         />
 
-        {/* Tabs de vista (NO tocados, quedan igual) */}
+        {/* Tabs de vista (NO tocados) */}
         <div
           style={{
             position: "absolute",
@@ -302,7 +295,7 @@ export default function RodillaMapper({
           ))}
         </div>
 
-        {/* Overlay de puntos (SIEMPRE visibles) */}
+        {/* Overlay de puntos */}
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
@@ -321,8 +314,8 @@ export default function RodillaMapper({
         </svg>
       </div>
 
-      {/* Acciones — alto contraste */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 12 }}>
+      {/* Acciones — alto contraste y compactas */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 10 }}>
         <Button type="button" subtle onClick={handleClearAll}>Desactivar todos</Button>
         <Button type="button" onClick={handleSave}>Guardar / Enviar</Button>
         <Button type="button" outline onClick={handleVolver}>Volver</Button>
@@ -333,7 +326,7 @@ export default function RodillaMapper({
 
 /* ===== UI helpers ===== */
 function VistaChip({ active, onClick, label }) {
-  // ← NO modificamos estilos de tabs para respetar tu pedido
+  // NO modificamos estilos de tabs para respetar tu pedido
   return (
     <button
       type="button"
@@ -363,14 +356,14 @@ function VistaChip({ active, onClick, label }) {
 
 function Button({ children, onClick, outline, subtle, type = "button" }) {
   const base = {
-    borderRadius: 12,
-    padding: "12px 16px",
-    fontWeight: 800,
-    fontSize: 14,
+    borderRadius: 10,
+    padding: "10px 12px",
+    fontWeight: 750,
+    fontSize: 13,
     cursor: "pointer",
     border: "2px solid transparent",
     transition: "all .15s ease",
-    minWidth: 140,
+    minWidth: 120,
   };
   let style = {};
   if (subtle) {
@@ -400,9 +393,9 @@ function Button({ children, onClick, outline, subtle, type = "button" }) {
   );
 }
 
-/* Marcador: aro solo borde; centro siempre visible (accentAlpha / primary); sin blanco */
+/* Marcador */
 function Marker({ cx, cy, active, label, onClick }) {
-  const r = 2.9; // tamaño cómodo
+  const r = 2.9;
   const textLen = Math.max(3, Math.min(30, (label || "").length));
   const padX = 2.2;
   const charW = 1.3;
@@ -416,10 +409,7 @@ function Marker({ cx, cy, active, label, onClick }) {
       style={{ pointerEvents: "auto", cursor: "pointer" }}
       onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick?.(); }}
     >
-      {/* halo grande para click (invisible) */}
       <circle r={6.5} fill="transparent" />
-
-      {/* aro exterior (SIN relleno) */}
       <circle
         r={r + 1.0}
         fill="none"
@@ -427,11 +417,7 @@ function Marker({ cx, cy, active, label, onClick }) {
         strokeWidth="0.6"
         style={{ filter: `drop-shadow(0 0.5px 1.2px ${THEME.markerShadow || "rgba(0,0,0,0.18)"})` }}
       />
-
-      {/* centro SIEMPRE visible: inactivo=accentAlpha, activo=primary */}
       <circle r={r - 1.0} fill={active ? THEME.dotActive : THEME.dotInactive} />
-
-      {/* etiqueta cuando activo */}
       {active && !!label && (
         <g transform={`translate(${-tagW / 2} ${-offsetY})`}>
           <rect
