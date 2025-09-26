@@ -4,9 +4,9 @@
 
 export const RODILLA_PUNTOS_FRENTE = [
   { key: "rotula", x: 0.50, y: 0.50, label: "Rótula" },
-  { key: "interlinea_medial", x: 0.65, y: 0.65, label: "Interlínea medial" },
+  { key: "interlinea_medial", x: 0.68, y: 0.65, label: "Interlínea medial" },
   { key: "interlinea_lateral", x: 0.30, y: 0.65, label: "Interlínea lateral" },
-  { key: "tendon_rotuliano", x: 0.50, y: 0.65, label: "Tendón rotuliano" },
+  { key: "tendon_rotuliano", x: 0.50, y: 0.67, label: "Tendón rotuliano" },
   { key: "tuberosidad_anterior_tibial", x: 0.50, y: 0.85, label: "Tuberosidad anterior tibial" },
   { key: "retinaculo_medial", x: 0.70, y: 0.35, label: "Retináculo medial" },
   { key: "retinaculo_lateral", x: 0.30, y: 0.35, label: "Retináculo lateral" },
