@@ -16,9 +16,9 @@ const THEME = {
   chipColor:    T?.onPrimary      // texto chip
 };
 
-/* Imágenes locales (solo derechas; izquierda se espeja) */
+/* Imágenes locales */
 import imgFrenteDerecha from "./rodillafrentederecha.jpg";
-// import imgFrenteIzquierda from "./rodillafrenteizquierda.jpg";  // ← ya no se usa
+import imgFrenteIzquierda from "./rodillafrenteizquierda.jpg";
 import imgLateral from "./rodillalateral.jpg";
 import imgPosteriorDerecha from "./rodillaposteriorderecha.jpg";
 
@@ -34,9 +34,9 @@ function normVista(v) {
   return "frente";
 }
 
-/* Mapa imagen por vista/lado (izquierda reutiliza derecha + espejo) */
+/* Mapa imagen por vista/lado */
 const IMG = {
-  frente:    { derecha: toUrl(imgFrenteDerecha),    izquierda: toUrl(imgFrenteDerecha) },
+  frente:    { derecha: toUrl(imgFrenteDerecha),    izquierda: toUrl(imgFrenteIzquierda) },
   lateral:   { derecha: toUrl(imgLateral),          izquierda: toUrl(imgLateral) },
   posterior: { derecha: toUrl(imgPosteriorDerecha), izquierda: toUrl(imgPosteriorDerecha) }
 };
@@ -48,11 +48,11 @@ const VISTA_LABEL = { frente: "FRONTAL", lateral: "LATERAL", posterior: "POSTERI
 const puntosDeVista = (vista) =>
   (RODILLA_PUNTOS_BY_VISTA?.[vista] || []).map((p) => ({ ...p, selected: !!p.selected }));
 
-/* === Persistencia en localStorage (por lado y vista) === */
+/* === Persistencia en sessionStorage (por lado y vista) === */
 const storageKey = (lado) => `rodilla:${lado}`;
 function loadPersisted(lado) {
   try {
-    const raw = localStorage.getItem(storageKey(lado));
+    const raw = sessionStorage.getItem(storageKey(lado));
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -60,7 +60,7 @@ function loadPersisted(lado) {
 }
 function savePersisted(lado, data) {
   try {
-    localStorage.setItem(storageKey(lado), JSON.stringify(data));
+    sessionStorage.setItem(storageKey(lado), JSON.stringify(data));
   } catch {}
 }
 
@@ -72,7 +72,6 @@ export default function RodillaMapper({
   onVolver,                  // debe VOLVER sin grabar
 }) {
   const lado = (ladoInicial || "").toLowerCase();
-  const isLeft = lado === "izquierda";
   const vistaInicialNorm = normVista(vistaInicial);
   const [vista, setVista] = useState(vistaInicialNorm);
 
@@ -103,7 +102,7 @@ export default function RodillaMapper({
     setPuntos(withSelection);
   }, [vista, lado, setPuntos]);
 
-  /* Persistir cada vez que cambian los puntos en esta vista */
+  /* Persistir cada vez que cambian los puntos en esta vista (en sessionStorage) */
   useEffect(() => {
     const persisted = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
     persisted[vista] = puntos.map((p) => !!p.selected);
@@ -114,6 +113,17 @@ export default function RodillaMapper({
   const handleToggle = useCallback((index) => {
     togglePunto(index);
   }, [togglePunto]);
+
+  /* Limpiar TODO (3 vistas) + borrar resumen en sesión */
+  const handleClearAll = useCallback(() => {
+    setPuntos((arr) => arr.map((p) => ({ ...p, selected: false })));
+    savePersisted(lado, { frente: [], lateral: [], posterior: [] });
+    try {
+      sessionStorage.removeItem(`rodilla_resumen_${lado}`);
+      sessionStorage.removeItem("rodilla_seccionesExtra");
+      sessionStorage.removeItem("rodilla_data");
+    } catch {}
+  }, [lado, setPuntos]);
 
   /* Botón Volver: NO guarda; con fallbacks y sin import.meta */
   const handleVolver = useCallback((e) => {
@@ -138,64 +148,79 @@ export default function RodillaMapper({
     if (typeof window !== "undefined") window.location.assign("/");
   }, [onVolver]);
 
-  /* Imagen final + espejo si izquierda */
+  /* Imagen final */
   const imgSrcFinal =
     (typeof imagenSrc === "string" && imagenSrc) ||
     IMG?.[vista]?.[lado] ||
     IMG?.[vista]?.derecha ||
     toUrl(imgFrenteDerecha);
 
-  /* Puntos render (coords %) + etiqueta (usa p.label o key)
-     Si lado es izquierda, reflejamos X: x' = 1 - x. */
+  /* Puntos render (coords %) + etiqueta (usa p.label o key) */
   const puntosRender = useMemo(
-    () =>
-      puntos.map((p) => {
-        const xNorm = isLeft ? (1 - p.x) : p.x;
-        return {
-          ...p,
-          cx: xNorm * 100,
-          cy: p.y * 100,
-          labelText: p.label || p.key || "",
-        };
-      }),
-    [puntos, isLeft]
+    () => puntos.map((p) => ({
+      ...p,
+      cx: p.x * 100,
+      cy: p.y * 100,
+      labelText: p.label || p.key || "",
+    })),
+    [puntos]
   );
 
-  /* Guardar */
+  /* Guardar: SUMA las 3 vistas, genera secciones y guarda resumen en sessionStorage */
   const handleSave = () => {
-    const activos = puntos.filter((p) => p.selected);
-    const activosKeys = activos.map((p) => p.key);
-    const activosLabels = activos.map((p) => p.label || p.key);
+    const persisted = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
 
-    // Bloque para PREVIEW (visual)
-    const seccionesExtra = activosLabels.length
-      ? [{ title: "Zonas marcadas", lines: activosLabels }]
-      : [];
+    const labelsDe = (vista) => {
+      const base = (RODILLA_PUNTOS_BY_VISTA?.[vista] || []);
+      const flags = Array.isArray(persisted[vista]) ? persisted[vista] : [];
+      const out = [];
+      for (let i = 0; i < base.length; i++) {
+        if (flags[i]) out.push(base[i].label || base[i].key);
+      }
+      return out;
+    };
 
-    // Bloque para BACKEND (Trauma/IA)
+    const resumenPorVista = {
+      frente: labelsDe("frente"),
+      lateral: labelsDe("lateral"),
+      posterior: labelsDe("posterior"),
+    };
+
+    const seccionesExtra = [];
+    if (resumenPorVista.frente.length) {
+      seccionesExtra.push({ title: "Rodilla — Vista Frontal", lines: resumenPorVista.frente });
+    }
+    if (resumenPorVista.lateral.length) {
+      seccionesExtra.push({ title: "Rodilla — Vista Lateral", lines: resumenPorVista.lateral });
+    }
+    if (resumenPorVista.posterior.length) {
+      seccionesExtra.push({ title: "Rodilla — Vista Posterior", lines: resumenPorVista.posterior });
+    }
+
+    const merged = [
+      ...resumenPorVista.frente,
+      ...resumenPorVista.lateral,
+      ...resumenPorVista.posterior,
+    ];
     const rodilla = {
       lado,
       vistaSeleccionada: vista,
-      puntosSeleccionados: activosLabels,
-      puntosKeys: activosKeys,
-      count: activosLabels.length,
+      puntosSeleccionados: merged,
+      porVista: resumenPorVista,
+      count: merged.length,
     };
 
-    // Payload unificado (el padre puede ignorar o consumir)
     const r = {
       modulo: "rodilla",
       lado,
       vistaSeleccionada: vista,
-      // compatibilidad
-      puntosActivos: activosKeys,
-      puntosSeleccionados: activosLabels,
-      // contratos acordados
+      puntosSeleccionados: merged,
       seccionesExtra,
       rodilla,
     };
 
-    // Persistencia opcional para flujos que lean directo del storage
     try {
+      sessionStorage.setItem(`rodilla_resumen_${lado}`, JSON.stringify(resumenPorVista));
       sessionStorage.setItem("rodilla_data", JSON.stringify(rodilla));
       sessionStorage.setItem("rodilla_seccionesExtra", JSON.stringify(seccionesExtra));
     } catch {}
@@ -212,15 +237,20 @@ export default function RodillaMapper({
         fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
       }}
     >
-      {/* Label informativo del lado */}
+      {/* Label informativo del lado — alto contraste */}
       <div style={{ marginBottom: 8 }}>
         <span
           style={{
-            fontSize: 14,
-            opacity: 0.9,
-            padding: "6px 10px",
-            borderRadius: 12,
-            background: "rgba(0,0,0,0.06)",
+            display: "inline-block",
+            fontSize: 15,
+            fontWeight: 800,
+            letterSpacing: 0.3,
+            padding: "8px 12px",
+            borderRadius: 10,
+            background: T?.primaryDark || "#0d47a1",
+            color: T?.onPrimary || "#fff",
+            border: `1px solid ${T?.primary || "#1976d2"}`,
+            boxShadow: T?.shadowSm || "0 2px 8px rgba(0,0,0,0.18)",
           }}
         >
           {`Zona seleccionada: Rodilla — ${RODILLA_LABELS?.[lado] || lado}`}
@@ -240,23 +270,15 @@ export default function RodillaMapper({
       >
         <div style={{ paddingTop: "133.333%" }} />
 
-        {/* Imagen base (espejar si izquierda) */}
+        {/* Imagen base */}
         <img
           src={imgSrcFinal}
           alt={`Rodilla ${vista} ${lado}`}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: "block",
-            transform: isLeft ? "scaleX(-1)" : "none", // ← espejo para izquierda
-          }}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
           draggable={false}
         />
 
-        {/* Tabs de vista (marcan la activa) */}
+        {/* Tabs de vista (NO tocados, quedan igual) */}
         <div
           style={{
             position: "absolute",
@@ -299,9 +321,9 @@ export default function RodillaMapper({
         </svg>
       </div>
 
-      {/* Acciones */}
+      {/* Acciones — alto contraste */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 12 }}>
-        <Button type="button" subtle onClick={() => clearSelection()}>Desactivar todos</Button>
+        <Button type="button" subtle onClick={handleClearAll}>Desactivar todos</Button>
         <Button type="button" onClick={handleSave}>Guardar / Enviar</Button>
         <Button type="button" outline onClick={handleVolver}>Volver</Button>
       </div>
@@ -311,6 +333,7 @@ export default function RodillaMapper({
 
 /* ===== UI helpers ===== */
 function VistaChip({ active, onClick, label }) {
+  // ← NO modificamos estilos de tabs para respetar tu pedido
   return (
     <button
       type="button"
@@ -339,11 +362,37 @@ function VistaChip({ active, onClick, label }) {
 }
 
 function Button({ children, onClick, outline, subtle, type = "button" }) {
-  const base = { borderRadius: 12, padding: "10px 14px", fontWeight: 650, fontSize: 14, cursor: "pointer", border: "1px solid transparent", transition: "all .15s ease" };
+  const base = {
+    borderRadius: 12,
+    padding: "12px 16px",
+    fontWeight: 800,
+    fontSize: 14,
+    cursor: "pointer",
+    border: "2px solid transparent",
+    transition: "all .15s ease",
+    minWidth: 140,
+  };
   let style = {};
-  if (subtle) style = { background: "rgba(0,0,0,0.06)", color: T?.text || "#111", borderColor: "rgba(0,0,0,0.08)" };
-  else if (outline) style = { background: "transparent", color: T?.text || "#111", borderColor: T?.border || "rgba(0,0,0,0.25)" };
-  else style = { background: T?.primaryDark || "#111", color: T?.onPrimary || "#fff", borderColor: T?.primaryDark || "#111", boxShadow: T?.shadowMd || "0 6px 18px rgba(0,0,0,0.18)" };
+  if (subtle) {
+    style = {
+      background: "#f2f4f7",
+      color: T?.text || "#111",
+      borderColor: "#e5e7eb",
+    };
+  } else if (outline) {
+    style = {
+      background: "#fff",
+      color: T?.primaryDark || "#0d47a1",
+      borderColor: T?.primaryDark || "#0d47a1",
+    };
+  } else {
+    style = {
+      background: T?.primaryDark || "#0d47a1",
+      color: T?.onPrimary || "#fff",
+      borderColor: T?.primary || "#1976d2",
+      boxShadow: T?.shadowMd || "0 4px 12px rgba(0,0,0,0.18)",
+    };
+  }
   return (
     <button type={type} onClick={onClick} style={{ ...base, ...style }}>
       {children}
