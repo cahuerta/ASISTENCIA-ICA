@@ -26,7 +26,7 @@ export const RODILLA_PUNTOS_LATERAL = [
   { key: "tendon_rotuliano", x: 0.20, y: 0.30, label: "Tendón rotuliano" },
   { key: "tuberosidad_tibial", x: 0.55, y: 0.78, label: "Tuberosidad tibial" },
   { key: "rotula", x: 0.20, y: 0.20, label: "Rótula" },
-  { key: "cuadriceps", x: 0.52, y: 0.10, label: "Cuádriceps" },
+  { key: "cuadriceps", x: 0.52, y: 0.010, label: "Cuádriceps" },
   { key: "gastrocnemios", x: 0.45, y: 0.72, label: "Gastrocnemios" },
 ];
 
