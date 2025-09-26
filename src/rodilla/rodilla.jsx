@@ -161,13 +161,23 @@ export default function RodillaMapper({
     [puntos, debeEspejar]
   );
 
-  /* Guardar (suma 3 vistas) */
+  /* Guardar (suma 3 vistas) — ROBUSTO A TIMING */
   const handleSave = () => {
+    // 1) Tomamos lo persistido
     const persisted = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
 
+    // 2) Inyectamos la vista ACTUAL desde memoria (por si el useEffect aún no guardó)
+    const persistedNow = {
+      frente: Array.isArray(persisted.frente) ? [...persisted.frente] : [],
+      lateral: Array.isArray(persisted.lateral) ? [...persisted.lateral] : [],
+      posterior: Array.isArray(persisted.posterior) ? [...persisted.posterior] : [],
+    };
+    persistedNow[vista] = puntos.map((p) => !!p.selected);
+
+    // 3) Función que mapea flags → labels por vista
     const labelsDe = (v) => {
       const base = (RODILLA_PUNTOS_BY_VISTA?.[v] || []);
-      const flags = Array.isArray(persisted[v]) ? persisted[v] : [];
+      const flags = Array.isArray(persistedNow[v]) ? persistedNow[v] : [];
       const out = [];
       for (let i = 0; i < base.length; i++) {
         if (flags[i]) out.push(base[i].label || base[i].key);
@@ -175,6 +185,7 @@ export default function RodillaMapper({
       return out;
     };
 
+    // 4) Construimos resumen completo
     const resumenPorVista = {
       frente: labelsDe("frente"),
       lateral: labelsDe("lateral"),
@@ -197,6 +208,7 @@ export default function RodillaMapper({
       ...resumenPorVista.lateral,
       ...resumenPorVista.posterior,
     ];
+
     const rodilla = {
       lado,
       vistaSeleccionada: vista,
@@ -218,12 +230,14 @@ export default function RodillaMapper({
       sessionStorage.setItem(`rodilla_resumen_${lado}`, JSON.stringify(resumenPorVista));
       sessionStorage.setItem("rodilla_data", JSON.stringify(rodilla));
       sessionStorage.setItem("rodilla_seccionesExtra", JSON.stringify(seccionesExtra));
+      // Y persistimos también el snapshot corregido (por si el efecto no alcanzó)
+      savePersisted(lado, persistedNow);
     } catch {}
 
     onSave?.(r);
   };
 
-  /* === Tamaño (proporcional, 4:3, más pequeño) === */
+  /* === Tamaño (proporcional, 4:3, compacto) === */
   const WRAP_MAX_W = 480; // compacto pero cómodo
 
   return (
