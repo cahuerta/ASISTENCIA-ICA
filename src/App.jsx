@@ -254,7 +254,7 @@ function App() {
     try {
       let resp = await postIA("/preop-ia");
       if (!resp.ok) resp = await postIA("/ia-preop");
-      if (!resp.ok) throw new Error(`HTTP ${r.status}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const j = await resp.json();
       const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
@@ -616,6 +616,46 @@ function App() {
     }
   };
 
+  /* ====== RESET de preview/modales al cambiar de módulo ====== */
+  const resetPreviewForModuleChange = () => { // <<< reset preview
+    // Cerrar cualquier preview y modal abierto
+    setMostrarVistaPrevia(false);
+    setPagoRealizado(false);
+    setPendingPreview(false);
+    setShowReso(false);
+    setMostrarRodilla(false);
+    setMostrarComorbilidades(false);
+
+    // Detener polling legado si estuviera activo
+    try {
+      if (pollerRef.current) {
+        clearInterval(pollerRef.current);
+        pollerRef.current = null;
+      }
+    } catch {}
+
+    // Limpiar claves de preview entre módulos (no borramos idPago ni datosPaciente)
+    try {
+      sessionStorage.removeItem("solicitaResonancia");
+      sessionStorage.removeItem("preop_ia_examenes");
+      sessionStorage.removeItem("preop_ia_resumen");
+      sessionStorage.removeItem("generales_ia_examenes");
+      sessionStorage.removeItem("generales_ia_resumen");
+    } catch {}
+  };
+
+  const switchModule = (nextKey) => {          // <<< usar switchModule
+    resetPreviewForModuleChange();
+    setModulo(nextKey);
+    try {
+      sessionStorage.setItem("modulo", nextKey);
+    } catch {}
+    // Mostrar Aviso Legal si entra por primera vez a PREOP/GENERALES
+    if ((nextKey === "preop" || nextKey === "generales") && !avisoOkRef.current[nextKey]) {
+      setMostrarAviso(true);
+    }
+  };
+
   // ====== UI ======
   return (
     <div style={styles.page}>
@@ -637,18 +677,7 @@ function App() {
               <button
                 key={b.key}
                 type="button"
-                onClick={() => {
-                  setModulo(b.key);
-                  sessionStorage.setItem("modulo", b.key);
-                  setPendingPreview(false);
-                  // Aviso Legal al entrar por primera vez a PREOP o GENERALES
-                  if (
-                    (b.key === "preop" || b.key === "generales") &&
-                    !avisoOkRef.current[b.key]
-                  ) {
-                    setMostrarAviso(true);
-                  }
-                }}
+                onClick={() => switchModule(b.key)}   // <<< usar switchModule
                 style={styleBtn}
               >
                 {b.label}
@@ -731,6 +760,7 @@ function App() {
         <div style={styles.previewCol} data-preview-col>
           {mostrarVistaPrevia && modulo === "trauma" && (
             <TraumaModulo
+              key={`trauma-${modulo}`}              {/* fuerza remount por módulo */}
               initialDatos={datosPaciente}
               // props opcionales para usar el checklist desde el módulo
               onPedirChecklistResonancia={pedirChecklistResonancia}
@@ -740,11 +770,11 @@ function App() {
           )}
 
           {mostrarVistaPrevia && modulo === "preop" && (
-            <PreopModulo initialDatos={datosPaciente} />
+            <PreopModulo key={`preop-${modulo}`} initialDatos={datosPaciente} />
           )}
 
           {mostrarVistaPrevia && modulo === "generales" && (
-            <GeneralesModulo initialDatos={datosPaciente} />
+            <GeneralesModulo key={`generales-${modulo}`} initialDatos={datosPaciente} />
           )}
 
           {mostrarVistaPrevia && modulo === "ia" && (
