@@ -698,7 +698,7 @@ function App() {
                   {datosPaciente.dolor}
                   {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
                 </strong>
-                {(datosPaciente.dolor === "Rodilla") &&
+                {datosPaciente.dolor === "Rodilla" &&
                   (modulo === "trauma" || modulo === "ia") && (
                     <button
                       type="button"
@@ -736,9 +736,9 @@ function App() {
         <div style={styles.previewCol} data-preview-col>
           {mostrarVistaPrevia && modulo === "trauma" && (
             <TraumaModulo
-              key={`trauma-${modulo}`}              {/* fuerza remount por módulo */}
+              key={`trauma-${modulo}`}
               initialDatos={datosPaciente}
-              rodillaSeleccion={rodillaSeleccion}   {/* pasa payload de rodilla */}
+              rodillaSeleccion={rodillaSeleccion}
               onPedirChecklistResonancia={pedirChecklistResonancia}
               onDetectarResonancia={detectarResonanciaEnBackend}
               resumenResoTexto={resumenResoTexto}
@@ -757,7 +757,7 @@ function App() {
             <IAModulo
               key={`ia-${modulo}`}
               initialDatos={datosPaciente}
-              rodillaSeleccion={rodillaSeleccion}   {/* pasa payload de rodilla */}
+              rodillaSeleccion={rodillaSeleccion}
               pedirChecklistResonancia={pedirChecklistResonancia}
             />
           )}
@@ -794,15 +794,12 @@ function App() {
                 .includes("izq")
                 ? "izquierda"
                 : "derecha"}
-              vistaInicial={vista} /* "anterior" | "posterior" (RodillaMapper convierte "anterior" → "frente") */
+              vistaInicial={vista}
               onSave={(payload) => {
-                // payload: { lado, vista, puntos:[{key,x,y,selected}], timestamp }
+                // payload: { lado, vistaSeleccionada, puntosSeleccionados, porVista, count, ... }
                 setRodillaSeleccion(payload);
                 try {
-                  sessionStorage.setItem(
-                    "rodilla_mapper_payload",
-                    JSON.stringify(payload)
-                  );
+                  sessionStorage.setItem("rodilla_mapper_payload", JSON.stringify(payload));
                 } catch {}
                 setMostrarRodilla(false);
               }}
