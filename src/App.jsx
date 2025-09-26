@@ -14,7 +14,7 @@ import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import IAModulo from "./modules/IAModulo.jsx";
 import TraumaModulo from "./modules/TraumaModulo.jsx";
 
-/* >>> NUEVO: módulo de rodilla (PNG + SVG) */
+/* Módulo de rodilla (PNG + SVG) */
 import RodillaMapper from "./rodilla/rodilla.jsx";
 
 /* Utilidades existentes */
@@ -50,14 +50,24 @@ function App() {
   const [modulo, setModulo] = useState("trauma");
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
-  const [pagoRealizado, setPagoRealizado] = useState(false); // usado por módulos que lean el query param
+  const [pagoRealizado, setPagoRealizado] = useState(false);
   const pollerRef = useRef(null);
 
   // Vista esquema (frontal/posterior)
   const [vista, setVista] = useState("anterior");
 
-  // >>> NUEVO: control del modal RodillaMapper
+  // Control del modal RodillaMapper
   const [mostrarRodilla, setMostrarRodilla] = useState(false);
+
+  // Guardar selección de rodilla (payload del RodillaMapper)
+  const [rodillaSeleccion, setRodillaSeleccion] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("rodilla_mapper_payload");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
   // ====== Flags persistentes (por módulo: preop / generales) ======
   const avisoOkRef = useRef({ preop: false, generales: false });
@@ -205,7 +215,6 @@ function App() {
 
   // ---- IA PREOP ----
   const llamarPreopIA = async (payloadComorb) => {
-    // Asegurar idPago
     let idPago = "";
     try {
       idPago = sessionStorage.getItem("idPago") || "";
@@ -215,7 +224,6 @@ function App() {
       }
     } catch {}
 
-    // Tipo de cirugía desde sessionStorage
     let tipoCirugia = "";
     try {
       const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
@@ -223,7 +231,6 @@ function App() {
       tipoCirugia = fijo || otro || "";
     } catch {}
 
-    // Comorbilidades
     let comorb = payloadComorb || comorbilidades;
     if (!comorb) {
       try {
@@ -265,7 +272,6 @@ function App() {
         sessionStorage.setItem("preop_ia_resumen", resumen || "");
       } catch {}
 
-      // Mostrar preview directo si Aviso ya aceptado; si no, abrirlo (una vez)
       if (avisoOkRef.current.preop) {
         setMostrarVistaPrevia(true);
         setPendingPreview(false);
@@ -281,7 +287,6 @@ function App() {
 
   // ---- IA GENERALES ----
   const llamarGeneralesIA = async (payloadComorb) => {
-    // Asegurar idPago
     let idPago = "";
     try {
       idPago = sessionStorage.getItem("idPago") || "";
@@ -291,7 +296,6 @@ function App() {
       }
     } catch {}
 
-    // Comorbilidades
     let comorb = payloadComorb || comorbilidades;
     if (!comorb) {
       try {
@@ -307,21 +311,15 @@ function App() {
       genero: normalizarGenero(datosPaciente.genero),
     };
 
-    const body = {
-      idPago,
-      paciente,
-      comorbilidades: comorb || {},
-    };
+    const body = { idPago, paciente, comorbilidades: comorb || {} };
 
     try {
-      // 1) Nueva ruta específica
       let resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
 
-      // 2) Fallback a endpoints existentes
       if (!resp.ok) {
         resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
           method: "POST",
@@ -403,14 +401,11 @@ function App() {
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
 
-      // (El polling fino lo hace cada módulo; mantenemos legacy para compatibilidad)
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
-          // Trauma
           await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`);
-          // Preop / Generales manejan su propia restauración
         } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
@@ -418,7 +413,6 @@ function App() {
         }
       }, 2000);
     } else if (!pago && idFinal) {
-      // Si venimos de historial con idPago en sessionStorage
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
     } else if (pago === "ok" && !idFinal) {
@@ -454,14 +448,13 @@ function App() {
     });
   };
 
-  // ====== NUEVAS ZONAS con la MISMA lógica que Cadera/Rodilla ======
+  // ====== Selección de zona ======
   const onSeleccionZona = (zona) => {
     let dolor = "";
     let lado = "";
     const z = String(zona || "");
     const zl = z.toLowerCase();
 
-    // --- Columna: respetar cervical/dorsal/lumbar, sin lado ---
     if (zl.includes("columna cervical")) {
       dolor = "Columna cervical";
       lado = "";
@@ -469,19 +462,15 @@ function App() {
       dolor = "Columna dorsal";
       lado = "";
     } else if (zl.includes("columna lumbar") || zl.includes("columna")) {
-      // Mantiene tu comportamiento previo si llega "Columna" sin subtipo
       dolor = "Columna lumbar";
       lado = "";
-    }
-    else if (zl.includes("cadera")) {
+    } else if (zl.includes("cadera")) {
       dolor = "Cadera";
       lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
     } else if (zl.includes("rodilla")) {
       dolor = "Rodilla";
       lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    }
-    // === NUEVAS ZONAS (igual que arriba) ===
-    else if (zl.includes("hombro")) {
+    } else if (zl.includes("hombro")) {
       dolor = "Hombro";
       lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
     } else if (zl.includes("codo")) {
@@ -503,7 +492,7 @@ function App() {
       return next;
     });
 
-    // >>> Abrir RodillaMapper solo en Trauma o IA
+    // Abrir RodillaMapper solo en Trauma o IA
     if ((modulo === "trauma" || modulo === "ia") && dolor === "Rodilla") {
       setMostrarRodilla(true);
     }
@@ -514,7 +503,6 @@ function App() {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
 
-    // Reglas generales
     if (
       !datosPaciente.nombre?.trim() ||
       !datosPaciente.rut?.trim() ||
@@ -525,7 +513,6 @@ function App() {
       return;
     }
 
-    // Solo TRAUMA exige dolor/lado
     if (modulo === "trauma" && !datosPaciente.dolor?.trim()) {
       alert("Seleccione dolor/zona en el esquema para continuar.");
       return;
@@ -542,7 +529,6 @@ function App() {
       return;
     }
 
-    // Otros módulos (trauma/ia): mostrar el módulo correspondiente
     setMostrarVistaPrevia(true);
     setPagoRealizado(false);
     setPendingPreview(false);
@@ -555,7 +541,6 @@ function App() {
     );
     if (!ok) return;
 
-    // 0) Detener polling local conocido
     try {
       if (pollerRef.current) {
         clearInterval(pollerRef.current);
@@ -563,7 +548,6 @@ function App() {
       }
     } catch {}
 
-    // 1) Cancelar TODOS los timeouts/intervalos del documento
     try {
       const maxId = setTimeout(() => {}, 0);
       for (let i = 0; i <= maxId; i++) {
@@ -572,7 +556,6 @@ function App() {
       }
     } catch {}
 
-    // 2) Limpiar storages (todo)
     try {
       sessionStorage.clear();
     } catch {}
@@ -580,7 +563,6 @@ function App() {
       localStorage.clear();
     } catch {}
 
-    // 3) Borrar caches (PWA/Fetch Cache)
     try {
       if ("caches" in window) {
         const names = await caches.keys();
@@ -588,7 +570,6 @@ function App() {
       }
     } catch {}
 
-    // 4) Desregistrar Service Workers
     try {
       if ("serviceWorker" in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
@@ -596,37 +577,32 @@ function App() {
       }
     } catch {}
 
-    // 5) Construir URL limpia (sin query ni hash)
     let cleanUrl = window.location.href;
     try {
       const url = new URL(window.location.href);
-      url.search = ""; // quita ?pago=...&idPago=...
-      url.hash = "";   // por si algo usa #...
+      url.search = "";
+      url.hash = "";
       cleanUrl = url.toString();
-      // Reemplaza en el historial para no dejar “colas” de retorno
       window.history.replaceState(null, "", cleanUrl);
     } catch {}
 
-    // 6) Recarga dura: estado React limpio, sin params, sin SW, sin caches
     try {
       window.location.replace(cleanUrl);
     } catch {
-      // fallback
       window.location.reload();
     }
   };
 
   /* ====== RESET de preview/modales al cambiar de módulo ====== */
-  const resetPreviewForModuleChange = () => { // <<< reset preview
-    // Cerrar cualquier preview y modal abierto
+  const resetPreviewForModuleChange = () => {
     setMostrarVistaPrevia(false);
     setPagoRealizado(false);
     setPendingPreview(false);
     setShowReso(false);
     setMostrarRodilla(false);
     setMostrarComorbilidades(false);
+    setRodillaSeleccion(null);
 
-    // Detener polling legado si estuviera activo
     try {
       if (pollerRef.current) {
         clearInterval(pollerRef.current);
@@ -634,23 +610,22 @@ function App() {
       }
     } catch {}
 
-    // Limpiar claves de preview entre módulos (no borramos idPago ni datosPaciente)
     try {
       sessionStorage.removeItem("solicitaResonancia");
       sessionStorage.removeItem("preop_ia_examenes");
       sessionStorage.removeItem("preop_ia_resumen");
       sessionStorage.removeItem("generales_ia_examenes");
       sessionStorage.removeItem("generales_ia_resumen");
+      sessionStorage.removeItem("rodilla_mapper_payload");
     } catch {}
   };
 
-  const switchModule = (nextKey) => {          // <<< usar switchModule
+  const switchModule = (nextKey) => {
     resetPreviewForModuleChange();
     setModulo(nextKey);
     try {
       sessionStorage.setItem("modulo", nextKey);
     } catch {}
-    // Mostrar Aviso Legal si entra por primera vez a PREOP/GENERALES
     if ((nextKey === "preop" || nextKey === "generales") && !avisoOkRef.current[nextKey]) {
       setMostrarAviso(true);
     }
@@ -677,7 +652,7 @@ function App() {
               <button
                 key={b.key}
                 type="button"
-                onClick={() => switchModule(b.key)}   // <<< usar switchModule
+                onClick={() => switchModule(b.key)}
                 style={styleBtn}
               >
                 {b.label}
@@ -685,7 +660,7 @@ function App() {
             );
           })}
 
-          {/* Botón REINICIAR siempre visible */}
+          {/* Botón REINICIAR */}
           <button
             type="button"
             onClick={handleReiniciar}
@@ -723,22 +698,23 @@ function App() {
                   {datosPaciente.dolor}
                   {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
                 </strong>
-                {datosPaciente.dolor === "Rodilla" && (modulo === "trauma" || modulo === "ia") && (
-                  <button
-                    type="button"
-                    onClick={() => setMostrarRodilla(true)}
-                    style={{
-                      marginLeft: 8,
-                      padding: "4px 8px",
-                      border: `1px solid ${T.border}`,
-                      borderRadius: 6,
-                      background: T.surface,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Marcar puntos
-                  </button>
-                )}
+                {(datosPaciente.dolor === "Rodilla") &&
+                  (modulo === "trauma" || modulo === "ia") && (
+                    <button
+                      type="button"
+                      onClick={() => setMostrarRodilla(true)}
+                      style={{
+                        marginLeft: 8,
+                        padding: "4px 8px",
+                        border: `1px solid ${T.border}`,
+                        borderRadius: 6,
+                        background: T.surface,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Marcar puntos
+                    </button>
+                  )}
               </>
             ) : (
               "Seleccione una zona en el esquema"
@@ -762,7 +738,7 @@ function App() {
             <TraumaModulo
               key={`trauma-${modulo}`}              {/* fuerza remount por módulo */}
               initialDatos={datosPaciente}
-              // props opcionales para usar el checklist desde el módulo
+              rodillaSeleccion={rodillaSeleccion}   {/* pasa payload de rodilla */}
               onPedirChecklistResonancia={pedirChecklistResonancia}
               onDetectarResonancia={detectarResonanciaEnBackend}
               resumenResoTexto={resumenResoTexto}
@@ -781,7 +757,7 @@ function App() {
             <IAModulo
               key={`ia-${modulo}`}
               initialDatos={datosPaciente}
-              /* ← única modificación pedida */
+              rodillaSeleccion={rodillaSeleccion}   {/* pasa payload de rodilla */}
               pedirChecklistResonancia={pedirChecklistResonancia}
             />
           )}
@@ -813,9 +789,23 @@ function App() {
         <div style={styles.modalOverlay}>
           <div style={{ width: "min(900px, 96vw)" }}>
             <RodillaMapper
-              ladoInicial={(datosPaciente?.lado || "").toLowerCase().includes("izq") ? "izquierda" : "derecha"}
-              vistaInicial={vista} // "anterior" | "posterior" (RodillaMapper convierte "anterior" → "frente")
-              onSave={() => setMostrarRodilla(false)} // guarda en sessionStorage dentro del componente
+              ladoInicial={(datosPaciente?.lado || "")
+                .toLowerCase()
+                .includes("izq")
+                ? "izquierda"
+                : "derecha"}
+              vistaInicial={vista} /* "anterior" | "posterior" (RodillaMapper convierte "anterior" → "frente") */
+              onSave={(payload) => {
+                // payload: { lado, vista, puntos:[{key,x,y,selected}], timestamp }
+                setRodillaSeleccion(payload);
+                try {
+                  sessionStorage.setItem(
+                    "rodilla_mapper_payload",
+                    JSON.stringify(payload)
+                  );
+                } catch {}
+                setMostrarRodilla(false);
+              }}
               onClose={() => setMostrarRodilla(false)}
             />
           </div>
@@ -862,7 +852,7 @@ const styles = {
     margin: "0 auto",
     padding: "12px 16px",
     display: "grid",
-    gridTemplateColumns: "repeat(5, 1fr)", // ← ahora 5 columnas (4 módulos + Reiniciar)
+    gridTemplateColumns: "repeat(5, 1fr)",
     gap: 12,
   },
   topBtn: {
