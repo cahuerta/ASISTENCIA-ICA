@@ -155,12 +155,16 @@ export default function RodillaMapper({
     [puntos]
   );
 
-  /* Guardar (AHORA suma FRONTAL + LATERAL + POSTERIOR) */
+  /* Guardar (AGREGA las tres vistas) */
   const handleSave = () => {
-    // 1) Cargar la selección booleana de TODAS las vistas desde localStorage
+    // 1) Flush de la vista actual al storage para no perder el último click
+    const persisted0 = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
+    persisted0[vista] = puntos.map((p) => !!p.selected);
+    savePersisted(lado, persisted0);
+
+    // 2) Leer y construir etiquetas seleccionadas por CADA vista
     const persisted = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
 
-    // 2) Helper: booleans → etiquetas por vista
     const labelsForView = (v) => {
       const pts = RODILLA_PUNTOS_BY_VISTA?.[v] || [];
       const sel = persisted?.[v] || [];
@@ -171,63 +175,56 @@ export default function RodillaMapper({
       return out;
     };
 
-    // 3) Resumen por todas las vistas
     const resumenPorVista = {
       frente: labelsForView("frente"),
       lateral: labelsForView("lateral"),
       posterior: labelsForView("posterior"),
     };
 
-    // 4) Secciones extra para Preview (una por vista si tiene ítems)
+    // 3) Secciones extra (una por vista con contenido)
     const seccionesExtra = [];
-    if (resumenPorVista.frente.length) {
-      seccionesExtra.push({
-        title: `Rodilla ${RODILLA_LABELS?.[lado] || lado} — FRONTAL`,
-        lines: resumenPorVista.frente,
-      });
-    }
-    if (resumenPorVista.lateral.length) {
-      seccionesExtra.push({
-        title: `Rodilla ${RODILLA_LABELS?.[lado] || lado} — LATERAL`,
-        lines: resumenPorVista.lateral,
-      });
-    }
-    if (resumenPorVista.posterior.length) {
-      seccionesExtra.push({
-        title: `Rodilla ${RODILLA_LABELS?.[lado] || lado} — POSTERIOR`,
-        lines: resumenPorVista.posterior,
-      });
-    }
+    if (resumenPorVista.frente.length)
+      seccionesExtra.push({ title: "Rodilla — Frente", lines: resumenPorVista.frente });
+    if (resumenPorVista.lateral.length)
+      seccionesExtra.push({ title: "Rodilla — Lateral", lines: resumenPorVista.lateral });
+    if (resumenPorVista.posterior.length)
+      seccionesExtra.push({ title: "Rodilla — Posterior", lines: resumenPorVista.posterior });
 
-    // 5) Bloque para backend (resumen total + vista seleccionada como compat)
-    const countTotal =
-      resumenPorVista.frente.length +
-      resumenPorVista.lateral.length +
-      resumenPorVista.posterior.length;
+    // 4) Bloque para BACKEND (Trauma/IA)
+    const activosLabels = [
+      ...resumenPorVista.frente,
+      ...resumenPorVista.lateral,
+      ...resumenPorVista.posterior,
+    ];
+    const activosKeys = activosLabels.map((lab) => lab); // si quieres keys reales, mapea desde pts
 
     const rodilla = {
       lado,
       vistaSeleccionada: vista,
-      resumen: resumenPorVista,
-      count: countTotal,
+      puntosSeleccionados: activosLabels,
+      puntosKeys: activosKeys,
+      count: activosLabels.length,
+      porVista: resumenPorVista,
     };
 
-    // 6) Payload unificado al padre
+    // 5) Persistir para lectores existentes (Preview/Trauma)
+    try {
+      const ladoKey = lado.includes("izq") ? "izquierda" : "derecha";
+      sessionStorage.setItem(`rodilla_resumen_${ladoKey}`, JSON.stringify(resumenPorVista));
+      sessionStorage.setItem("rodilla_data", JSON.stringify(rodilla));
+      sessionStorage.setItem("rodilla_seccionesExtra", JSON.stringify(seccionesExtra));
+    } catch {}
+
+    // 6) Devolver payload unificado al padre
     const r = {
       modulo: "rodilla",
       lado,
       vistaSeleccionada: vista,
+      puntosActivos: activosKeys,
+      puntosSeleccionados: activosLabels,
       seccionesExtra,
       rodilla,
     };
-
-    // 7) Persistencias esperadas por otros módulos (TraumaModulo, etc.)
-    try {
-      sessionStorage.setItem("rodilla_data", JSON.stringify(rodilla));
-      sessionStorage.setItem("rodilla_seccionesExtra", JSON.stringify(seccionesExtra));
-      const ladoKey = lado.includes("izquierda") ? "izquierda" : "derecha";
-      sessionStorage.setItem(`rodilla_resumen_${ladoKey}`, JSON.stringify(resumenPorVista));
-    } catch {}
 
     onSave?.(r);
   };
