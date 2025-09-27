@@ -8,12 +8,12 @@ import { getTheme } from "../theme.js";
 const T = getTheme();
 const THEME = {
   markerStroke: T?.primaryDark,
-  dotInactive:  T?.accentAlpha,
-  dotActive:    T?.primary,
+  dotInactive: T?.accentAlpha,
+  dotActive: T?.primary,
   markerShadow: T?.overlay,
-  chipBg:       T?.accentAlpha,
+  chipBg: T?.accentAlpha,
   chipActiveBg: T?.primaryDark,
-  chipColor:    T?.onPrimary
+  chipColor: T?.onPrimary,
 };
 
 /* Imágenes locales base
@@ -21,7 +21,7 @@ const THEME = {
    - DORSAL: base = DERECHA    → para izquierda se espeja
 */
 import imgPalmarIzquierda from "./manofrontalizquierda.png";
-import imgDorsalDerecha   from "./manodorsalderecha.jpg";
+import imgDorsalDerecha from "./manodorsalderecha.jpg";
 
 /* Helper: import → URL (Vite/Next) */
 const toUrl = (img) => (typeof img === "string" ? img : img?.src || "");
@@ -37,7 +37,7 @@ function normVista(v) {
 /* Mapa imagen por vista (ver notas de base) */
 const IMG = {
   palmar: toUrl(imgPalmarIzquierda), // base = izquierda
-  dorsal: toUrl(imgDorsalDerecha),   // base = derecha
+  dorsal: toUrl(imgDorsalDerecha), // base = derecha
 };
 
 /* Etiquetas tabs */
@@ -75,12 +75,7 @@ export default function ManoMapper({
   const [vista, setVista] = useState(vistaInicialNorm);
 
   /* Estado de puntos */
-  const {
-    puntos,
-    setPuntos,
-    togglePunto,
-    clearSelection
-  } = useHandState(puntosDeVista(vistaInicialNorm));
+  const { puntos, setPuntos, togglePunto, clearSelection } = useHandState(puntosDeVista(vistaInicialNorm));
 
   /* Restaurar selección inicial */
   useEffect(() => {
@@ -95,9 +90,7 @@ export default function ManoMapper({
   useEffect(() => {
     const base = puntosDeVista(vista);
     const persisted = loadPersisted(lado);
-    const withSelection = persisted?.[vista]?.length
-      ? base.map((p, i) => ({ ...p, selected: !!persisted[vista][i] }))
-      : base;
+    const withSelection = persisted?.[vista]?.length ? base.map((p, i) => ({ ...p, selected: !!persisted[vista][i] })) : base;
     setPuntos(withSelection);
   }, [vista, lado, setPuntos]);
 
@@ -108,9 +101,12 @@ export default function ManoMapper({
     savePersisted(lado, persisted);
   }, [puntos, vista, lado]);
 
-  const handleToggle = useCallback((index) => {
-    togglePunto(index);
-  }, [togglePunto]);
+  const handleToggle = useCallback(
+    (index) => {
+      togglePunto(index);
+    },
+    [togglePunto]
+  );
 
   const handleClearAll = useCallback(() => {
     setPuntos((arr) => arr.map((p) => ({ ...p, selected: false })));
@@ -122,46 +118,47 @@ export default function ManoMapper({
     } catch {}
   }, [lado, setPuntos]);
 
-  const handleVolver = useCallback((e) => {
-    e?.preventDefault?.();
-    e?.stopPropagation?.();
-    if (typeof onVolver === "function") {
-      onVolver();
-      return;
-    }
-    try { window.dispatchEvent(new CustomEvent("mano:volver")); } catch {}
-    if (typeof window !== "undefined" && window.history && window.history.length > 1) {
-      window.history.back();
-      return;
-    }
-    if (typeof window !== "undefined") window.location.assign("/");
-  }, [onVolver]);
+  const handleVolver = useCallback(
+    (e) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
+      if (typeof onVolver === "function") {
+        onVolver();
+        return;
+      }
+      try {
+        window.dispatchEvent(new CustomEvent("mano:volver"));
+      } catch {}
+      if (typeof window !== "undefined" && window.history && window.history.length > 1) {
+        window.history.back();
+        return;
+      }
+      if (typeof window !== "undefined") window.location.assign("/");
+    },
+    [onVolver]
+  );
 
   /* Imagen final + flag de espejo según base explicada arriba */
-  const imgSrcFinal =
-    (typeof imagenSrc === "string" && imagenSrc) ||
-    IMG[vista] ||
-    IMG.palmar;
+  const imgSrcFinal = (typeof imagenSrc === "string" && imagenSrc) || IMG[vista] || IMG.palmar;
 
   // Palmar base = izquierda → espejar si lado = derecha
   // Dorsal base = derecha   → espejar si lado = izquierda
-  const debeEspejar =
-    (vista === "palmar" && lado === "derecha") ||
-    (vista === "dorsal" && lado === "izquierda");
+  const debeEspejar = (vista === "palmar" && lado === "derecha") || (vista === "dorsal" && lado === "izquierda");
 
   /* Puntos render (espejar cx cuando corresponde) */
   const puntosRender = useMemo(
-    () => puntos.map((p) => {
-      const rawCx = p.x * 100;
-      const cx = debeEspejar ? (100 - rawCx) : rawCx;
-      const cy = p.y * 100;
-      return {
-        ...p,
-        cx,
-        cy,
-        labelText: p.label || p.key || "",
-      };
-    }),
+    () =>
+      puntos.map((p) => {
+        const rawCx = p.x * 100;
+        const cx = debeEspejar ? 100 - rawCx : rawCx;
+        const cy = p.y * 100;
+        return {
+          ...p,
+          cx,
+          cy,
+          labelText: p.label || p.key || "",
+        };
+      }),
     [puntos, debeEspejar]
   );
 
@@ -179,7 +176,7 @@ export default function ManoMapper({
 
     // 3) Mapea flags → labels por vista
     const labelsDe = (v) => {
-      const base = (MANO_PUNTOS_BY_VISTA?.[v] || []);
+      const base = MANO_PUNTOS_BY_VISTA?.[v] || [];
       const flags = Array.isArray(persistedNow[v]) ? persistedNow[v] : [];
       const out = [];
       for (let i = 0; i < base.length; i++) {
@@ -202,10 +199,7 @@ export default function ManoMapper({
       seccionesExtra.push({ title: "Mano — Vista Dorsal", lines: resumenPorVista.dorsal });
     }
 
-    const merged = [
-      ...resumenPorVista.palmar,
-      ...resumenPorVista.dorsal,
-    ];
+    const merged = [...resumenPorVista.palmar, ...resumenPorVista.dorsal];
 
     const mano = {
       lado,
@@ -260,7 +254,7 @@ export default function ManoMapper({
             background: T?.primaryDark || "#0d47a1",
             color: T?.onPrimary || "#fff",
             border: `1px solid ${T?.primary || "#1976d2"}`,
-            boxShadow: T?.shadowSm || "0 2px 8px rgba(0,0,0,0.18)`,
+            boxShadow: T?.shadowSm || "0 2px 8px rgba(0,0,0,0.18)",
           }}
         >
           {`Zona seleccionada: Mano — ${MANO_LABELS?.[lado] || lado}`}
@@ -274,7 +268,7 @@ export default function ManoMapper({
           width: "100%",
           borderRadius: 16,
           overflow: "hidden",
-          boxShadow: T?.shadowMd || "0 8px 24px rgba(0,0,0,0.15)`,
+          boxShadow: T?.shadowMd || "0 8px 24px rgba(0,0,0,0.15)",
           background: T?.bg || "#f2f2f2",
         }}
       >
@@ -313,12 +307,7 @@ export default function ManoMapper({
           }}
         >
           {["palmar", "dorsal"].map((v) => (
-            <VistaChip
-              key={v}
-              active={vista === v}
-              onClick={() => setVista(v)}
-              label={VISTA_LABEL[v]}
-            />
+            <VistaChip key={v} active={vista === v} onClick={() => setVista(v)} label={VISTA_LABEL[v]} />
           ))}
         </div>
 
@@ -329,23 +318,22 @@ export default function ManoMapper({
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "auto" }}
         >
           {puntosRender.map((p, i) => (
-            <Marker
-              key={p.key || i}
-              cx={p.cx}
-              cy={p.cy}
-              active={p.selected}
-              label={p.labelText}
-              onClick={() => handleToggle(i)}
-            />
+            <Marker key={p.key || i} cx={p.cx} cy={p.cy} active={p.selected} label={p.labelText} onClick={() => handleToggle(i)} />
           ))}
         </svg>
       </div>
 
       {/* Acciones */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 10 }}>
-        <Button type="button" subtle onClick={clearSelection}>Desactivar todos</Button>
-        <Button type="button" onClick={handleSave}>Guardar / Enviar</Button>
-        <Button type="button" outline onClick={handleVolver}>Volver</Button>
+        <Button type="button" subtle onClick={clearSelection}>
+          Desactivar todos
+        </Button>
+        <Button type="button" onClick={handleSave}>
+          Guardar / Enviar
+        </Button>
+        <Button type="button" outline onClick={handleVolver}>
+          Volver
+        </Button>
       </div>
     </div>
   );
@@ -433,7 +421,11 @@ function Marker({ cx, cy, active, label, onClick }) {
     <g
       transform={`translate(${cx} ${cy})`}
       style={{ pointerEvents: "auto", cursor: "pointer" }}
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick?.(); }}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick?.();
+      }}
     >
       <circle r={6.5} fill="transparent" />
       <circle
