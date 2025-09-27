@@ -61,6 +61,22 @@ function App() {
   const [mostrarMapper, setMostrarMapper] = useState(false);
   const [mapperId, setMapperId] = useState(null); // "rodilla" | "mano" | ...
 
+  // === RM (PDF listo tras guardar el formulario) ===
+  const [rmPdfListo, setRmPdfListo] = useState(() => {
+    try {
+      return sessionStorage.getItem("rm_pdf_disponible") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [rmIdPago, setRmIdPago] = useState(() => {
+    try {
+      return sessionStorage.getItem("rm_idPago") || "";
+    } catch {
+      return "";
+    }
+  });
+
   // ====== Flags persistentes (por módulo: preop / generales) ======
   const avisoOkRef = useRef({ preop: false, generales: false });
   const comorbOkRef = useRef({ preop: false, generales: false });
@@ -474,8 +490,7 @@ function App() {
       // Mantiene tu comportamiento previo si llega "Columna" sin subtipo
       dolor = "Columna lumbar";
       lado = "";
-    }
-    else if (zl.includes("cadera")) {
+    } else if (zl.includes("cadera")) {
       dolor = "Cadera";
       lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
     } else if (zl.includes("rodilla")) {
@@ -605,7 +620,7 @@ function App() {
     try {
       const url = new URL(window.location.href);
       url.search = ""; // quita ?pago=...&idPago=...
-      url.hash = "";   // por si algo usa #...
+      url.hash = ""; // por si algo usa #...
       cleanUrl = url.toString();
       // Reemplaza en el historial para no dejar “colas” de retorno
       window.history.replaceState(null, "", cleanUrl);
@@ -636,13 +651,16 @@ function App() {
     setPendingPreview(false);
     setShowReso(false);
     setResolverReso(null);
-    setMostrarMapper(false);         // <— cerrar modal genérico
+    setMostrarMapper(false); // <— cerrar modal genérico
     setMostrarComorbilidades(false);
+    setRmPdfListo(false);
+    setRmIdPago("");
 
     // 2) Limpiar datos de previews para evitar “restauraciones” cruzadas
     try {
-      ["preop_ia_examenes", "preop_ia_resumen", "generales_ia_examenes", "generales_ia_resumen", "solicitaResonancia"]
-        .forEach((k) => sessionStorage.removeItem(k));
+      ["preop_ia_examenes", "preop_ia_resumen", "generales_ia_examenes", "generales_ia_resumen", "solicitaResonancia", "rm_pdf_disponible", "rm_idPago"].forEach(
+        (k) => sessionStorage.removeItem(k)
+      );
     } catch {}
 
     // 3) Dejar URL sin parámetros de pago
@@ -679,7 +697,9 @@ function App() {
                 onClick={() => {
                   if (modulo !== b.key) resetPreviewOnModuleChange(b.key);
                   setModulo(b.key);
-                  try { sessionStorage.setItem("modulo", b.key); } catch {}
+                  try {
+                    sessionStorage.setItem("modulo", b.key);
+                  } catch {}
                   setPendingPreview(false);
                   // Aviso Legal al entrar por primera vez a PREOP o GENERALES
                   if (
@@ -740,7 +760,10 @@ function App() {
                       type="button"
                       onClick={() => {
                         const k = resolveZonaKey(datosPaciente?.dolor);
-                        if (k && hasMapper(k)) { setMapperId(k); setMostrarMapper(true); }
+                        if (k && hasMapper(k)) {
+                          setMapperId(k);
+                          setMostrarMapper(true);
+                        }
                       }}
                       style={{
                         marginLeft: 8,
@@ -798,6 +821,33 @@ function App() {
               pedirChecklistResonancia={pedirChecklistResonancia}
             />
           )}
+
+          {/* Botón Formulario RM (PDF) pintado en el PADRE, debajo del módulo */}
+          {mostrarVistaPrevia &&
+            (modulo === "trauma" || modulo === "ia") &&
+            rmPdfListo &&
+            !!rmIdPago && (
+              <div style={{ marginTop: 8 }}>
+                <a
+                  href={`${BACKEND_BASE}/pdf-rm/${rmIdPago}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "inline-block",
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    fontWeight: 750,
+                    fontSize: 13,
+                    textDecoration: "none",
+                    background: T?.surface,
+                    color: T?.primaryDark || "#0d47a1",
+                    border: `2px solid ${T?.primaryDark || "#0d47a1"}`,
+                  }}
+                >
+                  Formulario RM (PDF)
+                </a>
+              </div>
+            )}
         </div>
       </div>
 
@@ -810,8 +860,33 @@ function App() {
                 setShowReso(false);
                 resolverReso?.({ canceled: true });
               }}
-              onSave={(data, { riesgos }) => {
+              onSave={async (data, { riesgos, observaciones }) => {
                 setShowReso(false);
+                // Guardar respuestas en backend y habilitar botón PDF
+                try {
+                  const idPago = sessionStorage.getItem("idPago") || "";
+                  if (idPago) {
+                    await fetch(`${BACKEND_BASE}/guardar-rm`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        idPago,
+                        rmForm: data, // todas las respuestas (sí/no)
+                        observaciones:
+                          typeof observaciones === "string"
+                            ? observaciones
+                            : Array.isArray(riesgos)
+                            ? riesgos.join(", ")
+                            : "",
+                      }),
+                    });
+                    setRmPdfListo(true);
+                    setRmIdPago(idPago);
+                    sessionStorage.setItem("rm_pdf_disponible", "1");
+                    sessionStorage.setItem("rm_idPago", idPago);
+                  }
+                } catch {}
+
                 const resumen = resumenResoTexto(data);
                 const bloquea = hasRedFlags(data);
                 resolverReso?.({ canceled: false, bloquea, data, riesgos, resumen });
@@ -835,12 +910,8 @@ function App() {
               /* Vista inicial:
                  - Para Rodilla: "anterior"/"posterior" se usa tal cual (el componente normaliza).
                  - Para Mano: usamos "palmar"/"dorsal" según la pestaña global. */
-              vistaInicial={
-                mapperId === "mano"
-                  ? (vista === "anterior" ? "palmar" : "dorsal")
-                  : vista
-              }
-              onSave={() => setMostrarMapper(false)}  // guarda en sessionStorage dentro del componente
+              vistaInicial={mapperId === "mano" ? (vista === "anterior" ? "palmar" : "dorsal") : vista}
+              onSave={() => setMostrarMapper(false)} // guarda en sessionStorage dentro del componente
               onClose={() => setMostrarMapper(false)}
             />
           </div>
