@@ -142,15 +142,21 @@ export default function ManoMapper({
     (vista === "palmar" && lado === "derecha") ||
     (vista === "dorsal" && lado === "izquierda");
 
-  /* Puntos render (sin invertir matemáticamente; el wrapper espeja todo) */
+  /* Puntos render — espejo por coordenada (texto NO se espeja) */
   const puntosRender = useMemo(
-    () => puntos.map((p) => ({
-      ...p,
-      cx: p.x * 100,
-      cy: p.y * 100,
-      labelText: p.label || p.key || "",
-    })),
-    [puntos]
+    () =>
+      puntos.map((p) => {
+        const rawCx = p.x * 100;
+        const cx = debeEspejar ? 100 - rawCx : rawCx;
+        const cy = p.y * 100;
+        return {
+          ...p,
+          cx,
+          cy,
+          labelText: p.label || p.key || "",
+        };
+      }),
+    [puntos, debeEspejar]
   );
 
   /* Guardar (suma 2 vistas) — robusto a timing */
@@ -293,48 +299,40 @@ export default function ManoMapper({
           ))}
         </div>
 
-        {/* WRAPPER espejado: imagen + svg juntos */}
-        <div
+        {/* Imagen base (solo la imagen se espeja cuando corresponde) */}
+        <img
+          src={imgSrcFinal}
+          alt={`Mano ${vista} ${lado}`}
           style={{
             position: "absolute",
             inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
             transform: debeEspejar ? "scaleX(-1)" : "none",
             transformOrigin: "center",
           }}
-        >
-          {/* Imagen base (sin transform propio) */}
-          <img
-            src={imgSrcFinal}
-            alt={`Mano ${vista} ${lado}`}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              display: "block",
-            }}
-            draggable={false}
-          />
+          draggable={false}
+        />
 
-          {/* Overlay de puntos (se espeja junto a la imagen) */}
-          <svg
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "auto" }}
-          >
-            {puntosRender.map((p, i) => (
-              <Marker
-                key={p.key || i}
-                cx={p.cx}
-                cy={p.cy}
-                active={p.selected}
-                label={p.labelText}
-                onClick={() => handleToggle(i)}
-              />
-            ))}
-          </svg>
-        </div>
+        {/* Overlay de puntos (NO espejado; coordenadas ya invertidas cuando toca) */}
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "auto" }}
+        >
+          {puntosRender.map((p, i) => (
+            <Marker
+              key={p.key || i}
+              cx={p.cx}
+              cy={p.cy}
+              active={p.selected}
+              label={p.labelText}
+              onClick={() => handleToggle(i)}
+            />
+          ))}
+        </svg>
       </div>
 
       {/* Acciones */}
@@ -453,10 +451,9 @@ function Marker({ cx, cy, active, label, onClick }) {
             stroke="rgba(255,255,255,0.12)"
             strokeWidth="0.2"
           />
-          {/* Texto NO espejado: se corrige con transform inverso */}
+          {/* Texto normal (no espejado) */}
           <text
-            transform="scale(-1,1)"
-            x={-tagW / 2}
+            x={tagW / 2}
             y={-tagH / 2 + 0.8}
             textAnchor="middle"
             dominantBaseline="middle"
