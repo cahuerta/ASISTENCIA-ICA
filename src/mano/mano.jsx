@@ -37,7 +37,7 @@ function normVista(v) {
 /* Mapa imagen por vista (ver notas de base) */
 const IMG = {
   palmar: toUrl(imgPalmarIzquierda), // base = izquierda
-  dorsal: toUrl(imgDorsalDerecha), // base = derecha
+  dorsal: toUrl(imgDorsalDerecha),   // base = derecha
 };
 
 /* Etiquetas tabs */
@@ -101,12 +101,9 @@ export default function ManoMapper({
     savePersisted(lado, persisted);
   }, [puntos, vista, lado]);
 
-  const handleToggle = useCallback(
-    (index) => {
-      togglePunto(index);
-    },
-    [togglePunto]
-  );
+  const handleToggle = useCallback((index) => {
+    togglePunto(index);
+  }, [togglePunto]);
 
   const handleClearAll = useCallback(() => {
     setPuntos((arr) => arr.map((p) => ({ ...p, selected: false })));
@@ -118,48 +115,42 @@ export default function ManoMapper({
     } catch {}
   }, [lado, setPuntos]);
 
-  const handleVolver = useCallback(
-    (e) => {
-      e?.preventDefault?.();
-      e?.stopPropagation?.();
-      if (typeof onVolver === "function") {
-        onVolver();
-        return;
-      }
-      try {
-        window.dispatchEvent(new CustomEvent("mano:volver"));
-      } catch {}
-      if (typeof window !== "undefined" && window.history && window.history.length > 1) {
-        window.history.back();
-        return;
-      }
-      if (typeof window !== "undefined") window.location.assign("/");
-    },
-    [onVolver]
-  );
+  const handleVolver = useCallback((e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    if (typeof onVolver === "function") {
+      onVolver();
+      return;
+    }
+    try { window.dispatchEvent(new CustomEvent("mano:volver")); } catch {}
+    if (typeof window !== "undefined" && window.history && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    if (typeof window !== "undefined") window.location.assign("/");
+  }, [onVolver]);
 
-  /* Imagen final + flag de espejo según base explicada arriba */
-  const imgSrcFinal = (typeof imagenSrc === "string" && imagenSrc) || IMG[vista] || IMG.palmar;
+  /* Imagen final */
+  const imgSrcFinal =
+    (typeof imagenSrc === "string" && imagenSrc) ||
+    IMG[vista] ||
+    IMG.palmar;
 
   // Palmar base = izquierda → espejar si lado = derecha
   // Dorsal base = derecha   → espejar si lado = izquierda
-  const debeEspejar = (vista === "palmar" && lado === "derecha") || (vista === "dorsal" && lado === "izquierda");
+  const debeEspejar =
+    (vista === "palmar" && lado === "derecha") ||
+    (vista === "dorsal" && lado === "izquierda");
 
-  /* Puntos render (espejar cx cuando corresponde) */
+  /* Puntos render (sin invertir matemáticamente; el wrapper espeja todo) */
   const puntosRender = useMemo(
-    () =>
-      puntos.map((p) => {
-        const rawCx = p.x * 100;
-        const cx = debeEspejar ? 100 - rawCx : rawCx;
-        const cy = p.y * 100;
-        return {
-          ...p,
-          cx,
-          cy,
-          labelText: p.label || p.key || "",
-        };
-      }),
-    [puntos, debeEspejar]
+    () => puntos.map((p) => ({
+      ...p,
+      cx: p.x * 100,
+      cy: p.y * 100,
+      labelText: p.label || p.key || "",
+    })),
+    [puntos]
   );
 
   /* Guardar (suma 2 vistas) — robusto a timing */
@@ -176,7 +167,7 @@ export default function ManoMapper({
 
     // 3) Mapea flags → labels por vista
     const labelsDe = (v) => {
-      const base = MANO_PUNTOS_BY_VISTA?.[v] || [];
+      const base = (MANO_PUNTOS_BY_VISTA?.[v] || []);
       const flags = Array.isArray(persistedNow[v]) ? persistedNow[v] : [];
       const out = [];
       for (let i = 0; i < base.length; i++) {
@@ -199,7 +190,10 @@ export default function ManoMapper({
       seccionesExtra.push({ title: "Mano — Vista Dorsal", lines: resumenPorVista.dorsal });
     }
 
-    const merged = [...resumenPorVista.palmar, ...resumenPorVista.dorsal];
+    const merged = [
+      ...resumenPorVista.palmar,
+      ...resumenPorVista.dorsal,
+    ];
 
     const mano = {
       lado,
@@ -275,24 +269,7 @@ export default function ManoMapper({
         {/* Ratio 4:3 */}
         <div style={{ paddingTop: "133.333%" }} />
 
-        {/* Imagen base (espejo por CSS si corresponde) */}
-        <img
-          src={imgSrcFinal}
-          alt={`Mano ${vista} ${lado}`}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: "block",
-            transform: debeEspejar ? "scaleX(-1)" : "none",
-            transformOrigin: "center",
-          }}
-          draggable={false}
-        />
-
-        {/* Tabs de vista */}
+        {/* Tabs de vista (NO espejadas) */}
         <div
           style={{
             position: "absolute",
@@ -307,33 +284,64 @@ export default function ManoMapper({
           }}
         >
           {["palmar", "dorsal"].map((v) => (
-            <VistaChip key={v} active={vista === v} onClick={() => setVista(v)} label={VISTA_LABEL[v]} />
+            <VistaChip
+              key={v}
+              active={vista === v}
+              onClick={() => setVista(v)}
+              label={VISTA_LABEL[v]}
+            />
           ))}
         </div>
 
-        {/* Overlay de puntos */}
-        <svg
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "auto" }}
+        {/* WRAPPER espejado: imagen + svg juntos */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            transform: debeEspejar ? "scaleX(-1)" : "none",
+            transformOrigin: "center",
+          }}
         >
-          {puntosRender.map((p, i) => (
-            <Marker key={p.key || i} cx={p.cx} cy={p.cy} active={p.selected} label={p.labelText} onClick={() => handleToggle(i)} />
-          ))}
-        </svg>
+          {/* Imagen base (sin transform propio) */}
+          <img
+            src={imgSrcFinal}
+            alt={`Mano ${vista} ${lado}`}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              display: "block",
+            }}
+            draggable={false}
+          />
+
+          {/* Overlay de puntos (se espeja junto a la imagen) */}
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "auto" }}
+          >
+            {puntosRender.map((p, i) => (
+              <Marker
+                key={p.key || i}
+                cx={p.cx}
+                cy={p.cy}
+                active={p.selected}
+                label={p.labelText}
+                onClick={() => handleToggle(i)}
+              />
+            ))}
+          </svg>
+        </div>
       </div>
 
       {/* Acciones */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 10 }}>
-        <Button type="button" subtle onClick={clearSelection}>
-          Desactivar todos
-        </Button>
-        <Button type="button" onClick={handleSave}>
-          Guardar / Enviar
-        </Button>
-        <Button type="button" outline onClick={handleVolver}>
-          Volver
-        </Button>
+        <Button type="button" subtle onClick={clearSelection}>Desactivar todos</Button>
+        <Button type="button" onClick={handleSave}>Guardar / Enviar</Button>
+        <Button type="button" outline onClick={handleVolver}>Volver</Button>
       </div>
     </div>
   );
@@ -421,11 +429,7 @@ function Marker({ cx, cy, active, label, onClick }) {
     <g
       transform={`translate(${cx} ${cy})`}
       style={{ pointerEvents: "auto", cursor: "pointer" }}
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        onClick?.();
-      }}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick?.(); }}
     >
       <circle r={6.5} fill="transparent" />
       <circle
