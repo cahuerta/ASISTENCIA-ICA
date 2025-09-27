@@ -453,8 +453,10 @@ function Marker({ cx, cy, active, label, onClick }) {
             stroke="rgba(255,255,255,0.12)"
             strokeWidth="0.2"
           />
+          {/* Texto NO espejado: se corrige con transform inverso */}
           <text
-            x={tagW / 2}
+            transform="scale(-1,1)"
+            x={-tagW / 2}
             y={-tagH / 2 + 0.8}
             textAnchor="middle"
             dominantBaseline="middle"
