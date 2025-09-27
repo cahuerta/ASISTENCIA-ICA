@@ -417,7 +417,7 @@ function Button({ children, onClick, outline, subtle, type = "button" }) {
 
 /* Marcador */
 function Marker({ cx, cy, active, label, onClick }) {
-  const r = 2.9;
+  const r = 2.0;
   const textLen = Math.max(3, Math.min(30, (label || "").length));
   const padX = 2.2;
   const charW = 1.3;
