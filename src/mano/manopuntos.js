@@ -1,43 +1,72 @@
 // src/mano/manopuntos.js
 // Puntos predispuestos (x,y normalizados). SIN textos en PNG/SVG, solo pins.
-// Compatible con el esquema usado en rodilla_*: arrays por vista, lista plana y mapa key→label.
-// Vista actual: PALMAR. (Dorsal se puede completar después).
+// Patrón compatible con rodillapuntos.js: arrays por vista, lista plana y mapa key→label.
+// Nota: coordenadas pensadas para MANO DERECHA en vista ortogonal; para izquierda puedes espejar en UI.
 
 export const MANO_PUNTOS_PALMAR = [
   // Pulgar (sin yema; mantener IP y base CMC)
   { key: "pulgar_ip", x: 0.22, y: 0.42, label: "Pulgar IP" },
   { key: "pulgar_cmc", x: 0.25, y: 0.72, label: "Pulgar base CMC" },
 
-  // Índice (2): IFP, IFD
+  // Índice (2): IFP, IFD + polea A1
   { key: "indice_ifd", x: 0.38, y: 0.20, label: "Índice IFD (DIP)" },
   { key: "indice_ifp", x: 0.38, y: 0.32, label: "Índice IFP (PIP)" },
-  // A1 (solo 2–5)
-  { key: "a1_indice", x: 0.40, y: 0.62, label: "Polea A1 índice" },
+  { key: "a1_indice",  x: 0.40, y: 0.62, label: "Polea A1 índice" },
 
-  // Medio (3): IFP, IFD
+  // Medio (3): IFP, IFD + polea A1
   { key: "medio_ifd", x: 0.52, y: 0.16, label: "Medio IFD (DIP)" },
   { key: "medio_ifp", x: 0.52, y: 0.29, label: "Medio IFP (PIP)" },
-  { key: "a1_medio", x: 0.52, y: 0.60, label: "Polea A1 medio" },
+  { key: "a1_medio",  x: 0.52, y: 0.60, label: "Polea A1 medio" },
 
-  // Anular (4): IFP, IFD
+  // Anular (4): IFP, IFD + polea A1
   { key: "anular_ifd", x: 0.66, y: 0.18, label: "Anular IFD (DIP)" },
   { key: "anular_ifp", x: 0.66, y: 0.31, label: "Anular IFP (PIP)" },
-  { key: "a1_anular", x: 0.64, y: 0.62, label: "Polea A1 anular" },
+  { key: "a1_anular",  x: 0.64, y: 0.62, label: "Polea A1 anular" },
 
-  // Meñique (5): IFP, IFD
+  // Meñique (5): IFP, IFD + polea A1
   { key: "menique_ifd", x: 0.80, y: 0.22, label: "Meñique IFD (DIP)" },
   { key: "menique_ifp", x: 0.80, y: 0.34, label: "Meñique IFP (PIP)" },
-  { key: "a1_menique", x: 0.78, y: 0.64, label: "Polea A1 meñique" },
+  { key: "a1_menique",  x: 0.78, y: 0.64, label: "Polea A1 meñique" },
 
-  // Palma / Carpo (mantener, sin muñeca palmar ósea)
-  { key: "palma_tenar", x: 0.32, y: 0.66, label: "Eminencia tenar" },
+  // Palma / Carpo (mantener; SIN "muñeca palmar" ósea)
+  { key: "palma_tenar",     x: 0.32, y: 0.66, label: "Eminencia tenar" },
   { key: "palma_hipotenar", x: 0.84, y: 0.70, label: "Eminencia hipotenar" },
-  { key: "tunel_carpiano", x: 0.54, y: 0.80, label: "Túnel carpiano" },
-  { key: "canal_guyon", x: 0.90, y: 0.82, label: "Canal de Guyon" },
+  { key: "tunel_carpiano",  x: 0.54, y: 0.80, label: "Túnel carpiano" },
+  { key: "canal_guyon",     x: 0.90, y: 0.82, label: "Canal de Guyon" },
 ];
 
-// Placeholder para compatibilidad si tu componente espera ambas vistas
-export const MANO_PUNTOS_DORSAL = [];
+export const MANO_PUNTOS_DORSAL = [
+  // Pulgar (sin yema; mantener IP y base CMC)
+  { key: "pulgar_ip",  x: 0.22, y: 0.42, label: "Pulgar IP" },
+  { key: "pulgar_cmc", x: 0.25, y: 0.72, label: "Pulgar base CMC" },
+
+  // Dedos 2–5: IFP (PIP) e IFD (DIP) — sin MCP
+  { key: "indice_ifd",  x: 0.38, y: 0.20, label: "Índice IFD (DIP)" },
+  { key: "indice_ifp",  x: 0.38, y: 0.32, label: "Índice IFP (PIP)" },
+
+  { key: "medio_ifd",   x: 0.52, y: 0.16, label: "Medio IFD (DIP)" },
+  { key: "medio_ifp",   x: 0.52, y: 0.29, label: "Medio IFP (PIP)" },
+
+  { key: "anular_ifd",  x: 0.66, y: 0.18, label: "Anular IFD (DIP)" },
+  { key: "anular_ifp",  x: 0.66, y: 0.31, label: "Anular IFP (PIP)" },
+
+  { key: "menique_ifd", x: 0.80, y: 0.22, label: "Meñique IFD (DIP)" },
+  { key: "menique_ifp", x: 0.80, y: 0.34, label: "Meñique IFP (PIP)" },
+
+  // Carpo/Muñeca dorsal (landmarks y compartimentos extensores)
+  { key: "dorso_tabaquera", x: 0.30, y: 0.72, label: "Tabaquera anatómica" },
+  { key: "dorso_SL",        x: 0.55, y: 0.68, label: "Intervalo escafolunar (SL)" },
+  { key: "dorso_lister",    x: 0.50, y: 0.75, label: "Tubérculo de Lister" },
+
+  { key: "dorso_comp1",     x: 0.26, y: 0.66, label: "Compartimento 1 (APL/EPB)" },
+  { key: "dorso_comp2",     x: 0.36, y: 0.66, label: "Compartimento 2 (ECRL/ECRB)" },
+  { key: "dorso_comp4",     x: 0.58, y: 0.66, label: "Compartimento 4 (EDC/EIP)" },
+  { key: "dorso_comp5",     x: 0.72, y: 0.66, label: "Compartimento 5 (EDM)" },
+  { key: "dorso_ecu_surco", x: 0.86, y: 0.68, label: "Surco ECU (comp. 6)" },
+
+  { key: "dorso_tfcc",      x: 0.90, y: 0.74, label: "Fóvea ulnar / TFCC dorsal" },
+  { key: "dorso_boss",      x: 0.48, y: 0.60, label: "Boss carpiano (base 2.º–3.º MC)" },
+];
 
 export const MANO_PUNTOS_BY_VISTA = {
   palmar: MANO_PUNTOS_PALMAR,
