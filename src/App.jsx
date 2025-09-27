@@ -14,8 +14,9 @@ import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import IAModulo from "./modules/IAModulo.jsx";
 import TraumaModulo from "./modules/TraumaModulo.jsx";
 
-/* >>> NUEVO: módulo de rodilla (PNG + SVG) */
-import RodillaMapper from "./rodilla/rodilla.jsx";
+/* Host genérico de mapeadores (rodilla, mano, etc.) */
+import GenericMapper from "./mappers/GenericMapper.jsx";
+import { hasMapper, resolveZonaKey } from "./mappers/mapperRegistry.js";
 
 /* Utilidades existentes */
 import AvisoLegal from "./components/AvisoLegal.jsx";
@@ -56,8 +57,9 @@ function App() {
   // Vista esquema (frontal/posterior)
   const [vista, setVista] = useState("anterior");
 
-  // >>> NUEVO: control del modal RodillaMapper
-  const [mostrarRodilla, setMostrarRodilla] = useState(false);
+  // Modal genérico de mapeadores (rodilla, mano, etc.)
+  const [mostrarMapper, setMostrarMapper] = useState(false);
+  const [mapperId, setMapperId] = useState(null); // "rodilla" | "mano" | ...
 
   // ====== Flags persistentes (por módulo: preop / generales) ======
   const avisoOkRef = useRef({ preop: false, generales: false });
@@ -503,9 +505,11 @@ function App() {
       return next;
     });
 
-    // >>> Abrir RodillaMapper solo en Trauma o IA
-    if ((modulo === "trauma" || modulo === "ia") && dolor === "Rodilla") {
-      setMostrarRodilla(true);
+    // >>> Abrir mapper genérico si existe para la zona (en Trauma o IA)
+    const key = resolveZonaKey(dolor);
+    if ((modulo === "trauma" || modulo === "ia") && key && hasMapper(key)) {
+      setMapperId(key);
+      setMostrarMapper(true);
     }
   };
 
@@ -632,7 +636,7 @@ function App() {
     setPendingPreview(false);
     setShowReso(false);
     setResolverReso(null);
-    setMostrarRodilla(false);
+    setMostrarMapper(false);         // <— cerrar modal genérico
     setMostrarComorbilidades(false);
 
     // 2) Limpiar datos de previews para evitar “restauraciones” cruzadas
@@ -730,22 +734,26 @@ function App() {
                   {datosPaciente.dolor}
                   {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
                 </strong>
-                {datosPaciente.dolor === "Rodilla" && (modulo === "trauma" || modulo === "ia") && (
-                  <button
-                    type="button"
-                    onClick={() => setMostrarRodilla(true)}
-                    style={{
-                      marginLeft: 8,
-                      padding: "4px 8px",
-                      border: `1px solid ${T.border}`,
-                      borderRadius: 6,
-                      background: T.surface,
-                      cursor: "pointer",
-                    }}
-                  >
-                    Marcar puntos
-                  </button>
-                )}
+                {hasMapper(resolveZonaKey(datosPaciente?.dolor)) &&
+                  (modulo === "trauma" || modulo === "ia") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const k = resolveZonaKey(datosPaciente?.dolor);
+                        if (k && hasMapper(k)) { setMapperId(k); setMostrarMapper(true); }
+                      }}
+                      style={{
+                        marginLeft: 8,
+                        padding: "4px 8px",
+                        border: `1px solid ${T.border}`,
+                        borderRadius: 6,
+                        background: T.surface,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Marcar puntos
+                    </button>
+                  )}
               </>
             ) : (
               "Seleccione una zona en el esquema"
@@ -813,15 +821,27 @@ function App() {
         </div>
       )}
 
-      {/* ===== Modal Rodilla (PNG+SVG) ===== */}
-      {(modulo === "trauma" || modulo === "ia") && mostrarRodilla && (
+      {/* ===== Modal Genérico de Mapeo (PNG+SVG) ===== */}
+      {(modulo === "trauma" || modulo === "ia") && mostrarMapper && (
         <div style={styles.modalOverlay}>
           <div style={{ width: "min(900px, 96vw)" }}>
-            <RodillaMapper
-              ladoInicial={(datosPaciente?.lado || "").toLowerCase().includes("izq") ? "izquierda" : "derecha"}
-              vistaInicial={vista} // "anterior" | "posterior" (RodillaMapper convierte "anterior" → "frente")
-              onSave={() => setMostrarRodilla(false)} // guarda en sessionStorage dentro del componente
-              onClose={() => setMostrarRodilla(false)}
+            <GenericMapper
+              mapperId={mapperId}
+              ladoInicial={(datosPaciente?.lado || "")
+                .toLowerCase()
+                .includes("izq")
+                ? "izquierda"
+                : "derecha"}
+              /* Vista inicial:
+                 - Para Rodilla: "anterior"/"posterior" se usa tal cual (el componente normaliza).
+                 - Para Mano: usamos "palmar"/"dorsal" según la pestaña global. */
+              vistaInicial={
+                mapperId === "mano"
+                  ? (vista === "anterior" ? "palmar" : "dorsal")
+                  : vista
+              }
+              onSave={() => setMostrarMapper(false)}  // guarda en sessionStorage dentro del componente
+              onClose={() => setMostrarMapper(false)}
             />
           </div>
         </div>
