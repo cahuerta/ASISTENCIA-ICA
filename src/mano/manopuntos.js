@@ -11,22 +11,22 @@ export const MANO_PUNTOS_PALMAR = [
   // Índice (2): IFP, IFD + polea A1
   { key: "indice_ifd", x: 0.38, y: 0.20, label: "Índice IFD (DIP)" },
   { key: "indice_ifp", x: 0.38, y: 0.32, label: "Índice IFP (PIP)" },
-  { key: "a1_indice",  x: 0.40, y: 0.40, label: "Polea A1 índice" },
+  { key: "a1_indice",  x: 0.40, y: 0.43, label: "Polea A1 índice" },
 
   // Medio (3): IFP, IFD + polea A1
   { key: "medio_ifd", x: 0.52, y: 0.16, label: "Medio IFD (DIP)" },
   { key: "medio_ifp", x: 0.52, y: 0.29, label: "Medio IFP (PIP)" },
-  { key: "a1_medio",  x: 0.52, y: 0.35, label: "Polea A1 medio" },
+  { key: "a1_medio",  x: 0.50, y: 0.40, label: "Polea A1 medio" },
 
   // Anular (4): IFP, IFD + polea A1
   { key: "anular_ifd", x: 0.66, y: 0.18, label: "Anular IFD (DIP)" },
   { key: "anular_ifp", x: 0.66, y: 0.31, label: "Anular IFP (PIP)" },
-  { key: "a1_anular",  x: 0.64, y: 0.35, label: "Polea A1 anular" },
+  { key: "a1_anular",  x: 0.61, y: 0.40, label: "Polea A1 anular" },
 
   // Meñique (5): IFP, IFD + polea A1
   { key: "menique_ifd", x: 0.80, y: 0.22, label: "Meñique IFD (DIP)" },
   { key: "menique_ifp", x: 0.80, y: 0.34, label: "Meñique IFP (PIP)" },
-  { key: "a1_menique",  x: 0.70, y: 0.40, label: "Polea A1 meñique" },
+  { key: "a1_menique",  x: 0.70, y: 0.42, label: "Polea A1 meñique" },
 
   // Palma / Carpo (mantener; SIN "muñeca palmar" ósea)
   { key: "palma_tenar",     x: 0.35, y: 0.70, label: "Eminencia tenar" },
