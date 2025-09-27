@@ -31,7 +31,7 @@ export const MANO_PUNTOS_PALMAR = [
   // Palma / Carpo (mantener; SIN "muñeca palmar" ósea)
   { key: "palma_tenar",     x: 0.32, y: 0.66, label: "Eminencia tenar" },
   { key: "palma_hipotenar", x: 0.84, y: 0.70, label: "Eminencia hipotenar" },
-  { key: "tunel_carpiano",  x: 0.54, y: 0.80, label: "Túnel carpiano" },
+  { key: "tunel_carpiano",  x: 0.60, y: 0.75, label: "Túnel carpiano" },
   { key: "canal_guyon",     x: 0.90, y: 0.82, label: "Canal de Guyon" },
 ];
 
