@@ -6,33 +6,33 @@
 export const MANO_PUNTOS_PALMAR = [
   // Pulgar (sin yema; mantener IP y base CMC)
   { key: "pulgar_ip", x: 0.22, y: 0.42, label: "Pulgar IP" },
-  { key: "pulgar_cmc", x: 0.25, y: 0.72, label: "Pulgar base CMC" },
+  { key: "pulgar_cmc", x: 0.25, y: 0.60, label: "Pulgar base CMC" },
 
   // Índice (2): IFP, IFD + polea A1
   { key: "indice_ifd", x: 0.38, y: 0.20, label: "Índice IFD (DIP)" },
   { key: "indice_ifp", x: 0.38, y: 0.32, label: "Índice IFP (PIP)" },
-  { key: "a1_indice",  x: 0.40, y: 0.62, label: "Polea A1 índice" },
+  { key: "a1_indice",  x: 0.40, y: 0.50, label: "Polea A1 índice" },
 
   // Medio (3): IFP, IFD + polea A1
   { key: "medio_ifd", x: 0.52, y: 0.16, label: "Medio IFD (DIP)" },
   { key: "medio_ifp", x: 0.52, y: 0.29, label: "Medio IFP (PIP)" },
-  { key: "a1_medio",  x: 0.52, y: 0.60, label: "Polea A1 medio" },
+  { key: "a1_medio",  x: 0.52, y: 0.50, label: "Polea A1 medio" },
 
   // Anular (4): IFP, IFD + polea A1
   { key: "anular_ifd", x: 0.66, y: 0.18, label: "Anular IFD (DIP)" },
   { key: "anular_ifp", x: 0.66, y: 0.31, label: "Anular IFP (PIP)" },
-  { key: "a1_anular",  x: 0.64, y: 0.62, label: "Polea A1 anular" },
+  { key: "a1_anular",  x: 0.64, y: 0.50, label: "Polea A1 anular" },
 
   // Meñique (5): IFP, IFD + polea A1
   { key: "menique_ifd", x: 0.80, y: 0.22, label: "Meñique IFD (DIP)" },
   { key: "menique_ifp", x: 0.80, y: 0.34, label: "Meñique IFP (PIP)" },
-  { key: "a1_menique",  x: 0.78, y: 0.64, label: "Polea A1 meñique" },
+  { key: "a1_menique",  x: 0.78, y: 0.50, label: "Polea A1 meñique" },
 
   // Palma / Carpo (mantener; SIN "muñeca palmar" ósea)
   { key: "palma_tenar",     x: 0.32, y: 0.66, label: "Eminencia tenar" },
-  { key: "palma_hipotenar", x: 0.84, y: 0.70, label: "Eminencia hipotenar" },
-  { key: "tunel_carpiano",  x: 0.60, y: 0.75, label: "Túnel carpiano" },
-  { key: "canal_guyon",     x: 0.90, y: 0.82, label: "Canal de Guyon" },
+  { key: "palma_hipotenar", x: 0.60, y: 0.65, label: "Eminencia hipotenar" },
+  { key: "tunel_carpiano",  x: 0.45, y: 0.75, label: "Túnel carpiano" },
+  { key: "canal_guyon",     x: 0.65, y: 0.75, label: "Canal de Guyon" },
 ];
 
 export const MANO_PUNTOS_DORSAL = [
