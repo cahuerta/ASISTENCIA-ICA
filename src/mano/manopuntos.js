@@ -6,7 +6,7 @@
 export const MANO_PUNTOS_PALMAR = [
   // Pulgar (sin yema; mantener IP y base CMC)
   { key: "pulgar_ip", x: 0.18, y: 0.38, label: "Pulgar IP" },
-  { key: "pulgar_cmc", x: 0.29, y: 0.60, label: "Pulgar base CMC" },
+  { key: "pulgar_cmc", x: 0.30, y: 0.63, label: "Pulgar base CMC" },
 
   // Índice (2): IFP, IFD + polea A1
   { key: "indice_ifd", x: 0.36, y: 0.13, label: "Índice IFD (DIP)" },
@@ -26,10 +26,10 @@ export const MANO_PUNTOS_PALMAR = [
   // Meñique (5): IFP, IFD + polea A1
   { key: "menique_ifd", x: 0.77, y: 0.24, label: "Meñique IFD (DIP)" },
   { key: "menique_ifp", x: 0.75, y: 0.31, label: "Meñique IFP (PIP)" },
-  { key: "a1_menique",  x: 0.70, y: 0.44, label: "Polea A1 meñique" },
+  { key: "a1_menique",  x: 0.70, y: 0.45, label: "Polea A1 meñique" },
 
   // Palma / Carpo (mantener; SIN "muñeca palmar" ósea)
-  { key: "palma_tenar",     x: 0.38, y: 0.60, label: "Eminencia tenar" },
+  { key: "palma_tenar",     x: 0.40, y: 0.62, label: "Eminencia tenar" },
   { key: "palma_hipotenar", x: 0.60, y: 0.65, label: "Eminencia hipotenar" },
   { key: "tunel_carpiano",  x: 0.48, y: 0.75, label: "Túnel carpiano" },
   { key: "canal_guyon",     x: 0.62, y: 0.78, label: "Canal de Guyon" },
