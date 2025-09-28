@@ -38,7 +38,6 @@ export const MANO_PUNTOS_PALMAR = [
 export const MANO_PUNTOS_DORSAL = [
   // Pulgar (sin yema; mantener IP y base CMC)
   { key: "pulgar_ip",  x: 0.18, y: 0.42, label: "Pulgar IP" },
-  { key: "pulgar_cmc", x: 0.23, y: 0.72, label: "Pulgar base CMC" },
 
   // Dedos 2–5: IFP (PIP) e IFD (DIP) — sin MCP
   { key: "indice_ifd",  x: 0.35, y: 0.14, label: "Índice IFD (DIP)" },
@@ -54,12 +53,12 @@ export const MANO_PUNTOS_DORSAL = [
   { key: "menique_ifp", x: 0.77, y: 0.32, label: "Meñique IFP (PIP)" },
 
   // Carpo/Muñeca dorsal (landmarks y compartimentos extensores)
-  { key: "dorso_tabaquera", x: 0.30, y: 0.72, label: "Tabaquera anatómica" },
+  { key: "dorso_tabaquera", x: 0.30, y: 0.69, label: "Tabaquera anatómica" },
   { key: "dorso_SL",        x: 0.55, y: 0.68, label: "Intervalo escafolunar (SL)" },
   { key: "dorso_lister",    x: 0.50, y: 0.75, label: "Tubérculo de Lister" },
 
-  { key: "dorso_comp1",     x: 0.35, y: 0.70, label: "Compartimento 1 (APL/EPB)" },
-  { key: "dorso_comp2",     x: 0.40, y: 0.66, label: "Compartimento 2 (ECRL/ECRB)" },
+  { key: "dorso_comp1",     x: 0.38, y: 0.73, label: "Compartimento 1 (APL/EPB)" },
+  { key: "dorso_comp2",     x: 0.40, y: 0.70, label: "Compartimento 2 (ECRL/ECRB)" },
   { key: "dorso_ecu_surco", x: 0.86, y: 0.68, label: "Surco ECU (comp. 6)" },
 
   { key: "dorso_tfcc",      x: 0.90, y: 0.74, label: "Fóvea ulnar / TFCC dorsal" },
