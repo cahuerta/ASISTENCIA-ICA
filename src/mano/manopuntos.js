@@ -37,21 +37,21 @@ export const MANO_PUNTOS_PALMAR = [
 
 export const MANO_PUNTOS_DORSAL = [
   // Pulgar (sin yema; mantener IP y base CMC)
-  { key: "pulgar_ip",  x: 0.22, y: 0.42, label: "Pulgar IP" },
-  { key: "pulgar_cmc", x: 0.25, y: 0.72, label: "Pulgar base CMC" },
+  { key: "pulgar_ip",  x: 0.20, y: 0.42, label: "Pulgar IP" },
+  { key: "pulgar_cmc", x: 0.23, y: 0.72, label: "Pulgar base CMC" },
 
   // Dedos 2–5: IFP (PIP) e IFD (DIP) — sin MCP
-  { key: "indice_ifd",  x: 0.38, y: 0.20, label: "Índice IFD (DIP)" },
-  { key: "indice_ifp",  x: 0.38, y: 0.32, label: "Índice IFP (PIP)" },
+  { key: "indice_ifd",  x: 0.36, y: 0.20, label: "Índice IFD (DIP)" },
+  { key: "indice_ifp",  x: 0.36, y: 0.32, label: "Índice IFP (PIP)" },
 
-  { key: "medio_ifd",   x: 0.52, y: 0.16, label: "Medio IFD (DIP)" },
-  { key: "medio_ifp",   x: 0.52, y: 0.29, label: "Medio IFP (PIP)" },
+  { key: "medio_ifd",   x: 0.50, y: 0.16, label: "Medio IFD (DIP)" },
+  { key: "medio_ifp",   x: 0.50, y: 0.29, label: "Medio IFP (PIP)" },
 
-  { key: "anular_ifd",  x: 0.66, y: 0.18, label: "Anular IFD (DIP)" },
-  { key: "anular_ifp",  x: 0.66, y: 0.31, label: "Anular IFP (PIP)" },
+  { key: "anular_ifd",  x: 0.64, y: 0.18, label: "Anular IFD (DIP)" },
+  { key: "anular_ifp",  x: 0.64, y: 0.31, label: "Anular IFP (PIP)" },
 
-  { key: "menique_ifd", x: 0.80, y: 0.22, label: "Meñique IFD (DIP)" },
-  { key: "menique_ifp", x: 0.80, y: 0.34, label: "Meñique IFP (PIP)" },
+  { key: "menique_ifd", x: 0.78, y: 0.22, label: "Meñique IFD (DIP)" },
+  { key: "menique_ifp", x: 0.78, y: 0.34, label: "Meñique IFP (PIP)" },
 
   // Carpo/Muñeca dorsal (landmarks y compartimentos extensores)
   { key: "dorso_tabaquera", x: 0.30, y: 0.72, label: "Tabaquera anatómica" },
