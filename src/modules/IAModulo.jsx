@@ -1,6 +1,6 @@
 // src/modules/IAModulo.jsx
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 import FormularioResonancia from "../components/FormularioResonancia.jsx"; // ← NUEVO
@@ -45,6 +45,95 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
   });
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /* ========= Helpers de mapeadores (zonas) ========= */
+  const zonasSoportadas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
+  const capitalizar = (s = "") => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
+
+  // Lee y arma un resumen visible para UI por zona (flatten, único)
+  const leerResumenZona = useCallback((zona) => {
+    try {
+      const data = JSON.parse(sessionStorage.getItem(`${zona}_data`) || "null"); // { lado, puntosSeleccionados, porVista, ... }
+      const lado = data?.lado || datos?.lado || "";
+      const extra = JSON.parse(sessionStorage.getItem(`${zona}_seccionesExtra`) || "null"); // [{title,lines}]
+      let lines = [];
+      if (Array.isArray(extra)) {
+        for (const sec of extra) {
+          if (Array.isArray(sec?.lines)) lines.push(...sec.lines);
+        }
+      }
+      if (!lines.length && Array.isArray(data?.puntosSeleccionados)) {
+        lines = data.puntosSeleccionados;
+      }
+      if (!lines.length) {
+        // Intento final con *_resumen_{izquierda|derecha}
+        const ladoLow = (lado || "").toLowerCase();
+        const ladoKey = ladoLow.includes("izq") ? "izquierda" : (ladoLow.includes("der") ? "derecha" : "");
+        if (ladoKey) {
+          const resumen = JSON.parse(sessionStorage.getItem(`${zona}_resumen_${ladoKey}`) || "null");
+          if (resumen && typeof resumen === "object") {
+            Object.values(resumen).forEach((arr) => {
+              if (Array.isArray(arr)) lines.push(...arr);
+            });
+          }
+        }
+      }
+      lines = Array.from(new Set(lines));
+      if (!lines.length) return null;
+      const ladoTxt = lado ? ` — ${capitalizar(lado)}` : "";
+      return { zona, title: `${capitalizar(zona)}${ladoTxt} — puntos marcados`, lines, lado };
+    } catch {
+      return null;
+    }
+  }, [datos?.lado]);
+
+  // Construye payload general de marcadores para backend
+  const construirMarcadores = useCallback(() => {
+    const marcadores = {};
+    const porCompat = {};
+    zonasSoportadas.forEach((z) => {
+      try {
+        const data = JSON.parse(sessionStorage.getItem(`${z}_data`) || "null");
+        const extra = JSON.parse(sessionStorage.getItem(`${z}_seccionesExtra`) || "null");
+        const lado = data?.lado || "";
+        // Objeto compacto porZona
+        if (data && (Array.isArray(data.puntosSeleccionados) || data.porVista)) {
+          marcadores[z] = {
+            lado: data.lado || "",
+            porVista: data.porVista || null,
+            puntosSeleccionados: data.puntosSeleccionados || [],
+            count: data.count ?? (data.puntosSeleccionados?.length || 0),
+            seccionesExtra: Array.isArray(extra) ? extra : undefined,
+          };
+        } else {
+          // fallback a *_resumen_{lado}
+          const ladoLow = (lado || datos?.lado || "").toLowerCase();
+          const ladoKey = ladoLow.includes("izq") ? "izquierda" : (ladoLow.includes("der") ? "derecha" : "");
+          if (ladoKey) {
+            const resumen = JSON.parse(sessionStorage.getItem(`${z}_resumen_${ladoKey}`) || "null");
+            if (resumen && typeof resumen === "object") {
+              marcadores[z] = { lado: ladoKey, porVista: resumen };
+            }
+          }
+        }
+        // Compat: zMarcadores plano (porVista si existe)
+        if (marcadores[z]?.porVista) {
+          porCompat[`${z}Marcadores`] = marcadores[z].porVista;
+        }
+      } catch {}
+    });
+    return { marcadores, ...porCompat };
+  }, [datos?.lado]);
+
+  // Secciones visibles en el preview (todas las zonas con contenido)
+  const seccionesZonas = useMemo(() => {
+    const out = [];
+    for (const z of zonasSoportadas) {
+      const sec = leerResumenZona(z);
+      if (sec && Array.isArray(sec.lines) && sec.lines.length) out.push(sec);
+    }
+    return out;
+  }, [leerResumenZona, previewIA, resonanciaChecklist, showRM]);
 
   // ===== Montaje: sincroniza datos y detecta retorno de pago
   useEffect(() => {
@@ -209,6 +298,26 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
         setResonanciaResumenTexto("");
         setOrdenAlternativa("");
       } catch {}
+
+      // 💾 Guardar también los marcadores seleccionados (todas las zonas)
+      try {
+        const { marcadores, rodillaMarcadores, manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores } =
+          construirMarcadores();
+        await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            idPago,
+            datosPaciente: { ...datos, edad: edadNum },
+            marcadores,
+            rodillaMarcadores,
+            manoMarcadores,
+            hombroMarcadores,
+            codoMarcadores,
+            tobilloMarcadores,
+          }),
+        });
+      } catch {}
     } catch (err) {
       console.error("Preview IA error:", err);
       alert("Error al generar el preview de IA.");
@@ -327,6 +436,26 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
       sessionStorage.setItem("modulo", "ia");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify(base));
 
+      // 💾 Persistir marcadores también antes de ir a pago
+      try {
+        const { marcadores, rodillaMarcadores, manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores } =
+          construirMarcadores();
+        await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            idPago,
+            datosPaciente: base,
+            marcadores,
+            rodillaMarcadores,
+            manoMarcadores,
+            hombroMarcadores,
+            codoMarcadores,
+            tobilloMarcadores,
+          }),
+        });
+      } catch {}
+
       await irAPagoKhipu({ ...base, edad: edadNum }, { idPago, modulo: "ia" });
     } catch (err) {
       console.error("No se pudo generar el link de pago (IA):", err);
@@ -360,6 +489,23 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
           genero: datos.genero,
           dolor: datos.dolor,
           lado: datos.lado,
+        }),
+      });
+      // y guarda marcadores actuales
+      const { marcadores, rodillaMarcadores, manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores } =
+        construirMarcadores();
+      await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idPago,
+          datosPaciente: { ...datos, edad: edadNum },
+          marcadores,
+          rodillaMarcadores,
+          manoMarcadores,
+          hombroMarcadores,
+          codoMarcadores,
+          tobilloMarcadores,
         }),
       });
     } catch {}
@@ -450,6 +596,26 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
                 lado: datosReinyectar?.lado,
               }),
             });
+
+            // 💾 reenviar marcadores
+            try {
+              const { marcadores, rodillaMarcadores, manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores } =
+                construirMarcadores();
+              await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  idPago: id,
+                  datosPaciente: datosReinyectar,
+                  marcadores,
+                  rodillaMarcadores,
+                  manoMarcadores,
+                  hombroMarcadores,
+                  codoMarcadores,
+                  tobilloMarcadores,
+                }),
+              });
+            } catch {}
 
             // marcar pago confirmado nuevamente
             await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
@@ -557,6 +723,26 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
               }),
             });
 
+            // 💾 reenviar marcadores
+            try {
+              const { marcadores, rodillaMarcadores, manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores } =
+                construirMarcadores();
+              await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  idPago: id,
+                  datosPaciente: datosReinyectar,
+                  marcadores,
+                  rodillaMarcadores,
+                  manoMarcadores,
+                  hombroMarcadores,
+                  codoMarcadores,
+                  tobilloMarcadores,
+                }),
+              });
+            } catch {}
+
             await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -630,6 +816,22 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
           </label>
         </div>
       </div>
+
+      {/* Puntos marcados de mapeadores (todas las zonas con contenido) */}
+      {seccionesZonas.length > 0 && (
+        <div style={S.block}>
+          {seccionesZonas.map((sec, idx) => (
+            <div key={`${sec.zona}-${idx}`} style={{ marginBottom: 8 }}>
+              <strong>{sec.title}</strong>
+              <ul style={{ marginTop: 6 }}>
+                {sec.lines.map((l, i) => (
+                  <li key={`${sec.zona}-${i}`}>{l}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Consulta Libre */}
       <div>
@@ -819,6 +1021,7 @@ function makeStyles(T) {
       border: `1px solid ${T.border ?? "#e8e8e8"}`,
       color: T.text ?? "#1b1b1b",
     },
+    block: { marginTop: 12 },
     hint: { marginTop: 10, fontStyle: "italic", color: T.textMuted ?? "#666" },
 
     // Modal simple
