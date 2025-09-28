@@ -5,7 +5,7 @@
 
 export const MANO_PUNTOS_PALMAR = [
   // Pulgar (sin yema; mantener IP y base CMC)
-  { key: "pulgar_ip", x: 0.18, y: 0.39, label: "Pulgar IP" },
+  { key: "pulgar_ip", x: 0.18, y: 0.40, label: "Pulgar IP" },
   { key: "pulgar_cmc", x: 0.30, y: 0.63, label: "Pulgar base CMC" },
 
   // Índice (2): IFP, IFD + polea A1
