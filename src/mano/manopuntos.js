@@ -9,18 +9,18 @@ export const MANO_PUNTOS_PALMAR = [
   { key: "pulgar_cmc", x: 0.25, y: 0.60, label: "Pulgar base CMC" },
 
   // Índice (2): IFP, IFD + polea A1
-  { key: "indice_ifd", x: 0.35, y: 0.12, label: "Índice IFD (DIP)" },
+  { key: "indice_ifd", x: 0.36, y: 0.13, label: "Índice IFD (DIP)" },
   { key: "indice_ifp", x: 0.36, y: 0.22, label: "Índice IFP (PIP)" },
   { key: "a1_indice",  x: 0.40, y: 0.43, label: "Polea A1 índice" },
 
   // Medio (3): IFP, IFD + polea A1
-  { key: "medio_ifd", x: 0.52, y: 0.08, label: "Medio IFD (DIP)" },
+  { key: "medio_ifd", x: 0.50, y: 0.10, label: "Medio IFD (DIP)" },
   { key: "medio_ifp", x: 0.50, y: 0.20, label: "Medio IFP (PIP)" },
   { key: "a1_medio",  x: 0.50, y: 0.40, label: "Polea A1 medio" },
 
   // Anular (4): IFP, IFD + polea A1
-  { key: "anular_ifd", x: 0.66, y: 0.18, label: "Anular IFD (DIP)" },
-  { key: "anular_ifp", x: 0.66, y: 0.31, label: "Anular IFP (PIP)" },
+  { key: "anular_ifd", x: 0.60, y: 0.12, label: "Anular IFD (DIP)" },
+  { key: "anular_ifp", x: 0.66, y: 0.22, label: "Anular IFP (PIP)" },
   { key: "a1_anular",  x: 0.61, y: 0.40, label: "Polea A1 anular" },
 
   // Meñique (5): IFP, IFD + polea A1
