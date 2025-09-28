@@ -137,7 +137,7 @@ export default function HombroMapper({
   /* Imagen final */
   const imgSrcFinal = (typeof imagenSrc === "string" && imagenSrc) || IMG[vista] || IMG.frontal;
 
-  // Reglas de espejo según base de cada vista (ver comentarios arriba):
+  // Espejo según base:
   // - FRONTAL base = derecha → espejar si lado = izquierda
   // - POSTERIOR base = izquierda → espejar si lado = derecha
   const debeEspejar =
@@ -158,17 +158,13 @@ export default function HombroMapper({
 
   /* Guardar (suma 2 vistas) — robusto a timing */
   const handleSave = () => {
-    // 1) Tomamos lo persistido
     const persisted = loadPersisted(lado) || { frontal: [], posterior: [] };
-
-    // 2) Inyectamos la vista ACTUAL
     const persistedNow = {
       frontal: Array.isArray(persisted.frontal) ? [...persisted.frontal] : [],
       posterior: Array.isArray(persisted.posterior) ? [...persisted.posterior] : [],
     };
     persistedNow[vista] = puntos.map((p) => !!p.selected);
 
-    // 3) Flags → labels por vista
     const labelsDe = (v) => {
       const base = HOMBRO_PUNTOS_BY_VISTA?.[v] || [];
       const flags = Array.isArray(persistedNow[v]) ? persistedNow[v] : [];
@@ -177,7 +173,6 @@ export default function HombroMapper({
       return out;
     };
 
-    // 4) Resumen
     const resumenPorVista = {
       frontal: labelsDe("frontal"),
       posterior: labelsDe("posterior"),
@@ -220,7 +215,7 @@ export default function HombroMapper({
     onSave?.(r);
   };
 
-  /* === Tamaño (igual a rodilla/mano; más compacto en alto) === */
+  /* === Tamaño (idéntico a mano/rodilla) === */
   const WRAP_MAX_W = 480;
 
   return (
@@ -252,7 +247,7 @@ export default function HombroMapper({
         </span>
       </div>
 
-      {/* Contenedor con proporción 4:3 (apaisado como los otros) */}
+      {/* Contenedor 4:3 */}
       <div
         style={{
           position: "relative",
@@ -261,9 +256,11 @@ export default function HombroMapper({
           overflow: "hidden",
           boxShadow: T?.shadowMd || "0 8px 24px rgba(0,0,0,0.15)",
           background: T?.bg || "#f2f2f2",
-          aspectRatio: "4 / 3", // ← ajusta el alto (más compacto)
         }}
       >
+        {/* Ratio 4:3 (igual a mano/rodilla) */}
+        <div style={{ paddingTop: "133.333%" }} />
+
         {/* Tabs de vista */}
         <div
           style={{
