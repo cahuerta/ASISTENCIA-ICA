@@ -54,7 +54,7 @@ export const MANO_PUNTOS_DORSAL = [
 
   // Carpo/Muñeca dorsal (landmarks y compartimentos extensores)
   { key: "dorso_tabaquera", x: 0.30, y: 0.67, label: "Tabaquera anatómica" },
-  { key: "dorso_SL",        x: 0.55, y: 0.68, label: "Intervalo escafolunar (SL)" },
+  { key: "dorso_SL",        x: 0.50, y: 0.73, label: "Intervalo escafolunar (SL)" },
   { key: "dorso_lister",    x: 0.45, y: 0.80, label: "Tubérculo de Lister" },
 
   { key: "dorso_comp1",     x: 0.36, y: 0.73, label: "Compartimento 1 (APL/EPB)" },
@@ -62,7 +62,7 @@ export const MANO_PUNTOS_DORSAL = [
   { key: "dorso_ecu_surco", x: 0.65, y: 0.82, label: "Surco ECU (comp. 6)" },
 
   { key: "dorso_tfcc",      x: 0.67, y: 0.74, label: "Fóvea ulnar / TFCC dorsal" },
-  { key: "dorso_boss",      x: 0.48, y: 0.60, label: "Boss carpiano (base 2.º–3.º MC)" },
+  { key: "dorso_boss",      x: 0.51, y: 0.61, label: "Boss carpiano (base 2.º–3.º MC)" },
 ];
 
 export const MANO_PUNTOS_BY_VISTA = {
