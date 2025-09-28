@@ -112,6 +112,15 @@ export default function ManoMapper({
       sessionStorage.removeItem(`mano_resumen_${lado}`);
       sessionStorage.removeItem("mano_seccionesExtra");
       sessionStorage.removeItem("mano_data");
+
+      // Limpia compatibilidad y global
+      sessionStorage.removeItem("manoMarcadores");
+      const raw = sessionStorage.getItem("marcadores");
+      const global = raw ? JSON.parse(raw) : {};
+      if (global && global.mano) {
+        global.mano = { palmar: [], dorsal: [] };
+        sessionStorage.setItem("marcadores", JSON.stringify(global));
+      }
     } catch {}
   }, [lado, setPuntos]);
 
@@ -187,6 +196,26 @@ export default function ManoMapper({
       palmar: labelsDe("palmar"),
       dorsal: labelsDe("dorsal"),
     };
+
+    // === NUEVO: persistencias que leen preview y backend ===
+    try {
+      // Legacy por región
+      sessionStorage.setItem(
+        "manoMarcadores",
+        JSON.stringify({
+          palmar: resumenPorVista.palmar,
+          dorsal: resumenPorVista.dorsal,
+        })
+      );
+      // Contenedor global "marcadores"
+      const raw = sessionStorage.getItem("marcadores");
+      const global = raw ? JSON.parse(raw) : {};
+      global.mano = {
+        palmar: resumenPorVista.palmar,
+        dorsal: resumenPorVista.dorsal,
+      };
+      sessionStorage.setItem("marcadores", JSON.stringify(global));
+    } catch {}
 
     const seccionesExtra = [];
     if (resumenPorVista.palmar.length) {
