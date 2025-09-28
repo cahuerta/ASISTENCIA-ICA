@@ -49,7 +49,8 @@ export const HOMBRO_PUNTOS_POSTERIOR = [
    Por cada vista
    ============== */
 export const HOMBRO_PUNTOS_BY_VISTA = {
-  anterior: HOMBRO_PUNTOS_ANTERIOR,
+  anterior:  HOMBRO_PUNTOS_ANTERIOR,
+  frontal:   HOMBRO_PUNTOS_ANTERIOR, // alias para compatibilidad con hombro.jsx
   posterior: HOMBRO_PUNTOS_POSTERIOR,
 };
 
