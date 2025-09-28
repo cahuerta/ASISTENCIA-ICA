@@ -51,6 +51,60 @@ function isResonanciaTexto(t = "") {
   return regexes.some((re) => re.test(t));
 }
 
+/* === Lee y arma las secciones de puntos desde sessionStorage para cualquier zona === */
+function leerSecciones(zonaKey, ladoFallback = "") {
+  // 1) Preferir *_seccionesExtra (tal como guardan Mano/Hombro/Rodilla nuevos)
+  try {
+    const rawExtra = sessionStorage.getItem(`${zonaKey}_seccionesExtra`);
+    if (rawExtra) {
+      const arr = JSON.parse(rawExtra);
+      if (Array.isArray(arr) && arr.length) {
+        return arr
+          .filter((sec) => Array.isArray(sec?.lines) && sec.lines.length)
+          .map((sec) => ({
+            title: sec.title || `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${ladoFallback} — puntos marcados`,
+            lines: sec.lines,
+          }));
+      }
+    }
+  } catch {}
+
+  // 2) Fallback a *_data → puntosSeleccionados
+  try {
+    const rawData = sessionStorage.getItem(`${zonaKey}_data`);
+    if (rawData) {
+      const d = JSON.parse(rawData);
+      const lines = Array.isArray(d?.puntosSeleccionados) ? d.puntosSeleccionados : [];
+      if (lines.length) {
+        const lado = d?.lado || ladoFallback || "";
+        return [
+          {
+            title: `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${lado} — puntos marcados`,
+            lines,
+          },
+        ];
+      }
+    }
+  } catch {}
+
+  // 3) Nada
+  return [];
+}
+
+/* === Carga los "resumenes" por zona para enviar al backend ==================== */
+function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
+  const lado = (ladoTexto || "").toLowerCase();
+  const side =
+    lado.includes("izquierda") ? "izquierda" : lado.includes("derecha") ? "derecha" : "";
+  if (!side) return null;
+  try {
+    const raw = sessionStorage.getItem(`${zonaKey}_resumen_${side}`);
+    return raw ? JSON.parse(raw) : null; // {palmar:[], dorsal:[]} o {frontal:[], posterior:[]} etc.
+  } catch {
+    return null;
+  }
+}
+
 /* ================= Componente ================= */
 export default function TraumaModulo({
   initialDatos,
@@ -139,32 +193,16 @@ export default function TraumaModulo({
     };
   }, []);
 
-  /* -------- Sección de rodilla para el preview inicial (compatible) -------- */
-  const seccionRodilla = useMemo(() => {
-    try {
-      // 1) Preferir lo que guarda el componente: "rodilla_seccionesExtra"
-      const rawExtra = sessionStorage.getItem("rodilla_seccionesExtra");
-      if (rawExtra) {
-        const arr = JSON.parse(rawExtra);
-        const sec = Array.isArray(arr) && arr[0];
-        if (sec && Array.isArray(sec.lines) && sec.lines.length) {
-          const titulo = `Rodilla ${datos?.lado || ""} — puntos marcados`;
-          return { title: titulo, lines: sec.lines };
-        }
-      }
-      // 2) Fallback a "rodilla_data" → usar puntosSeleccionados
-      const rawData = sessionStorage.getItem("rodilla_data");
-      if (rawData) {
-        const rod = JSON.parse(rawData); // { puntosSeleccionados: [...], lado, ... }
-        if (Array.isArray(rod?.puntosSeleccionados) && rod.puntosSeleccionados.length) {
-          const titulo = `Rodilla ${rod?.lado || datos?.lado || ""} — puntos marcados`;
-          return { title: titulo, lines: rod.puntosSeleccionados };
-        }
-      }
-      return null;
-    } catch {
-      return null;
+  /* -------- Secciones de puntos (todas las zonas soportadas) -------- */
+  const seccionesMarcadores = useMemo(() => {
+    const lado = datos?.lado || "";
+    const zonas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
+    const out = [];
+    for (const z of zonas) {
+      const secs = leerSecciones(z, lado);
+      if (secs.length) out.push(...secs);
     }
+    return out;
   }, [datos?.lado]);
 
   /* -------- IA -------- */
@@ -183,16 +221,13 @@ export default function TraumaModulo({
 
       const edadNum = Number(datos.edad) || datos.edad;
 
-      // 🚀 Cargar marcadores de rodilla para enviar a la IA
-      let rodillaMarcadores = null;
-      try {
-        const lado = (datos?.lado || "").toLowerCase();
-        if (lado) {
-          const key = `rodilla_resumen_${lado.includes("izquierda") ? "izquierda" : "derecha"}`;
-          const raw = sessionStorage.getItem(key);
-          if (raw) rodillaMarcadores = JSON.parse(raw); // {frente:[], posterior:[], lateral:[]}
-        }
-      } catch {}
+      // Marcadores por zona (se envían a la IA como objeto + compat individual)
+      const lado = datos?.lado || "";
+      const rodillaMarcadores = loadMarcadoresPorZona("rodilla", lado);
+      const manoMarcadores = loadMarcadoresPorZona("mano", lado);
+      const hombroMarcadores = loadMarcadoresPorZona("hombro", lado);
+      const codoMarcadores = loadMarcadoresPorZona("codo", lado);
+      const tobilloMarcadores = loadMarcadoresPorZona("tobillo", lado);
 
       const body = {
         idPago,
@@ -200,8 +235,21 @@ export default function TraumaModulo({
           ...datos,
           edad: edadNum,
         },
-        // ← se envían a la IA
+        // Compatibilidad previa:
         rodillaMarcadores,
+        // Nuevo agregado genérico:
+        marcadores: {
+          rodilla: rodillaMarcadores,
+          mano: manoMarcadores,
+          hombro: hombroMarcadores,
+          codo: codoMarcadores,
+          tobillo: tobilloMarcadores,
+        },
+        // Campos sueltos opcionales (por si quieres leerlos explícitos en backend):
+        manoMarcadores,
+        hombroMarcadores,
+        codoMarcadores,
+        tobilloMarcadores,
       };
 
       const resp = await fetch(`${BACKEND_BASE}/ia-trauma`, {
@@ -250,7 +298,7 @@ export default function TraumaModulo({
     }
   };
 
-  // Lanzar checklist RM: ahora abrimos el modal del FormularioResonancia (como Comorbilidades)
+  // Lanzar checklist RM (modal)
   const lanzarChecklistRM = async () => {
     if (!requiereRM) return;
     setShowRM(true);
@@ -336,16 +384,13 @@ export default function TraumaModulo({
       sessionStorage.setItem("modulo", "trauma");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
 
-      // Cargar marcadores de rodilla para persistir en backend (no IA)
-      let rodillaMarcadores = null;
-      try {
-        const lado = (datos?.lado || "").toLowerCase();
-        if (lado) {
-          const key = `rodilla_resumen_${lado.includes("izquierda") ? "izquierda" : "derecha"}`;
-          const raw = sessionStorage.getItem(key);
-          if (raw) rodillaMarcadores = JSON.parse(raw);
-        }
-      } catch {}
+      // Marcadores por zona para persistir en backend (no IA)
+      const lado = datos?.lado || "";
+      const rodillaMarcadores = loadMarcadoresPorZona("rodilla", lado);
+      const manoMarcadores = loadMarcadoresPorZona("mano", lado);
+      const hombroMarcadores = loadMarcadoresPorZona("hombro", lado);
+      const codoMarcadores = loadMarcadoresPorZona("codo", lado);
+      const tobilloMarcadores = loadMarcadoresPorZona("tobillo", lado);
 
       // Guardar datos + IA + checklist para que el PDF quede consistente
       await fetch(`${BACKEND_BASE}/guardar-datos`, {
@@ -361,7 +406,21 @@ export default function TraumaModulo({
             justificacionIA,
             rmForm: resonanciaChecklist,
             rmObservaciones: resonanciaChecklist?.observaciones || "",
-            rodillaMarcadores, // persistimos para PDF
+            // Compatibilidad:
+            rodillaMarcadores,
+            // Nuevo agregado genérico:
+            marcadores: {
+              rodilla: rodillaMarcadores,
+              mano: manoMarcadores,
+              hombro: hombroMarcadores,
+              codo: codoMarcadores,
+              tobillo: tobilloMarcadores,
+            },
+            // Campos sueltos opcionales:
+            manoMarcadores,
+            hombroMarcadores,
+            codoMarcadores,
+            tobilloMarcadores,
           },
           resonanciaChecklist,
           resonanciaResumenTexto,
@@ -426,16 +485,12 @@ export default function TraumaModulo({
             const respaldo = sessionStorage.getItem("datosPacienteJSON");
             const datosReinyectar = respaldo ? JSON.parse(respaldo) : datos;
 
-            // incluir rodillaMarcadores en la reinyección
-            let rodillaMarcadoresReiny = null;
-            try {
-              const lado = (datosReinyectar?.lado || "").toLowerCase();
-              if (lado) {
-                const key = `rodilla_resumen_${lado.includes("izquierda") ? "izquierda" : "derecha"}`;
-                const raw = sessionStorage.getItem(key);
-                if (raw) rodillaMarcadoresReiny = JSON.parse(raw);
-              }
-            } catch {}
+            const lado = datosReinyectar?.lado || "";
+            const rodillaMarcadores = loadMarcadoresPorZona("rodilla", lado);
+            const manoMarcadores = loadMarcadoresPorZona("mano", lado);
+            const hombroMarcadores = loadMarcadoresPorZona("hombro", lado);
+            const codoMarcadores = loadMarcadoresPorZona("codo", lado);
+            const tobilloMarcadores = loadMarcadoresPorZona("tobillo", lado);
 
             await fetch(`${BACKEND_BASE}/guardar-datos`, {
               method: "POST",
@@ -449,7 +504,18 @@ export default function TraumaModulo({
                   justificacionIA,
                   rmForm: resonanciaChecklist,
                   rmObservaciones: resonanciaChecklist?.observaciones || "",
-                  rodillaMarcadores: rodillaMarcadoresReiny,
+                  rodillaMarcadores,
+                  marcadores: {
+                    rodilla: rodillaMarcadores,
+                    mano: manoMarcadores,
+                    hombro: hombroMarcadores,
+                    codo: codoMarcadores,
+                    tobillo: tobilloMarcadores,
+                  },
+                  manoMarcadores,
+                  hombroMarcadores,
+                  codoMarcadores,
+                  tobilloMarcadores,
                 },
                 resonanciaChecklist,
                 resonanciaResumenTexto,
@@ -511,17 +577,17 @@ export default function TraumaModulo({
       {/* Primer preview: SIEMPRE visible */}
       <div style={{ ...S.mono, marginTop: 6 }}>{resumenInicialTrauma(datos)}</div>
 
-      {/* Sección Rodilla — puntos marcados (compatible) */}
-      {seccionRodilla && (
-        <div style={S.block}>
-          <strong>{seccionRodilla.title}</strong>
+      {/* Secciones de puntos de cualquier zona disponible */}
+      {seccionesMarcadores.map((sec, idx) => (
+        <div style={S.block} key={`sec-${idx}`}>
+          <strong>{sec.title}</strong>
           <ul style={{ marginTop: 6 }}>
-            {seccionRodilla.lines.map((l, i) => (
+            {sec.lines.map((l, i) => (
               <li key={i}>{l}</li>
             ))}
           </ul>
         </div>
-      )}
+      ))}
 
       {/* Botón Continuar SOLO antes de iniciar IA */}
       {!stepStarted && (
@@ -530,7 +596,7 @@ export default function TraumaModulo({
         </button>
       )}
 
-      {/* Segundo preview: IA + confirmación/pago (aparece debajo, no borra el anterior) */}
+      {/* Segundo preview: IA + confirmación/pago */}
       {stepStarted && (
         <>
           <div style={S.block}>
@@ -573,14 +639,12 @@ export default function TraumaModulo({
 
           {!pagoRealizado ? (
             <>
-              {/* Si requiere RM y aún no hay checklist: botón Continuar para abrir formulario */}
               {requiereRM && !resonanciaChecklist && !bloqueaRM && (
                 <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={lanzarChecklistRM}>
                   Continuar
                 </button>
               )}
 
-              {/* Si NO requiere RM, o ya se completó checklist, o quedó bloqueada: pagar */}
               {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
                 <>
                   <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={handlePagar}>
@@ -607,7 +671,6 @@ export default function TraumaModulo({
                         JSON.stringify(datosGuest)
                       );
 
-                      // Guest: NO enviamos rodillaMarcadores (según indicaste)
                       await fetch(`${BACKEND_BASE}/guardar-datos`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
