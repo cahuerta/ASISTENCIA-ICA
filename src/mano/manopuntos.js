@@ -19,13 +19,13 @@ export const MANO_PUNTOS_PALMAR = [
   { key: "a1_medio",  x: 0.50, y: 0.40, label: "Polea A1 medio" },
 
   // Anular (4): IFP, IFD + polea A1
-  { key: "anular_ifd", x: 0.60, y: 0.12, label: "Anular IFD (DIP)" },
-  { key: "anular_ifp", x: 0.66, y: 0.22, label: "Anular IFP (PIP)" },
+  { key: "anular_ifd", x: 0.64, y: 0.13, label: "Anular IFD (DIP)" },
+  { key: "anular_ifp", x: 0.64, y: 0.23, label: "Anular IFP (PIP)" },
   { key: "a1_anular",  x: 0.61, y: 0.40, label: "Polea A1 anular" },
 
   // Meñique (5): IFP, IFD + polea A1
-  { key: "menique_ifd", x: 0.80, y: 0.22, label: "Meñique IFD (DIP)" },
-  { key: "menique_ifp", x: 0.80, y: 0.34, label: "Meñique IFP (PIP)" },
+  { key: "menique_ifd", x: 0.78, y: 0.15, label: "Meñique IFD (DIP)" },
+  { key: "menique_ifp", x: 0.78, y: 0.25, label: "Meñique IFP (PIP)" },
   { key: "a1_menique",  x: 0.70, y: 0.44, label: "Polea A1 meñique" },
 
   // Palma / Carpo (mantener; SIN "muñeca palmar" ósea)
