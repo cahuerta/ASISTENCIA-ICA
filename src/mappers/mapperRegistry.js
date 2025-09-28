@@ -32,3 +32,5 @@ export function resolveZonaKey(zonaTexto) {
 */
 registerMapper("rodilla", () => import("../rodilla/rodilla.jsx"));
 registerMapper("mano",    () => import("../mano/mano.jsx"));
+registerMapper("hombro", () => import("../hombro/hombro.jsx"));
+
