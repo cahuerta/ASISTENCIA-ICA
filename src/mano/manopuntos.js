@@ -11,12 +11,12 @@ export const MANO_PUNTOS_PALMAR = [
   // Índice (2): IFP, IFD + polea A1
   { key: "indice_ifd", x: 0.36, y: 0.13, label: "Índice IFD (DIP)" },
   { key: "indice_ifp", x: 0.36, y: 0.22, label: "Índice IFP (PIP)" },
-  { key: "a1_indice",  x: 0.40, y: 0.44, label: "Polea A1 índice" },
+  { key: "a1_indice",  x: 0.40, y: 0.40, label: "Polea A1 índice" },
 
   // Medio (3): IFP, IFD + polea A1
   { key: "medio_ifd", x: 0.50, y: 0.10, label: "Medio IFD (DIP)" },
   { key: "medio_ifp", x: 0.50, y: 0.20, label: "Medio IFP (PIP)" },
-  { key: "a1_medio",  x: 0.50, y: 0.40, label: "Polea A1 medio" },
+  { key: "a1_medio",  x: 0.50, y: 0.42, label: "Polea A1 medio" },
 
   // Anular (4): IFP, IFD + polea A1
   { key: "anular_ifd", x: 0.64, y: 0.14, label: "Anular IFD (DIP)" },
