@@ -17,8 +17,8 @@ const THEME = {
 };
 
 /* Imágenes locales base
-   - FRONTAL: base = DERECHA   → para izquierda se espeja
-   - POSTERIOR: base = IZQUIERDA → para derecha se espeja
+   - FRONTAL: base = DERECHA      → para izquierda se espeja
+   - POSTERIOR: base = IZQUIERDA  → para derecha se espeja
 */
 import imgFrontalDerecha from "./hombrofrontalderecho.png";
 import imgPosteriorIzquierda from "./hombroposteriorizquierdo.jpg";
@@ -220,8 +220,8 @@ export default function HombroMapper({
     onSave?.(r);
   };
 
-  /* === Tamaño (proporcional) === */
-  const WRAP_MAX_W = 520;
+  /* === Tamaño (igual a rodilla/mano; más compacto en alto) === */
+  const WRAP_MAX_W = 480;
 
   return (
     <div
@@ -252,7 +252,7 @@ export default function HombroMapper({
         </span>
       </div>
 
-      {/* Contenedor 4:3 */}
+      {/* Contenedor con proporción 4:3 (apaisado como los otros) */}
       <div
         style={{
           position: "relative",
@@ -261,11 +261,9 @@ export default function HombroMapper({
           overflow: "hidden",
           boxShadow: T?.shadowMd || "0 8px 24px rgba(0,0,0,0.15)",
           background: T?.bg || "#f2f2f2",
+          aspectRatio: "4 / 3", // ← ajusta el alto (más compacto)
         }}
       >
-        {/* Ratio 4:3 */}
-        <div style={{ paddingTop: "133.333%" }} />
-
         {/* Tabs de vista */}
         <div
           style={{
