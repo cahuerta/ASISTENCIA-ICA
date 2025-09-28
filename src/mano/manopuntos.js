@@ -58,10 +58,8 @@ export const MANO_PUNTOS_DORSAL = [
   { key: "dorso_SL",        x: 0.55, y: 0.68, label: "Intervalo escafolunar (SL)" },
   { key: "dorso_lister",    x: 0.50, y: 0.75, label: "Tubérculo de Lister" },
 
-  { key: "dorso_comp1",     x: 0.26, y: 0.66, label: "Compartimento 1 (APL/EPB)" },
-  { key: "dorso_comp2",     x: 0.36, y: 0.66, label: "Compartimento 2 (ECRL/ECRB)" },
-  { key: "dorso_comp4",     x: 0.58, y: 0.66, label: "Compartimento 4 (EDC/EIP)" },
-  { key: "dorso_comp5",     x: 0.72, y: 0.66, label: "Compartimento 5 (EDM)" },
+  { key: "dorso_comp1",     x: 0.35, y: 0.70, label: "Compartimento 1 (APL/EPB)" },
+  { key: "dorso_comp2",     x: 0.40, y: 0.66, label: "Compartimento 2 (ECRL/ECRB)" },
   { key: "dorso_ecu_surco", x: 0.86, y: 0.68, label: "Surco ECU (comp. 6)" },
 
   { key: "dorso_tfcc",      x: 0.90, y: 0.74, label: "Fóvea ulnar / TFCC dorsal" },
