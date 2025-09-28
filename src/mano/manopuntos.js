@@ -11,7 +11,7 @@ export const MANO_PUNTOS_PALMAR = [
   // Índice (2): IFP, IFD + polea A1
   { key: "indice_ifd", x: 0.36, y: 0.13, label: "Índice IFD (DIP)" },
   { key: "indice_ifp", x: 0.36, y: 0.22, label: "Índice IFP (PIP)" },
-  { key: "a1_indice",  x: 0.40, y: 0.40, label: "Polea A1 índice" },
+  { key: "a1_indice",  x: 0.40, y: 0.41, label: "Polea A1 índice" },
 
   // Medio (3): IFP, IFD + polea A1
   { key: "medio_ifd", x: 0.50, y: 0.10, label: "Medio IFD (DIP)" },
@@ -29,7 +29,7 @@ export const MANO_PUNTOS_PALMAR = [
   { key: "a1_menique",  x: 0.70, y: 0.45, label: "Polea A1 meñique" },
 
   // Palma / Carpo (mantener; SIN "muñeca palmar" ósea)
-  { key: "palma_tenar",     x: 0.40, y: 0.62, label: "Eminencia tenar" },
+  { key: "palma_tenar",     x: 0.38, y: 0.62, label: "Eminencia tenar" },
   { key: "palma_hipotenar", x: 0.60, y: 0.65, label: "Eminencia hipotenar" },
   { key: "tunel_carpiano",  x: 0.48, y: 0.75, label: "Túnel carpiano" },
   { key: "canal_guyon",     x: 0.62, y: 0.78, label: "Canal de Guyon" },
