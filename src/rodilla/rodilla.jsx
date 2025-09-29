@@ -143,21 +143,22 @@ export default function RodillaMapper({
     IMG[vista] ||
     IMG.frente;
 
-  const debeEspejar = (lado === "izquierda") && (vista === "frente" || vista === "posterior"));
+  const debeEspejar = (lado === "izquierda") && (vista === "frente" || vista === "posterior");
 
   /* Puntos render (espejar cx cuando corresponde) */
   const puntosRender = useMemo(
-    () => puntos.map((p) => {
-      const rawCx = p.x * 100;
-      const cx = debeEspejar ? (100 - rawCx) : rawCx;
-      const cy = p.y * 100;
-      return {
-        ...p,
-        cx,
-        cy,
-        labelText: p.label || p.key || "",
-      };
-    }),
+    () =>
+      puntos.map((p) => {
+        const rawCx = p.x * 100;
+        const cx = debeEspejar ? (100 - rawCx) : rawCx;
+        const cy = p.y * 100;
+        return {
+          ...p,
+          cx,
+          cy,
+          labelText: p.label || p.key || "",
+        };
+      }),
     [puntos, debeEspejar]
   );
 
@@ -249,69 +250,44 @@ export default function RodillaMapper({
         </span>
       </div>
 
-      {/* Contenedor 4:3 con overlay (mantiene proporción exacta) */}
-      <div
-        style={{
-          position: "relative",
-          width: "100%",
-          borderRadius: 16,
-          overflow: "hidden",
-          boxShadow: T?.shadowMd || "0 8px 24px rgba(0,0,0,0.15)",
-          background: T?.bg || "#f2f2f2",
-          marginTop: 10,
-        }}
-      >
-        {/* Ratio 4:3 */}
-        <div style={{ paddingTop: "133.333%" }} />
+      {/* Contenedor 4:3 con helpers de app.css */}
+      <div className="figure ratio-4x3 mt-10">
+        <div className="ratio-inner" />
 
-        {/* Tabs de vista */}
+        {/* Tabs de vista (centradas) */}
         <div
-          className="tabs"
-          style={{
-            position: "absolute",
-            top: 10,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 3,
-            pointerEvents: "auto",
-            marginBottom: 0,
-            backdropFilter: "blur(6px)",
-          }}
+          className="ratio-overlay"
+          style={{ top: 10, left: "50%", transform: "translateX(-50%)", pointerEvents: "auto" }}
         >
-          {["frente", "lateral", "posterior"].map((v) => (
-            <button
-              key={v}
-              type="button"
-              className={`tab ${vista === v ? "active" : ""}`}
-              onClick={() => setVista(v)}
-            >
-              {VISTA_LABEL[v]}
-            </button>
-          ))}
+          <div className="tabs" style={{ marginBottom: 0 }}>
+            {["frente", "lateral", "posterior"].map((v) => (
+              <button
+                key={v}
+                type="button"
+                className={`tab ${vista === v ? "active" : ""}`}
+                onClick={() => setVista(v)}
+              >
+                {VISTA_LABEL[v]}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Imagen base (espejo por CSS inline si corresponde) */}
+        {/* Imagen base (solo la imagen se espeja cuando corresponde) */}
         <img
           src={imgSrcFinal}
           alt={`Rodilla ${vista} ${lado}`}
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: "block",
-            transform: debeEspejar ? "scaleX(-1)" : "none",
-            transformOrigin: "center",
-          }}
+          className="ratio-img"
+          style={{ transform: debeEspejar ? "scaleX(-1)" : "none", transformOrigin: "center" }}
           draggable={false}
         />
 
-        {/* Overlay de puntos */}
+        {/* Overlay de puntos (SVG) */}
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "auto" }}
+          className="ratio-overlay"
+          style={{ pointerEvents: "auto" }}
         >
           {puntosRender.map((p, i) => (
             <Marker
