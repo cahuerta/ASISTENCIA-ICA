@@ -263,15 +263,15 @@ export default function ManoMapper({
 
   return (
     <div
+      className="card"
       style={{
         width: "100%",
         maxWidth: WRAP_MAX_W,
         margin: "0 auto",
-        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
       }}
     >
-      {/* Label del lado — alto contraste */}
-      <div style={{ marginBottom: 8 }}>
+      {/* Label del lado — alto contraste (mantengo inline para no alterar contraste/overlay) */}
+      <div className="mt-8">
         <span
           style={{
             display: "inline-block",
@@ -290,7 +290,7 @@ export default function ManoMapper({
         </span>
       </div>
 
-      {/* Contenedor 4:3 */}
+      {/* Contenedor 4:3 (proporción idéntica para que calcen los puntos) */}
       <div
         style={{
           position: "relative",
@@ -299,32 +299,34 @@ export default function ManoMapper({
           overflow: "hidden",
           boxShadow: T?.shadowMd || "0 8px 24px rgba(0,0,0,0.15)",
           background: T?.bg || "#f2f2f2",
+          marginTop: 8,
         }}
       >
         {/* Ratio 4:3 */}
         <div style={{ paddingTop: "133.333%" }} />
 
-        {/* Tabs de vista (NO espejadas) */}
+        {/* Tabs de vista */}
         <div
+          className="tabs"
           style={{
             position: "absolute",
             top: 10,
             left: "50%",
             transform: "translateX(-50%)",
-            display: "flex",
-            gap: 8,
             zIndex: 3,
             pointerEvents: "auto",
             backdropFilter: "blur(6px)",
           }}
         >
           {["palmar", "dorsal"].map((v) => (
-            <VistaChip
+            <button
               key={v}
-              active={vista === v}
+              type="button"
+              className={`tab ${vista === v ? "active" : ""}`}
               onClick={() => setVista(v)}
-              label={VISTA_LABEL[v]}
-            />
+            >
+              {VISTA_LABEL[v]}
+            </button>
           ))}
         </div>
 
@@ -365,10 +367,16 @@ export default function ManoMapper({
       </div>
 
       {/* Acciones */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 10 }}>
-        <Button type="button" subtle onClick={clearSelection}>Desactivar todos</Button>
-        <Button type="button" onClick={handleSave}>Guardar / Enviar</Button>
-        <Button type="button" outline onClick={handleVolver}>Volver</Button>
+      <div className="toolbar center mt-10">
+        <button type="button" className="btn secondary" onClick={clearSelection}>
+          Desactivar todos
+        </button>
+        <button type="button" className="btn" onClick={handleSave}>
+          Guardar / Enviar
+        </button>
+        <button type="button" className="btn secondary" onClick={handleVolver}>
+          Volver
+        </button>
       </div>
     </div>
   );
@@ -376,27 +384,13 @@ export default function ManoMapper({
 
 /* ===== UI helpers ===== */
 function VistaChip({ active, onClick, label }) {
+  // Ya no se usa directamente (reemplazado por .tab), pero lo dejo por compatibilidad
   return (
     <button
       type="button"
       onClick={onClick}
-      style={{
-        pointerEvents: "auto",
-        border: "1px solid transparent",
-        padding: "8px 12px",
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 700,
-        letterSpacing: 0.6,
-        textTransform: "uppercase",
-        boxShadow: T?.shadowSm || "0 2px 6px rgba(0,0,0,0.12)",
-        background: active ? THEME.chipActiveBg : THEME.chipBg,
-        color: THEME.chipColor,
-        opacity: active ? 1 : 0.92,
-        transform: active ? "translateY(-1px)" : "none",
-        transition: "all .15s ease",
-        backdropFilter: "blur(6px)",
-      }}
+      className={`tab ${active ? "active" : ""}`}
+      style={{ pointerEvents: "auto" }}
     >
       {label}
     </button>
@@ -404,45 +398,16 @@ function VistaChip({ active, onClick, label }) {
 }
 
 function Button({ children, onClick, outline, subtle, type = "button" }) {
-  const base = {
-    borderRadius: 10,
-    padding: "10px 12px",
-    fontWeight: 750,
-    fontSize: 13,
-    cursor: "pointer",
-    border: "2px solid transparent",
-    transition: "all .15s ease",
-    minWidth: 120,
-  };
-  let style = {};
-  if (subtle) {
-    style = {
-      background: "#f2f4f7",
-      color: T?.text || "#111",
-      borderColor: "#e5e7eb",
-    };
-  } else if (outline) {
-    style = {
-      background: "#fff",
-      color: T?.primaryDark || "#0d47a1",
-      borderColor: T?.primaryDark || "#0d47a1",
-    };
-  } else {
-    style = {
-      background: T?.primaryDark || "#0d47a1",
-      color: T?.onPrimary || "#fff",
-      borderColor: T?.primary || "#1976d2",
-      boxShadow: T?.shadowMd || "0 4px 12px rgba(0,0,0,0.18)",
-    };
-  }
+  // Compatibilidad: mapea a clases globales .btn
+  const cls = `btn ${outline || subtle ? "secondary" : ""}`;
   return (
-    <button type={type} onClick={onClick} style={{ ...base, ...style }}>
+    <button type={type} onClick={onClick} className={cls}>
       {children}
     </button>
   );
 }
 
-/* Marcador */
+/* Marcador (sin cambios de lógica/medidas) */
 function Marker({ cx, cy, active, label, onClick }) {
   const r = 2.0;
   const textLen = Math.max(3, Math.min(30, (label || "").length));
