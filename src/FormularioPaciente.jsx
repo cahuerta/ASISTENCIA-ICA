@@ -1,8 +1,6 @@
 // src/FormularioPaciente.jsx
 "use client";
 import React, { useMemo, useState, useEffect } from "react";
-import { getTheme } from "./theme.js"; // <- colores desde theme.json
-const T = getTheme();
 
 /* ================= Utilidades RUT (Chile) ================= */
 function limpiarRut(str = "") {
@@ -214,25 +212,19 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
     opcionesCirugia.length > 0 ? opcionesCirugia : ["OTRO (ESPECIFICAR)"];
 
   return (
-    <form onSubmit={handleSubmit} style={styles.form}>
-      <h1 style={styles.title}>Asistente Virtual para Pacientes</h1>
+    <form onSubmit={handleSubmit}>
+      <h1 className="h1 center mb-12">Asistente Virtual para Pacientes</h1>
 
-      <label style={styles.label}>Nombre completo:</label>
+      <label>Nombre completo:</label>
       <input
-        style={styles.input}
         type="text"
         value={datos.nombre || ""}
         onChange={(e) => onCambiarDato("nombre", e.target.value)}
         required
       />
 
-      <label style={styles.label}>RUT:</label>
+      <label>RUT:</label>
       <input
-        style={{
-          ...styles.input,
-          borderColor: rutValido ? T.border : T.primaryDark,
-          outline: rutValido ? "none" : `1px solid ${T.primaryDark}`,
-        }}
         type="text"
         value={datos.rut || ""}
         onChange={handleRutChange}
@@ -243,17 +235,22 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
         required
         aria-invalid={!rutValido}
         aria-describedby="rut-help"
+        className={rutValido ? "" : "input-error"}
       />
       <div
         id="rut-help"
-        style={{ ...styles.help, color: rutValido ? T.textMuted : T.primaryDark }}
+        style={{
+          fontSize: 12,
+          marginTop: 4,
+          minHeight: 16,
+          color: rutValido ? "var(--text-muted)" : "var(--primary-dark)",
+        }}
       >
         {rutMsg}
       </div>
 
-      <label style={styles.label}>Edad:</label>
+      <label>Edad:</label>
       <input
-        style={styles.input}
         type="number"
         min="10"
         max="110"
@@ -262,9 +259,8 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
         required
       />
 
-      <label style={styles.label}>Género:</label>
+      <label>Género:</label>
       <select
-        style={styles.input}
         value={datos.genero || ""}
         onChange={(e) => onCambiarDato("genero", e.target.value)}
         required
@@ -278,9 +274,8 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
       {/* Dolor/Lado: se ocultan en GENERALES */}
       {!isGenerales && (
         <>
-          <label style={styles.label}>Dolor:</label>
+          <label>Dolor:</label>
           <select
-            style={styles.input}
             value={datos.dolor || ""}
             onChange={manejoCambioDolor}
             required
@@ -300,9 +295,8 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
             <option value="Tobillo">Tobillo</option>
           </select>
 
-          <label style={styles.label}>Lado:</label>
+          <label>Lado:</label>
           <select
-            style={styles.input}
             value={datos.lado || ""}
             onChange={(e) => onCambiarDato("lado", e.target.value)}
             required={!isZonaColumna}
@@ -324,9 +318,8 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
       {/* TIPO DE CIRUGÍA (solo en PREOP) */}
       {showCirugia && (
         <>
-          <label style={styles.label}>TIPO DE CIRUGÍA:</label>
+          <label>TIPO DE CIRUGÍA:</label>
           <select
-            style={styles.input}
             value={tipoCirugia}
             onChange={(e) => setTipoCirugia(e.target.value)}
             required
@@ -341,7 +334,6 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
 
           {tipoCirugia === "OTRO (ESPECIFICAR)" && (
             <input
-              style={styles.input}
               placeholder="Especifique el tipo de cirugía"
               value={tipoCirugiaLibre}
               onChange={(e) => setTipoCirugiaLibre(e.target.value)}
@@ -351,65 +343,11 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
         </>
       )}
 
-      <button style={styles.button} type="submit">
+      <button className="btn fullw mt-16" type="submit">
         Generar Informe
       </button>
     </form>
   );
 }
-
-/* ================== Estilos (todos desde theme.json) ================== */
-const styles = {
-  form: {
-    backgroundColor: T.surface,
-    padding: "30px 40px",
-    borderRadius: "10px",
-    boxShadow: T.shadowMd,
-    width: "100%",
-    boxSizing: "border-box",
-    border: `1px solid ${T.border}`,
-  },
-  title: {
-    marginBottom: "20px",
-    color: T.primary,
-    textAlign: "center",
-  },
-  label: {
-    display: "block",
-    marginTop: "15px",
-    fontWeight: "bold",
-    color: T.text,
-    textAlign: "left",
-  },
-  input: {
-    width: "100%",
-    padding: "8px 10px",
-    marginTop: "5px",
-    border: `1px solid ${T.border}`,
-    borderRadius: "5px",
-    boxSizing: "border-box",
-    fontSize: "14px",
-    background: T.surface,
-    color: T.text,
-  },
-  help: {
-    fontSize: 12,
-    marginTop: 4,
-    minHeight: 16,
-  },
-  button: {
-    marginTop: "25px",
-    backgroundColor: T.primary,
-    color: T.onPrimary || "#fff",
-    border: "none",
-    padding: "12px",
-    fontSize: "16px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    width: "100%",
-    transition: "background 0.3s ease",
-    boxShadow: T.shadowSm,
-  },
-};
 
 export default FormularioPaciente;
