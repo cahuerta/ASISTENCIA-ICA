@@ -143,7 +143,7 @@ export default function RodillaMapper({
     IMG[vista] ||
     IMG.frente;
 
-  const debeEspejar = (lado === "izquierda") && (vista === "frente" || vista === "posterior");
+  const debeEspejar = (lado === "izquierda") && (vista === "frente" || vista === "posterior"));
 
   /* Puntos render (espejar cx cuando corresponde) */
   const puntosRender = useMemo(
@@ -249,46 +249,69 @@ export default function RodillaMapper({
         </span>
       </div>
 
-      {/* Contenedor 4:3 con overlay */}
-      <div className="figure ratio-4x3 mt-10" style={{ position: "relative" }}>
-        <div className="ratio-inner" />
+      {/* Contenedor 4:3 con overlay (mantiene proporción exacta) */}
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          borderRadius: 16,
+          overflow: "hidden",
+          boxShadow: T?.shadowMd || "0 8px 24px rgba(0,0,0,0.15)",
+          background: T?.bg || "#f2f2f2",
+          marginTop: 10,
+        }}
+      >
+        {/* Ratio 4:3 */}
+        <div style={{ paddingTop: "133.333%" }} />
+
+        {/* Tabs de vista */}
+        <div
+          className="tabs"
+          style={{
+            position: "absolute",
+            top: 10,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 3,
+            pointerEvents: "auto",
+            marginBottom: 0,
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          {["frente", "lateral", "posterior"].map((v) => (
+            <button
+              key={v}
+              type="button"
+              className={`tab ${vista === v ? "active" : ""}`}
+              onClick={() => setVista(v)}
+            >
+              {VISTA_LABEL[v]}
+            </button>
+          ))}
+        </div>
+
         {/* Imagen base (espejo por CSS inline si corresponde) */}
         <img
           src={imgSrcFinal}
           alt={`Rodilla ${vista} ${lado}`}
-          className="ratio-img"
-          style={{ transform: debeEspejar ? "scaleX(-1)" : "none", transformOrigin: "center" }}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+            transform: debeEspejar ? "scaleX(-1)" : "none",
+            transformOrigin: "center",
+          }}
           draggable={false}
         />
-
-        {/* Tabs de vista */}
-        <div
-          className="ratio-overlay"
-          style={{
-            top: 10, left: "50%", transform: "translateX(-50%)",
-            display: "flex", gap: 8, pointerEvents: "auto"
-          }}
-        >
-          <div className="tabs" style={{ marginBottom: 0 }}>
-            {["frente", "lateral", "posterior"].map((v) => (
-              <button
-                key={v}
-                type="button"
-                className={`tab ${vista === v ? "active" : ""}`}
-                onClick={() => setVista(v)}
-              >
-                {VISTA_LABEL[v]}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Overlay de puntos */}
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
-          className="ratio-overlay"
-          style={{ pointerEvents: "auto" }}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "auto" }}
         >
           {puntosRender.map((p, i) => (
             <Marker
@@ -319,9 +342,8 @@ export default function RodillaMapper({
   );
 }
 
-/* ===== UI helpers (solo presentación → ahora con clases de app.css) ===== */
+/* ===== UI helpers (compat con .tab/.btn) ===== */
 function VistaChip({ active, onClick, label }) {
-  // Mantengo el componente por compat, pero ahora usamos .tab/.active del app.css
   return (
     <button
       type="button"
@@ -335,11 +357,7 @@ function VistaChip({ active, onClick, label }) {
 }
 
 function Button({ children, onClick, outline, subtle, type = "button" }) {
-  // Compat: no se usa en el JSX final, pero lo dejamos por si algún padre lo importa.
-  const cls =
-    subtle ? "btn ghost" :
-    outline ? "btn secondary" :
-    "btn";
+  const cls = subtle ? "btn ghost" : outline ? "btn secondary" : "btn";
   return (
     <button type={type} onClick={onClick} className={cls}>
       {children}
