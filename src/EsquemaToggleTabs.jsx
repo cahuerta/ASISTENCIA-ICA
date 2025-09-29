@@ -1,8 +1,6 @@
 // src/EsquemaToggleTabs.jsx
+"use client";
 import React, { useMemo, useRef, useEffect } from "react";
-import { getTheme } from "./theme.js";
-
-const T = getTheme();
 
 /**
  * Toggle Anterior/Posterior accesible (tabs):
@@ -78,39 +76,12 @@ export default function EsquemaToggleTabs({
     }
   };
 
-  const baseStyles = {
-    container: {
-      display: "flex",
-      gap: 8,
-      marginBottom: 8,
-      border: `1px solid ${T.border ?? "#e5e7eb"}`,
-      borderRadius: 10,
-      padding: 4,
-      background: T.surface ?? "#f9fafb",
-    },
-    tab: (selected) => ({
-      padding: "8px 12px",
-      borderRadius: 8,
-      border: `1px solid ${T.border ?? "#d1d5db"}`,
-      background: selected ? (T.primary ?? "#0072CE") : (T.bg ?? "#fff"),
-      color: selected ? (T.onPrimary ?? "#fff") : (T.text ?? "#111827"),
-      cursor: "pointer",
-      fontWeight: 600,
-      outline: "none",
-    }),
-    tabFocus: {
-      // se aplica vía :focus-visible en navegadores modernos
-      boxShadow: `0 0 0 3px ${T.accentAlpha ?? "rgba(0,114,206,0.35)"}`,
-    },
-  };
-
   return (
     <div
-      className={className}
+      className={`tabs ${className}`.trim()}
       role="tablist"
       aria-label="Cambiar vista del esquema"
       onKeyDown={onKeyDown}
-      style={baseStyles.container}
     >
       {tabs.map(({ key, label }) => {
         const selected = vista === key;
@@ -131,14 +102,7 @@ export default function EsquemaToggleTabs({
             onClick={() => {
               if (!selected) onChange?.(key);
             }}
-            style={baseStyles.tab(selected)}
-            onFocus={(e) => {
-              // aplicar foco visible (fallback simple para navegadores sin :focus-visible)
-              e.currentTarget.style.boxShadow = baseStyles.tabFocus.boxShadow;
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.boxShadow = "none";
-            }}
+            className={`tab ${selected ? "active" : ""}`}
           >
             {label}
           </button>
