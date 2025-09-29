@@ -171,6 +171,8 @@ input:focus,select:focus,textarea:focus{
   padding: 8px;
   box-shadow: var(--shadow-sm);
 }
+/* Quita padding para mapas (opcional) */
+.figure.no-pad{ padding:0; }
 
 /* Chips / etiquetas (p.ej. lado: derecha/izquierda) */
 .chips{ display:flex; gap:8px; flex-wrap:wrap }
@@ -292,7 +294,10 @@ input:focus,select:focus,textarea:focus{
   border: 1px solid var(--t-border, var(--border));
   padding: 12px;
 }
-/* Helpers de contenedor con relación 3:4 (igual que antes) */
+
+/* ==========================================================
+   Helpers de contenedor con relación 3:4 (igual que antes)
+   ========================================================== */
 .ratio-3x4 { position: relative; }
 .ratio-3x4 .ratio-inner { width: 100%; padding-top: 133.333%; } /* 3:4 exacto */
 .ratio-3x4 .ratio-img {
@@ -301,6 +306,7 @@ input:focus,select:focus,textarea:focus{
   object-fit: cover; display: block;
 }
 .ratio-3x4 .ratio-overlay { position: absolute; inset: 0; }
+
 /* ==========================================================
    Soporte de contenedores con ratio fijo (4:3) para mapas
    ========================================================== */
@@ -336,6 +342,15 @@ input:focus,select:focus,textarea:focus{
   position: absolute;
   inset: 0;
 }
+
+/* ===== FIX universal para overlays de mapas ===== */
+.ratio-overlay{
+  position: absolute;
+  inset: 0;
+}
+/* No bloquear eventos del contenedor; los hijos sí reciben clic */
+.ratio-overlay{ pointer-events: none; }
+.ratio-overlay > *{ pointer-events: auto; }
 
 /* En móvil le damos un poco más de elevación y radio suave */
 @media (max-width: 768px){
