@@ -1,6 +1,7 @@
 // src/App.jsx
 "use client";
 import React, { useState, useEffect, useRef } from "react";
+import "./app.css"; // ← NUEVO: CSS global con media queries
 
 /* Esquema corporal */
 import EsquemaAnterior from "./EsquemaAnterior.jsx";
@@ -26,6 +27,23 @@ import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx"
 /* Tema (JSON + helper) */
 import { getTheme } from "./theme.js";
 const T = getTheme();
+
+/* Mapea theme → variables CSS que usa app.css */
+const cssVars = {
+  "--bg": T.bg,
+  "--surface": T.surface,
+  "--border": T.border,
+  "--text": T.text,
+  "--text-muted": T.textMuted,
+  "--muted": T.muted,
+  "--primary": T.primary,
+  "--primary-dark": T.primaryDark,
+  "--onPrimary": T.onPrimary,
+  "--accent-alpha": T.accentAlpha,
+  "--shadow-sm": T.shadowSm,
+  "--shadow-md": T.shadowMd,
+  "--overlay": T.overlay,
+};
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
@@ -658,9 +676,15 @@ function App() {
 
     // 2) Limpiar datos de previews para evitar “restauraciones” cruzadas
     try {
-      ["preop_ia_examenes", "preop_ia_resumen", "generales_ia_examenes", "generales_ia_resumen", "solicitaResonancia", "rm_pdf_disponible", "rm_idPago"].forEach(
-        (k) => sessionStorage.removeItem(k)
-      );
+      [
+        "preop_ia_examenes",
+        "preop_ia_resumen",
+        "generales_ia_examenes",
+        "generales_ia_resumen",
+        "solicitaResonancia",
+        "rm_pdf_disponible",
+        "rm_idPago",
+      ].forEach((k) => sessionStorage.removeItem(k));
     } catch {}
 
     // 3) Dejar URL sin parámetros de pago
@@ -675,7 +699,7 @@ function App() {
 
   // ====== UI ======
   return (
-    <div style={styles.page}>
+    <div className="app" style={cssVars}>
       {/* Barra superior fija */}
       <div style={styles.topBarWrap}>
         <div style={styles.topBar}>
@@ -709,6 +733,7 @@ function App() {
                     setMostrarAviso(true);
                   }
                 }}
+                className="btn" // usa estilos base móviles
                 style={styleBtn}
               >
                 {b.label}
@@ -721,6 +746,7 @@ function App() {
             type="button"
             onClick={handleReiniciar}
             aria-label="Reiniciar asistente"
+            className="btn secondary"
             style={{ ...styles.topBtn, ...styles.topBtnIdle }}
           >
             REINICIAR
@@ -736,125 +762,125 @@ function App() {
         onReject={rechazarAviso}
       />
 
-      <div style={styles.content}>
+      {/* Contenido principal: 3 columnas que se apilan en móvil */}
+      <div className="row" style={styles.contentRow}>
         {/* Columna 1 - Esquema */}
-        <div style={styles.esquemaCol}>
-          <EsquemaToggleTabs vista={vista} onChange={setVista} />
-          {vista === "anterior" ? (
-            <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
-          ) : (
-            <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
-          )}
-
-          <div aria-live="polite" role="status" style={styles.statusBox}>
-            {datosPaciente?.dolor ? (
-              <>
-                Zona seleccionada:{" "}
-                <strong>
-                  {datosPaciente.dolor}
-                  {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
-                </strong>
-                {hasMapper(resolveZonaKey(datosPaciente?.dolor)) &&
-                  (modulo === "trauma" || modulo === "ia") && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const k = resolveZonaKey(datosPaciente?.dolor);
-                        if (k && hasMapper(k)) {
-                          setMapperId(k);
-                          setMostrarMapper(true);
-                        }
-                      }}
-                      style={{
-                        marginLeft: 8,
-                        padding: "4px 8px",
-                        border: `1px solid ${T.border}`,
-                        borderRadius: 6,
-                        background: T.surface,
-                        cursor: "pointer",
-                      }}
-                    >
-                      Marcar puntos
-                    </button>
-                  )}
-              </>
+        <div className="col" style={styles.esquemaCol}>
+          <div className="card">
+            <EsquemaToggleTabs vista={vista} onChange={setVista} />
+            {vista === "anterior" ? (
+              <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
             ) : (
-              "Seleccione una zona en el esquema"
+              <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
             )}
+
+            <div aria-live="polite" role="status" style={styles.statusBox}>
+              {datosPaciente?.dolor ? (
+                <>
+                  Zona seleccionada:{" "}
+                  <strong>
+                    {datosPaciente.dolor}
+                    {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
+                  </strong>
+                  {hasMapper(resolveZonaKey(datosPaciente?.dolor)) &&
+                    (modulo === "trauma" || modulo === "ia") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const k = resolveZonaKey(datosPaciente?.dolor);
+                          if (k && hasMapper(k)) {
+                            setMapperId(k);
+                            setMostrarMapper(true);
+                          }
+                        }}
+                        className="btn ghost"
+                        style={{ marginLeft: 8 }}
+                      >
+                        Marcar puntos
+                      </button>
+                    )}
+                </>
+              ) : (
+                "Seleccione una zona en el esquema"
+              )}
+            </div>
           </div>
         </div>
 
         {/* Columna 2 - Formulario Paciente */}
-        <div style={styles.formCol}>
-          <FormularioPaciente
-            datos={datosPaciente}
-            onCambiarDato={handleCambiarDato}
-            onSubmit={handleSubmit}
-            moduloActual={modulo}
-          />
+        <div className="col" style={styles.formCol}>
+          <div className="card">
+            <FormularioPaciente
+              datos={datosPaciente}
+              onCambiarDato={handleCambiarDato}
+              onSubmit={handleSubmit}
+              moduloActual={modulo}
+            />
+          </div>
         </div>
 
         {/* Columna 3 - Previews / Acciones */}
-        <div style={styles.previewCol} data-preview-col>
-          {mostrarVistaPrevia && modulo === "trauma" && (
-            <TraumaModulo
-              initialDatos={datosPaciente}
-              // props opcionales para usar el checklist desde el módulo
-              onPedirChecklistResonancia={pedirChecklistResonancia}
-              onDetectarResonancia={detectarResonanciaEnBackend}
-              resumenResoTexto={resumenResoTexto}
-            />
-          )}
-
-          {mostrarVistaPrevia && modulo === "preop" && (
-            <PreopModulo initialDatos={datosPaciente} />
-          )}
-
-          {mostrarVistaPrevia && modulo === "generales" && (
-            <GeneralesModulo initialDatos={datosPaciente} />
-          )}
-
-          {mostrarVistaPrevia && modulo === "ia" && (
-            <IAModulo
-              key={`ia-${modulo}`}
-              initialDatos={datosPaciente}
-              pedirChecklistResonancia={pedirChecklistResonancia}
-            />
-          )}
-
-          {/* Botón Formulario RM (PDF) pintado en el PADRE, debajo del módulo */}
-          {mostrarVistaPrevia &&
-            (modulo === "trauma" || modulo === "ia") &&
-            rmPdfListo &&
-            !!rmIdPago && (
-              <div style={{ marginTop: 8 }}>
-                <a
-                  href={`${BACKEND_BASE}/pdf-rm/${rmIdPago}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: "inline-block",
-                    padding: "10px 12px",
-                    borderRadius: 10,
-                    fontWeight: 750,
-                    fontSize: 13,
-                    textDecoration: "none",
-                    background: T?.surface,
-                    color: T?.primaryDark || "#0d47a1",
-                    border: `2px solid ${T?.primaryDark || "#0d47a1"}`,
-                  }}
-                >
-                  Formulario RM (PDF)
-                </a>
-              </div>
+        <div className="col" style={styles.previewCol} data-preview-col>
+          <div className="card">
+            {mostrarVistaPrevia && modulo === "trauma" && (
+              <TraumaModulo
+                initialDatos={datosPaciente}
+                // props opcionales para usar el checklist desde el módulo
+                onPedirChecklistResonancia={pedirChecklistResonancia}
+                onDetectarResonancia={detectarResonanciaEnBackend}
+                resumenResoTexto={resumenResoTexto}
+              />
             )}
+
+            {mostrarVistaPrevia && modulo === "preop" && (
+              <PreopModulo initialDatos={datosPaciente} />
+            )}
+
+            {mostrarVistaPrevia && modulo === "generales" && (
+              <GeneralesModulo initialDatos={datosPaciente} />
+            )}
+
+            {mostrarVistaPrevia && modulo === "ia" && (
+              <IAModulo
+                key={`ia-${modulo}`}
+                initialDatos={datosPaciente}
+                pedirChecklistResonancia={pedirChecklistResonancia}
+              />
+            )}
+
+            {/* Botón Formulario RM (PDF) pintado en el PADRE, debajo del módulo */}
+            {mostrarVistaPrevia &&
+              (modulo === "trauma" || modulo === "ia") &&
+              rmPdfListo &&
+              !!rmIdPago && (
+                <div style={{ marginTop: 8 }}>
+                  <a
+                    href={`${BACKEND_BASE}/pdf-rm/${rmIdPago}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn"
+                    style={{
+                      display: "inline-block",
+                      fontWeight: 750,
+                      fontSize: 13,
+                      textDecoration: "none",
+                      background: T?.surface,
+                      color: T?.primaryDark || "#0d47a1",
+                      border: `2px solid ${T?.primaryDark || "#0d47a1"}`,
+                    }}
+                  >
+                    Formulario RM (PDF)
+                  </a>
+                </div>
+              )}
+          </div>
         </div>
       </div>
 
       {/* ===== Modal RNM ===== */}
       {showReso && (
-        <div style={styles.modalOverlay}>
-          <div style={{ width: "min(900px, 96vw)" }}>
+        <div className="overlay show" style={styles.modalOverlay}>
+          <div className="card" style={{ width: "min(900px, 96vw)" }}>
             <FormularioResonancia
               onCancel={() => {
                 setShowReso(false);
@@ -898,8 +924,8 @@ function App() {
 
       {/* ===== Modal Genérico de Mapeo (PNG+SVG) ===== */}
       {(modulo === "trauma" || modulo === "ia") && mostrarMapper && (
-        <div style={styles.modalOverlay}>
-          <div style={{ width: "min(900px, 96vw)" }}>
+        <div className="overlay show" style={styles.modalOverlay}>
+          <div className="card" style={{ width: "min(900px, 96vw)" }}>
             <GenericMapper
               mapperId={mapperId}
               ladoInicial={(datosPaciente?.lado || "")
@@ -920,8 +946,8 @@ function App() {
 
       {/* ===== Modal Comorbilidades ===== */}
       {mostrarComorbilidades && (
-        <div style={styles.modalOverlay}>
-          <div style={{ width: "min(900px, 96vw)" }}>
+        <div className="overlay show" style={styles.modalOverlay}>
+          <div className="card" style={{ width: "min(900px, 96vw)" }}>
             <FormularioComorbilidades
               initial={comorbilidades || {}}
               onSave={handleSaveComorbilidades}
@@ -936,12 +962,6 @@ function App() {
 
 /* ================== Styles (solo variables del theme.json) ================== */
 const styles = {
-  page: {
-    fontFamily: "Arial, sans-serif",
-    backgroundColor: T.bg,
-    minHeight: "100vh",
-  },
-
   /* Top bar */
   topBarWrap: {
     position: "sticky",
@@ -958,7 +978,7 @@ const styles = {
     margin: "0 auto",
     padding: "12px 16px",
     display: "grid",
-    gridTemplateColumns: "repeat(5, 1fr)", // ← ahora 5 columnas (4 módulos + Reiniciar)
+    gridTemplateColumns: "repeat(5, 1fr)", // 4 módulos + Reiniciar
     gap: 12,
   },
   topBtn: {
@@ -985,18 +1005,13 @@ const styles = {
     borderColor: T.primary,
   },
 
-  /* Layout */
-  content: {
-    display: "grid",
-    gridTemplateColumns: "400px 400px 1fr",
-    gap: 40,
-    maxWidth: 1200,
-    margin: "18px auto",
-    padding: "0 16px 24px",
+  /* Layout principal ahora se maneja con clases .row/.col (app.css) */
+  contentRow: {
+    alignItems: "flex-start",
   },
-  esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
 
-  /* Stacking para que los modales siempre queden arriba */
+  // Mantengo anchos máximos para que en desktop se vean parecidos a tu diseño
+  esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
   formCol: {
     flex: "0 0 400px",
     maxWidth: 400,
@@ -1023,7 +1038,7 @@ const styles = {
     minHeight: 30,
   },
 
-  /* Modals */
+  /* Modals (el color viene de --overlay) */
   modalOverlay: {
     position: "fixed",
     inset: 0,
