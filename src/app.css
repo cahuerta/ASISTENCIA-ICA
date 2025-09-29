@@ -1,0 +1,212 @@
+/* ===========================
+   App global styles (UX móvil)
+   =========================== */
+
+/* Fallbacks: si el wrapper no define vars, usa estos valores por defecto */
+:root{
+  --bg:#F3F5F8;
+  --surface:#FFFFFF;
+  --border:#D5DBE3;
+  --text:#1F2937;
+  --text-muted:#6B7280;
+  --muted:#4B5563;
+
+  --primary:#0056A6;
+  --primary-dark:#003B73;
+  --onPrimary:#FFFFFF;
+  --accent-alpha: rgba(0, 86, 166, 0.25);
+
+  --shadow-sm: 0 2px 10px rgba(0,0,0,0.08);
+  --shadow-md: 0 6px 18px rgba(0,0,0,0.12);
+  --overlay: rgba(0,0,0,0.35);
+
+  --gap:16px;
+  --radius:16px;
+  --maxw:980px;
+
+  /* Tipografía fluida */
+  --fs-body: clamp(15px, 1.2vw + 12px, 18px);
+  --fs-small: 0.9rem;
+  --fs-title: clamp(18px, 1.2vw + 16px, 22px);
+}
+
+*{ box-sizing:border-box }
+html,body,#root{ height:100% }
+body{
+  margin:0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--fs-body);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Contenedor principal de la app */
+.app{
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* Títulos genéricos */
+.h1{ font-size: var(--fs-title); font-weight: 700; margin: 0 0 8px }
+.muted{ color: var(--text-muted) }
+
+/* Tarjeta genérica reutilizable */
+.card{
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Barras/headers internos (por ejemplo, títulos de módulo) */
+.section{
+  display:flex; align-items:center; justify-content:space-between;
+  gap: var(--gap); margin-bottom: 6px;
+}
+
+/* Separadores suaves */
+.divider{
+  height:1px; background: var(--border);
+  margin: 8px 0 16px;
+}
+
+/* Layout flexible reutilizable */
+.row{ display:flex; gap: var(--gap) }
+.col{ flex:1 1 0 }
+
+/* Grid que se adapta solo (para grupos de campos o cards) */
+.grid-autofit{
+  display:grid;
+  gap: var(--gap);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+/* Formularios (válido para cualquier markup) */
+label{
+  display:block; margin:0 0 6px;
+  font-size: var(--fs-small); color: var(--text-muted);
+}
+input,select,textarea{
+  width:100%;
+  background: #fbfbfd;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  outline: none;
+  min-height: 44px; /* touch-friendly */
+}
+textarea{ resize: vertical; min-height: 96px }
+input:focus,select:focus,textarea:focus{
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 25%, transparent);
+}
+
+/* Estados de error/ok para inputs (opcional) */
+.input-error{ border-color:#dc2626 !important }
+.input-ok{ border-color:#16a34a !important }
+
+/* Botones */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding: 12px 16px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--primary);
+  color: var(--onPrimary);
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px; /* touch-friendly */
+  text-decoration: none;
+}
+.btn:hover{ filter: brightness(1.05) }
+.btn:active{ transform: translateY(1px) }
+.btn.secondary{
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+.btn.ghost{
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  color: var(--primary);
+  border-color: color-mix(in oklab, var(--primary) 25%, transparent);
+}
+.btn.danger{ background:#ef4444; color:#fff }
+
+/* Toolbars / acciones arriba/abajo (Guardar / Volver) */
+.toolbar{
+  display:flex; gap: var(--gap); flex-wrap: wrap;
+}
+.toolbar.right{ justify-content: flex-end }
+.toolbar.center{ justify-content: center }
+
+/* Pestañas simples (para EsquemaAnterior/Posterior/Lateral) */
+.tabs{
+  display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;
+}
+.tab{
+  padding:8px 12px; border-radius:999px;
+  border:1px solid var(--border); background:#fff; color:var(--text);
+  cursor:pointer; user-select:none;
+}
+.tab.active{
+  background: var(--primary); color: var(--onPrimary);
+  border-color: transparent;
+}
+
+/* Imágenes y esquemas médicos */
+.img-fluid{ max-width:100%; height:auto; display:block; border-radius:12px }
+.figure{
+  width:100%;
+  background: #fff;
+  border:1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Chips / etiquetas (p.ej. lado: derecha/izquierda) */
+.chips{ display:flex; gap:8px; flex-wrap:wrap }
+.chip{
+  padding:6px 10px; border-radius:999px;
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  color: var(--primary);
+  border:1px solid color-mix(in oklab, var(--primary) 25%, transparent);
+  font-size: var(--fs-small);
+}
+.chip.active{
+  background: var(--primary); color: var(--onPrimary);
+  border-color: transparent;
+}
+
+/* Utilidades */
+.hidden{ display:none !important }
+.center{ display:flex; align-items:center; justify-content:center }
+.nowrap{ white-space: nowrap }
+.fullw{ width:100% }
+.mt-8{ margin-top:8px } .mt-12{ margin-top:12px } .mt-16{ margin-top:16px }
+.mb-8{ margin-bottom:8px } .mb-12{ margin-bottom:12px } .mb-16{ margin-bottom:16px }
+
+/* ----- Responsivo móvil ----- */
+@media (max-width: 768px){
+  .app{ padding:16px; gap:12px }
+  .row{ flex-direction: column }
+  .card{ padding:16px; border-radius:14px; box-shadow: var(--shadow-md) }
+  .toolbar{ gap:12px }
+  .btn{ padding:14px 18px } /* + área táctil */
+  input,select,textarea{ padding:14px 16px }
+}
+
+/* ----- Dark overlay genérico (para modales si los usas) ----- */
+.overlay{
+  position: fixed; inset: 0; background: var(--overlay);
+  display: none;
+}
+.overlay.show{ display:block }
