@@ -14,17 +14,17 @@ Se recomienda acudir a evaluación presencial con el/la especialista sugerido/a,
  * - Guarda la aceptación en localStorage (configurable).
  *
  * Props:
- *  - title?: string                       (por defecto "Aviso legal")
- *  - message?: string                     (texto del aviso)
- *  - visible?: boolean                    (modo controlado; si lo pasas, tú controlas abrir/cerrar)
- *  - initiallyOpen?: boolean              (modo no-controlado; por defecto auto según persistencia)
- *  - persist?: boolean                    (guardar aceptación en localStorage, default: true)
- *  - persistKey?: string                  (clave localStorage, default: "avisoLegalAceptado")
- *  - onAccept?: () => void                (callback al aceptar)
- *  - onReject?: () => void                (callback al rechazar)
- *  - lockScroll?: boolean                 (bloquea scroll del body cuando está abierto; default true)
- *  - zIndex?: number                      (z-index del modal, default 9999)
- *  - backdropClickToClose?: boolean       (cerrar al click en fondo; default false)
+ *  - title?: string
+ *  - message?: string
+ *  - visible?: boolean
+ *  - initiallyOpen?: boolean
+ *  - persist?: boolean
+ *  - persistKey?: string
+ *  - onAccept?: () => void
+ *  - onReject?: () => void
+ *  - lockScroll?: boolean
+ *  - zIndex?: number
+ *  - backdropClickToClose?: boolean
  */
 export default function AvisoLegal({
   title = "Aviso legal",
@@ -101,7 +101,6 @@ export default function AvisoLegal({
 
   const handleBackdrop = () => {
     if (backdropClickToClose) {
-      // Si decides permitir cierre por fondo (no recomendado para avisos legales estrictos)
       if (!isControlled) setOpen(false);
     }
   };
@@ -113,25 +112,54 @@ export default function AvisoLegal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="aviso-legal-title"
+      onClick={handleBackdrop}
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0,0,0,0.45)",
+        background: "var(--overlay, rgba(0,0,0,0.45))",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         padding: 16,
         zIndex,
       }}
-      onClick={handleBackdrop}
     >
       <div
-        style={styles.modal}
         onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(720px, 95vw)",
+          background: "var(--surface, #fff)",
+          borderRadius: 12,
+          boxShadow: "var(--shadow-md, 0 16px 50px rgba(0,0,0,0.25))",
+          padding: 20,
+          color: "var(--text, #1b1f24)",
+          border: "1px solid var(--border, #e5e7eb)",
+        }}
       >
-        <h2 id="aviso-legal-title" style={styles.title}>{title}</h2>
+        <h2
+          id="aviso-legal-title"
+          style={{
+            margin: "0 0 12px",
+            color: "var(--primary-dark, var(--primary))",
+            fontSize: 20,
+            fontWeight: 700,
+            textAlign: "left",
+          }}
+        >
+          {title}
+        </h2>
 
-        <div style={styles.content}>
+        <div
+          style={{
+            fontSize: 15,
+            lineHeight: 1.55,
+            color: "var(--text, #1f2937)",
+            background: "var(--bg, #f8fafc)",
+            border: "1px solid var(--border, #e5e7eb)",
+            borderRadius: 10,
+            padding: 14,
+          }}
+        >
           {message.split("\n\n").map((p, i) => (
             <p key={i} style={{ margin: "0 0 12px", whiteSpace: "pre-wrap" }}>
               {p}
@@ -139,17 +167,34 @@ export default function AvisoLegal({
           ))}
         </div>
 
-        <div style={styles.actions}>
+        <div
+          style={{
+            marginTop: 16,
+            display: "flex",
+            gap: 10,
+            justifyContent: "flex-end",
+            flexWrap: "wrap",
+          }}
+        >
           <button
             ref={firstBtnRef}
             onClick={handleAccept}
-            style={{ ...styles.btn, ...styles.primary }}
+            className="btn"
+            style={{
+              minWidth: 160,
+            }}
           >
             Acepto y deseo continuar
           </button>
           <button
             onClick={handleReject}
-            style={{ ...styles.btn, ...styles.secondary }}
+            className="btn"
+            style={{
+              background: "var(--surface)",
+              color: "var(--text)",
+              border: "1px solid var(--border)",
+              minWidth: 160,
+            }}
           >
             No acepto
           </button>
@@ -158,56 +203,3 @@ export default function AvisoLegal({
     </div>
   );
 }
-
-const styles = {
-  modal: {
-    width: "min(720px, 95vw)",
-    background: "#fff",
-    borderRadius: 12,
-    boxShadow: "0 16px 50px rgba(0,0,0,0.25)",
-    padding: 20,
-    color: "#1b1f24",
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-  },
-  title: {
-    margin: "0 0 12px",
-    color: "#0a2b5e",
-    fontSize: 20,
-    fontWeight: 700,
-    textAlign: "left",
-  },
-  content: {
-    fontSize: 15,
-    lineHeight: 1.55,
-    color: "#1f2937",
-    background: "#f8fafc",
-    border: "1px solid #e5e7eb",
-    borderRadius: 10,
-    padding: 14,
-  },
-  actions: {
-    marginTop: 16,
-    display: "flex",
-    gap: 10,
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-  },
-  btn: {
-    cursor: "pointer",
-    padding: "10px 14px",
-    borderRadius: 8,
-    border: "1px solid transparent",
-    fontSize: 14,
-    minWidth: 160,
-  },
-  primary: {
-    background: "#004B94",
-    color: "#fff",
-    borderColor: "#004B94",
-  },
-  secondary: {
-    background: "#fff",
-    color: "#374151",
-    borderColor: "#d1d5db",
-  },
-};
