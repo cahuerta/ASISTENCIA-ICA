@@ -31,34 +31,27 @@ export default function EsquemaPosterior({
   };
 
   // ===== Nuevos puntos (vista posterior: DERECHA = derecha en pantalla) =====
-  // Tamaños acordados:
-  // - Hombro = Rodilla (rx/ry ~ 44)
-  // - Codo = Tobillo (rx/ry ~ 38)  [más chico que hombro]
-  // - Mano más chico (rx/ry ~ 32)
-  //
-  // Posiciones ajustadas para vista posterior (puedes afinar si quieres calce perfecto con tu PNG):
   const nuevos = {
-    // HOMBROS (ligeramente por debajo del trapecio)
+    // HOMBROS
     hombroIzq: { cx: VB * 0.35, cy: VB * 0.075, rx: 44, ry: 44, label: "Hombro izquierda" },
     hombroDer: { cx: VB * 0.65, cy: VB * 0.075, rx: 44, ry: 44, label: "Hombro derecha" },
 
-    // CODOS (a la mitad del brazo)
+    // CODOS
     codoIzq:   { cx: VB * 0.31, cy: VB * 0.31, rx: 38, ry: 38, label: "Codo izquierda" },
     codoDer:   { cx: VB * 0.69, cy: VB * 0.31, rx: 38, ry: 38, label: "Codo derecha" },
 
-    // MANOS (a la altura del muslo superior)
+    // MANOS
     manoIzq:   { cx: VB * 0.26, cy: VB * 0.495, rx: 32, ry: 32, label: "Mano izquierda" },
     manoDer:   { cx: VB * 0.74, cy: VB * 0.495, rx: 32, ry: 32, label: "Mano derecha" },
 
-    // TOBILLOS (apenas por sobre el borde inferior)
+    // TOBILLOS
     tobilloIzq:{ cx: VB * 0.41, cy: VB * 1.08, rx: 38, ry: 38, label: "Tobillo izquierda" },
     tobilloDer:{ cx: VB * 0.59, cy: VB * 1.08, rx: 38, ry: 38, label: "Tobillo derecha" },
   };
 
   // ===== Columnas adicionales (sin lado) =====
-  // Mismo estilo que lumbar; ubicadas por encima de lumbar
   const cervical = { x: VB * 0.5 - 34, y: VB * 0.00001,  w: 68,  h: 65,  rx: 10, label: "Columna cervical" };
-  const dorsal   = { x: VB * 0.5 - 40, y: VB * 0.07,  w: 80,  h: 145, rx: 12, label: "Columna dorsal" };
+  const dorsal   = { x: VB * 0.5 - 40, y: VB * 0.07,     w: 80,  h: 145, rx: 12, label: "Columna dorsal" };
 
   const hitFill = T.primary ?? "#2f6bd8";
   const spineStroke = T.textMuted ?? "#8c8c8c";
@@ -78,7 +71,8 @@ export default function EsquemaPosterior({
       <img
         src={baseSrc}
         alt="Cuerpo humano posterior"
-        style={{ width: "100%", height: "auto", display: "block" }}
+        className="img-fluid"   // ← asegura escalado correcto en móvil
+        style={{ display: "block" }}
         draggable={false}
       />
 
