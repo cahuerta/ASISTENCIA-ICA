@@ -74,7 +74,8 @@ export default function EsquemaAnterior({
       <img
         src={baseSrc}
         alt="Cuerpo humano frontal"
-        style={{ width: "100%", height: "auto", display: "block" }}
+        className="img-fluid"        // ← asegura escalado correcto en móvil
+        style={{ display: "block" }} // ya no forzamos width/height aquí (lo hace img-fluid)
         draggable={false}
       />
 
@@ -97,7 +98,7 @@ export default function EsquemaAnterior({
               fill: ${hitFill};
               opacity: .18;
               transition: opacity .15s ease;
-              pointer-events: auto;
+              pointer-events: auto; /* permite click/teclado sobre la figura */
               cursor: pointer;
             }
             .hit:hover, .hit:focus { opacity: .30; outline: none; }
