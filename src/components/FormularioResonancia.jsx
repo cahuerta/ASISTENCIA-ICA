@@ -1,6 +1,6 @@
+// src/components/FormularioResonancia.jsx
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import { getTheme } from "../theme.js"; // ← ruta correcta para src/components/*
 
 /** ====== Preguntas Sí/No (claves estables para backend) ====== */
 const ITEMS = [
@@ -39,118 +39,20 @@ const ITEMS = [
   { key: "ayuno_6h", label: "¿Ha cumplido ayuno de 6 horas? (si habrá sedación)" },
 ];
 
-/** ====== Utilidad ====== */
 const baseState = () => ITEMS.reduce((acc, it) => ({ ...acc, [it.key]: null }), {});
 
-function makeStyles(T) {
-  return {
-    card: {
-      background: T.surface || "#fff",
-      borderRadius: 12,
-      padding: 16,
-      boxShadow: T.shadowSm || "0 2px 10px rgba(0,0,0,0.06)",
-      maxHeight: "80vh",
-      overflowY: "auto",
-      color: T.text || "#0f172a",
-      border: `1px solid ${T.border || "#e5e7eb"}`,
-    },
-    title: { fontWeight: 800, fontSize: 18, marginBottom: 10, color: T.primaryDark || T.primary },
-    grid: { display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" },
-    row: { display: "grid", gap: 6 },
-    label: { fontWeight: 600, fontSize: 13, lineHeight: 1.2, color: T.textMuted || "#475569" },
-    seg: { display: "flex", gap: 6 },
-    segBtn: (active) => ({
-      flex: 1,
-      padding: "10px 12px",
-      borderRadius: 8,
-      border: `1px solid ${T.border || "#d0d7de"}`,
-      background: active ? T.primary || "#0072CE" : T.surface || "#fff",
-      color: active ? T.onPrimary || "#fff" : T.text || "#111",
-      cursor: "pointer",
-      fontWeight: 700,
-      textAlign: "center",
-    }),
-    actions: {
-      position: "sticky",
-      bottom: 0,
-      background: `linear-gradient(transparent, ${T.surface || "#fff"} 40%)`,
-      paddingTop: 12,
-      display: "flex",
-      gap: 10,
-      marginTop: 14,
-      flexWrap: "wrap",
-      borderTop: `1px solid ${T.border || "#e5e7eb"}`,
-    },
-    btn: {
-      flex: "1 0 200px",
-      background: T.primary || "#0072CE",
-      color: T.onPrimary || "#fff",
-      border: "none",
-      padding: "12px 14px",
-      borderRadius: 8,
-      cursor: "pointer",
-      fontWeight: 700,
-      boxShadow: T.shadowSm,
-    },
-    btnGray: {
-      flex: "1 0 200px",
-      background: T.muted || "#667085",
-      color: T.onMuted || "#fff",
-      border: "none",
-      padding: "12px 14px",
-      borderRadius: 8,
-      cursor: "pointer",
-      fontWeight: 700,
-    },
-    hint: { fontSize: 12, color: T.textMuted || "#555" },
-    warnCard: {
-      background: T.warningBg || "#fff8e1",
-      border: `1px solid ${T.warningBorder || "#ffe08a"}`,
-      borderRadius: 8,
-      padding: 10,
-      marginBottom: 10,
-      color: T.warningText || "#5f370e",
-    },
-    okCard: {
-      background: T.successBg || "#e6fffa",
-      border: `1px solid ${T.successBorder || "#b2f5ea"}`,
-      borderRadius: 8,
-      padding: 10,
-      marginBottom: 10,
-      color: T.successText || "#234e52",
-    },
-    textarea: {
-      width: "100%",
-      padding: 10,
-      borderRadius: 8,
-      border: `1px solid ${T.border || "#d0d7de"}`,
-      minHeight: 84,
-      background: T.surface || "#fff",
-      color: T.text || "#0f172a",
-    },
-  };
-}
-
-/**
- * FormularioResonancia
- * - Usa tema desde theme.json (getTheme)
- * - Solo valida y entrega datos al padre vía onSave(form)
- */
 export default function FormularioResonancia({
   initial = {},
   onSave,
   onCancel,
 }) {
-  const T = getTheme();
-  const S = makeStyles(T);
-
   const [form, setForm] = useState({
     ...baseState(),
     observaciones: "",
     ...initial,
   });
 
-  // Carga desde sessionStorage si existe (opcional UX)
+  // Carga desde sessionStorage si existe (UX: continuar donde quedó)
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("resonanciaJSON");
@@ -220,37 +122,77 @@ export default function FormularioResonancia({
   };
 
   return (
-    <div style={S.card}>
-      <div style={S.title}>Formulario Resonancia (Sí/No)</div>
+    <div
+      className="card"
+      style={{
+        maxHeight: "80vh",
+        overflowY: "auto",
+      }}
+    >
+      <div className="h1" style={{ fontWeight: 800, fontSize: 18, marginBottom: 10, color: "var(--primary-dark, var(--primary))" }}>
+        Formulario Resonancia (Sí/No)
+      </div>
 
       {/* Resumen dinámico */}
       {riesgos.length > 0 ? (
-        <div style={S.warnCard}>
+        <div
+          style={{
+            background: "var(--warning-bg, #fff8e1)",
+            border: "1px solid var(--warning-border, #ffe08a)",
+            borderRadius: 8,
+            padding: 10,
+            marginBottom: 10,
+            color: "var(--warning-text, #5f370e)",
+          }}
+        >
           <strong>Alertas relevantes:</strong>
           <ul style={{ margin: "6px 0 0 18px" }}>
             {riesgos.map((t, i) => (
               <li key={i}>{t}</li>
             ))}
           </ul>
-          <div style={S.hint}>
+          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
             Este resumen es informativo; la decisión clínica y logística se define fuera del formulario.
           </div>
         </div>
       ) : (
-        <div style={S.okCard}>
+        <div
+          style={{
+            background: "var(--success-bg, #e6fffa)",
+            border: "1px solid var(--success-border, #b2f5ea)",
+            borderRadius: 8,
+            padding: 10,
+            marginBottom: 10,
+            color: "var(--success-text, #234e52)",
+          }}
+        >
           <strong>Sin alertas marcadas.</strong> Completa todas las respuestas para confirmar.
         </div>
       )}
 
       {/* Preguntas Sí/No */}
-      <div style={S.grid}>
+      <div
+        style={{
+          display: "grid",
+          gap: 12,
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+        }}
+      >
         {ITEMS.map(({ key, label }) => (
-          <div key={key} style={S.row}>
-            <label style={S.label}>{label}</label>
-            <div style={S.seg} role="group" aria-label={label}>
+          <div key={key} style={{ display: "grid", gap: 6 }}>
+            <label style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.2, color: "var(--text-muted)" }}>
+              {label}
+            </label>
+            <div style={{ display: "flex", gap: 6 }} role="group" aria-label={label}>
               <button
                 type="button"
-                style={S.segBtn(form[key] === true)}
+                className="btn"
+                style={{
+                  flex: 1,
+                  background: form[key] === true ? "var(--primary)" : "var(--surface)",
+                  color: form[key] === true ? "var(--on-primary,#fff)" : "var(--text)",
+                  border: "1px solid var(--border)",
+                }}
                 onClick={() => setYN(key, true)}
                 aria-pressed={form[key] === true}
               >
@@ -258,7 +200,13 @@ export default function FormularioResonancia({
               </button>
               <button
                 type="button"
-                style={S.segBtn(form[key] === false)}
+                className="btn"
+                style={{
+                  flex: 1,
+                  background: form[key] === false ? "var(--primary)" : "var(--surface)",
+                  color: form[key] === false ? "var(--on-primary,#fff)" : "var(--text)",
+                  border: "1px solid var(--border)",
+                }}
                 onClick={() => setYN(key, false)}
                 aria-pressed={form[key] === false}
               >
@@ -270,32 +218,71 @@ export default function FormularioResonancia({
       </div>
 
       {/* Observaciones opcional */}
-      <div style={{ marginTop: 12 }}>
-        <div style={S.row}>
-          <label style={S.label}>Observaciones (opcional)</label>
+      <div className="mt-12">
+        <div style={{ display: "grid", gap: 6 }}>
+          <label style={{ fontWeight: 600, fontSize: 13, lineHeight: 1.2, color: "var(--text-muted)" }}>
+            Observaciones (opcional)
+          </label>
           <textarea
-            style={S.textarea}
             value={form.observaciones}
             onChange={(e) => setForm((f) => ({ ...f, observaciones: e.target.value }))}
             placeholder="Notas: fechas de cirugía, tipo de dispositivo, documentación adjunta, etc."
+            style={{ minHeight: 84 }}
           />
         </div>
       </div>
 
       {/* Acciones */}
-      <div style={S.actions}>
-        <button type="button" style={S.btnGray} onClick={responderTodoNo}>
+      <div
+        className="mt-12"
+        style={{
+          position: "sticky",
+          bottom: 0,
+          background: "linear-gradient(transparent, var(--surface,#fff) 40%)",
+          paddingTop: 12,
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          borderTop: "1px solid var(--border)",
+        }}
+      >
+        <button
+          type="button"
+          className="btn"
+          onClick={responderTodoNo}
+          style={{
+            flex: "1 0 200px",
+            background: "var(--muted, #667085)",
+            border: "1px solid var(--muted, #667085)",
+            color: "var(--on-primary,#fff)",
+          }}
+        >
           Marcar todo en No
         </button>
-        <button type="button" style={S.btnGray} onClick={() => onCancel?.()}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => onCancel?.()}
+          style={{
+            flex: "1 0 200px",
+            background: "var(--surface)",
+            color: "var(--text)",
+            border: "1px solid var(--border)",
+          }}
+        >
           Cancelar
         </button>
-        <button type="button" style={S.btn} onClick={guardar}>
+        <button
+          type="button"
+          className="btn"
+          onClick={guardar}
+          style={{ flex: "1 0 200px" }}
+        >
           Guardar
         </button>
       </div>
 
-      <div style={{ marginTop: 8, ...S.hint }}>
+      <div className="mt-12" style={{ fontSize: 12, color: "var(--text-muted)" }}>
         * Este formulario no reemplaza la evaluación médica; sirve para screening de seguridad y logística del examen.
       </div>
     </div>
