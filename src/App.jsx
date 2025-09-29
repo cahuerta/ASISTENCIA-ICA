@@ -1,7 +1,7 @@
 // src/App.jsx
 "use client";
 import React, { useState, useEffect, useRef } from "react";
-import "./app.css"; // ← NUEVO: CSS global con media queries
+import "./app.css";
 
 /* Esquema corporal */
 import EsquemaAnterior from "./EsquemaAnterior.jsx";
@@ -56,6 +56,14 @@ const normalizarGenero = (g = "") => {
 };
 
 function App() {
+  /* ====================== ESTADO RAÍZ (flujo nuevo) ====================== */
+  // pasos: 'inicio' | 'paciente' | 'menu' | 'modulo'
+  const [paso, setPaso] = useState("inicio");
+  const [isGuest, setIsGuest] = useState(false);
+
+  // módulo activo dentro del paso 'modulo'
+  const [modulo, setModulo] = useState("trauma"); // 'trauma' | 'preop' | 'generales' | 'ia'
+
   const [datosPaciente, setDatosPaciente] = useState({
     nombre: "",
     rut: "",
@@ -65,11 +73,8 @@ function App() {
     lado: "",
   });
 
-  // Módulo activo: 'trauma' | 'preop' | 'generales' | 'ia'
-  const [modulo, setModulo] = useState("trauma");
-
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
-  const [pagoRealizado, setPagoRealizado] = useState(false); // usado por módulos que lean el query param
+  const [pagoRealizado, setPagoRealizado] = useState(false);
   const pollerRef = useRef(null);
 
   // Vista esquema (frontal/posterior)
@@ -406,18 +411,13 @@ function App() {
     else await llamarGeneralesIA(payload);
   };
 
-  // ====== Restauración de estado en montaje ======
+  /* ====== Restauración de estado útil (mantengo comportamiento existente) ====== */
   useEffect(() => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
     if (saved) {
       try {
         setDatosPaciente(JSON.parse(saved));
       } catch {}
-    }
-
-    const moduloSS = sessionStorage.getItem("modulo");
-    if (["trauma", "preop", "generales", "ia"].includes(moduloSS)) {
-      setModulo(moduloSS);
     }
 
     const vistaSS = sessionStorage.getItem("vistaEsquema");
@@ -439,14 +439,11 @@ function App() {
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
 
-      // (El polling fino lo hace cada módulo; mantenemos legacy para compatibilidad)
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
-          // Trauma
           await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`);
-          // Preop / Generales manejan su propia restauración
         } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
@@ -454,7 +451,6 @@ function App() {
         }
       }, 2000);
     } else if (!pago && idFinal) {
-      // Si venimos de historial con idPago en sessionStorage
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
     } else if (pago === "ok" && !idFinal) {
@@ -464,13 +460,6 @@ function App() {
       setMostrarVistaPrevia(false);
       setPagoRealizado(false);
     }
-
-    return () => {
-      if (pollerRef.current) {
-        clearInterval(pollerRef.current);
-        pollerRef.current = null;
-      }
-    };
   }, []);
 
   // Persistir vista de esquema
@@ -497,7 +486,7 @@ function App() {
     const z = String(zona || "");
     const zl = z.toLowerCase();
 
-    // --- Columna: respetar cervical/dorsal/lumbar, sin lado ---
+    // Columna: cervical/dorsal/lumbar sin lado
     if (zl.includes("columna cervical")) {
       dolor = "Columna cervical";
       lado = "";
@@ -505,7 +494,6 @@ function App() {
       dolor = "Columna dorsal";
       lado = "";
     } else if (zl.includes("columna lumbar") || zl.includes("columna")) {
-      // Mantiene tu comportamiento previo si llega "Columna" sin subtipo
       dolor = "Columna lumbar";
       lado = "";
     } else if (zl.includes("cadera")) {
@@ -514,9 +502,7 @@ function App() {
     } else if (zl.includes("rodilla")) {
       dolor = "Rodilla";
       lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    }
-    // === NUEVAS ZONAS (igual que arriba) ===
-    else if (zl.includes("hombro")) {
+    } else if (zl.includes("hombro")) {
       dolor = "Hombro";
       lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
     } else if (zl.includes("codo")) {
@@ -538,7 +524,7 @@ function App() {
       return next;
     });
 
-    // >>> Abrir mapper genérico si existe para la zona (en Trauma o IA)
+    // Abrir mapper genérico si existe (en Trauma o IA)
     const key = resolveZonaKey(dolor);
     if ((modulo === "trauma" || modulo === "ia") && key && hasMapper(key)) {
       setMapperId(key);
@@ -546,20 +532,21 @@ function App() {
     }
   };
 
-  // ====== Submit del formulario principal ======
+  // ====== Submit del formulario principal (solo cuando estamos en 'modulo') ======
   const handleSubmit = async (e) => {
     e.preventDefault();
     const edadNum = Number(datosPaciente.edad);
 
-    // Reglas generales
-    if (
-      !datosPaciente.nombre?.trim() ||
-      !datosPaciente.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0
-    ) {
-      alert("Por favor complete nombre, RUT y edad (>0).");
-      return;
+    if (!isGuest) {
+      if (
+        !datosPaciente.nombre?.trim() ||
+        !datosPaciente.rut?.trim() ||
+        !Number.isFinite(edadNum) ||
+        edadNum <= 0
+      ) {
+        alert("Por favor complete nombre, RUT y edad (>0).");
+        return;
+      }
     }
 
     // Solo TRAUMA exige dolor/lado
@@ -579,7 +566,7 @@ function App() {
       return;
     }
 
-    // Otros módulos (trauma/ia): mostrar el módulo correspondiente
+    // Otros módulos (trauma/ia)
     setMostrarVistaPrevia(true);
     setPagoRealizado(false);
     setPendingPreview(false);
@@ -592,7 +579,6 @@ function App() {
     );
     if (!ok) return;
 
-    // 0) Detener polling local conocido
     try {
       if (pollerRef.current) {
         clearInterval(pollerRef.current);
@@ -600,7 +586,6 @@ function App() {
       }
     } catch {}
 
-    // 1) Cancelar TODOS los timeouts/intervalos del documento
     try {
       const maxId = setTimeout(() => {}, 0);
       for (let i = 0; i <= maxId; i++) {
@@ -609,7 +594,6 @@ function App() {
       }
     } catch {}
 
-    // 2) Limpiar storages (todo)
     try {
       sessionStorage.clear();
     } catch {}
@@ -617,7 +601,6 @@ function App() {
       localStorage.clear();
     } catch {}
 
-    // 3) Borrar caches (PWA/Fetch Cache)
     try {
       if ("caches" in window) {
         const names = await caches.keys();
@@ -625,7 +608,6 @@ function App() {
       }
     } catch {}
 
-    // 4) Desregistrar Service Workers
     try {
       if ("serviceWorker" in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
@@ -633,29 +615,24 @@ function App() {
       }
     } catch {}
 
-    // 5) Construir URL limpia (sin query ni hash)
     let cleanUrl = window.location.href;
     try {
       const url = new URL(window.location.href);
-      url.search = ""; // quita ?pago=...&idPago=...
-      url.hash = ""; // por si algo usa #...
+      url.search = "";
+      url.hash = "";
       cleanUrl = url.toString();
-      // Reemplaza en el historial para no dejar “colas” de retorno
       window.history.replaceState(null, "", cleanUrl);
     } catch {}
 
-    // 6) Recarga dura: estado React limpio, sin params, sin SW, sin caches
     try {
       window.location.replace(cleanUrl);
     } catch {
-      // fallback
       window.location.reload();
     }
   };
 
-  /* ====== Reset de PREVIEW al cambiar de módulo ====== */
-  const resetPreviewOnModuleChange = (nextKey) => {
-    // 0) Detener polling local
+  /* ====== Reset de PREVIEW al entrar a un módulo ====== */
+  const resetPreviewForModule = (nextKey) => {
     try {
       if (pollerRef.current) {
         clearInterval(pollerRef.current);
@@ -663,18 +640,16 @@ function App() {
       }
     } catch {}
 
-    // 1) Cerrar y limpiar vistas/modales y preview
     setMostrarVistaPrevia(false);
     setPagoRealizado(false);
     setPendingPreview(false);
     setShowReso(false);
     setResolverReso(null);
-    setMostrarMapper(false); // <— cerrar modal genérico
+    setMostrarMapper(false);
     setMostrarComorbilidades(false);
     setRmPdfListo(false);
     setRmIdPago("");
 
-    // 2) Limpiar datos de previews para evitar “restauraciones” cruzadas
     try {
       [
         "preop_ia_examenes",
@@ -687,7 +662,6 @@ function App() {
       ].forEach((k) => sessionStorage.removeItem(k));
     } catch {}
 
-    // 3) Dejar URL sin parámetros de pago
     try {
       const url = new URL(window.location.href);
       if (url.search) {
@@ -697,64 +671,136 @@ function App() {
     } catch {}
   };
 
-  // ====== UI ======
-  return (
-    <div className="app" style={cssVars}>
-      {/* Barra superior fija */}
-      <div style={styles.topBarWrap}>
-        <div style={styles.topBar}>
-          {[
-            { key: "trauma", label: "ASISTENTE TRAUMATOLÓGICO" },
-            { key: "preop", label: "EXÁMENES PREQUIRÚRGICOS" },
-            { key: "generales", label: "REVISIÓN GENERAL" },
-            { key: "ia", label: "ANÁLISIS MEDIANTE IA" },
-          ].map((b) => {
-            const active = modulo === b.key;
-            const styleBtn = {
-              ...styles.topBtn,
-              ...(active ? styles.topBtnActive : styles.topBtnIdle),
-            };
-            return (
-              <button
-                key={b.key}
-                type="button"
-                onClick={() => {
-                  if (modulo !== b.key) resetPreviewOnModuleChange(b.key);
-                  setModulo(b.key);
-                  try {
-                    sessionStorage.setItem("modulo", b.key);
-                  } catch {}
-                  setPendingPreview(false);
-                  // Aviso Legal al entrar por primera vez a PREOP o GENERALES
-                  if (
-                    (b.key === "preop" || b.key === "generales") &&
-                    !avisoOkRef.current[b.key]
-                  ) {
-                    setMostrarAviso(true);
-                  }
-                }}
-                className="btn" // usa estilos base móviles
-                style={styleBtn}
-              >
-                {b.label}
-              </button>
-            );
-          })}
-
-          {/* Botón REINICIAR siempre visible */}
-          <button
-            type="button"
-            onClick={handleReiniciar}
-            aria-label="Reiniciar asistente"
-            className="btn secondary"
-            style={{ ...styles.topBtn, ...styles.topBtnIdle }}
-          >
-            REINICIAR
-          </button>
-        </div>
+  /* ============================ UI POR PASOS ============================ */
+  const PantallaInicio = () => (
+    <div className="card" style={styles.centerCard}>
+      <div style={{ textAlign: "center", marginBottom: 16 }}>
+        <h1 style={{ margin: 0 }}>Asistente Virtual para Pacientes</h1>
+        <p style={{ margin: 0, color: T.textMuted }}>icaricular.cl</p>
+      </div>
+      <div style={{ display: "grid", gap: 12 }}>
+        <button
+          className="btn"
+          onClick={() => {
+            setIsGuest(false);
+            setPaso("paciente");
+          }}
+        >
+          Ingresar Paciente
+        </button>
+        <button
+          className="btn secondary"
+          onClick={() => {
+            setIsGuest(true);
+            setPaso("menu");
+          }}
+          title="Modo prueba (permite navegar y generar documentos)"
+        >
+          Guest
+        </button>
       </div>
 
-      {/* Modal Aviso Legal */}
+      <div style={{ marginTop: 16 }}>
+        <button className="btn ghost" onClick={handleReiniciar}>
+          Reiniciar
+        </button>
+      </div>
+    </div>
+  );
+
+  const PantallaPaciente = () => (
+    <div className="card" style={styles.centerCard}>
+      <h2 style={{ marginTop: 0 }}>Datos del Paciente</h2>
+      {/* Usamos el mismo componente actual; la simplificación del formulario la hacemos luego */}
+      <FormularioPaciente
+        datos={datosPaciente}
+        onCambiarDato={handleCambiarDato}
+        onSubmit={(e) => {
+          e.preventDefault();
+          // Pasamos a menú sin validar aquí (la validación ocurre al usar los módulos)
+          setPaso("menu");
+        }}
+        moduloActual={"generales"}
+      />
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button className="btn ghost" onClick={() => setPaso("inicio")}>
+          Volver
+        </button>
+        <button
+          className="btn"
+          onClick={() => setPaso("menu")}
+          style={{ marginLeft: "auto" }}
+        >
+          Continuar
+        </button>
+      </div>
+    </div>
+  );
+
+  const BotonModulo = ({ onClick, children }) => (
+    <button className="btn" style={styles.menuBtn} onClick={onClick}>
+      {children}
+    </button>
+  );
+
+  const PantallaMenu = () => (
+    <div className="card" style={styles.centerCard}>
+      <h2 style={{ marginTop: 0, textAlign: "center" }}>Menú</h2>
+      <div style={styles.menuGrid}>
+        {/* Arriba: TraumaIA y ANÁLISIS MEDIANTE IA */}
+        <BotonModulo
+          onClick={() => {
+            resetPreviewForModule("trauma");
+            setModulo("trauma");
+            setPaso("modulo");
+          }}
+        >
+          TraumaIA
+        </BotonModulo>
+        <BotonModulo
+          onClick={() => {
+            resetPreviewForModule("ia");
+            setModulo("ia");
+            setPaso("modulo");
+          }}
+        >
+          ANÁLISIS MEDIANTE IA
+        </BotonModulo>
+
+        {/* Abajo: Preoperatorio y Generales */}
+        <BotonModulo
+          onClick={() => {
+            resetPreviewForModule("preop");
+            setModulo("preop");
+            setPaso("modulo");
+            if (!avisoOkRef.current.preop) setMostrarAviso(true);
+          }}
+        >
+          Preoperatorio
+        </BotonModulo>
+        <BotonModulo
+          onClick={() => {
+            resetPreviewForModule("generales");
+            setModulo("generales");
+            setPaso("modulo");
+            if (!avisoOkRef.current.generales) setMostrarAviso(true);
+          }}
+        >
+          Generales
+        </BotonModulo>
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <button className="btn ghost" onClick={() => setPaso(isGuest ? "inicio" : "paciente")}>
+          Volver
+        </button>
+      </div>
+    </div>
+  );
+
+  const PantallaModulo = () => (
+    <>
+      {/* Modal Aviso Legal (para preop/generales) */}
       <AvisoLegal
         visible={mostrarAviso}
         persist={false}
@@ -804,10 +850,16 @@ function App() {
                 "Seleccione una zona en el esquema"
               )}
             </div>
+
+            <div style={{ marginTop: 8 }}>
+              <button className="btn ghost" onClick={() => setPaso("menu")}>
+                Volver al Menú
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Columna 2 - Formulario Paciente */}
+        {/* Columna 2 - Formulario Paciente (se usa igual que antes) */}
         <div className="col" style={styles.formCol}>
           <div className="card">
             <FormularioPaciente
@@ -825,7 +877,6 @@ function App() {
             {mostrarVistaPrevia && modulo === "trauma" && (
               <TraumaModulo
                 initialDatos={datosPaciente}
-                // props opcionales para usar el checklist desde el módulo
                 onPedirChecklistResonancia={pedirChecklistResonancia}
                 onDetectarResonancia={detectarResonanciaEnBackend}
                 resumenResoTexto={resumenResoTexto}
@@ -956,74 +1007,50 @@ function App() {
           </div>
         </div>
       )}
+    </>
+  );
+
+  /* ================== Render raíz por paso ================== */
+  return (
+    <div className="app" style={cssVars}>
+      {paso === "inicio" && <PantallaInicio />}
+      {paso === "paciente" && <PantallaPaciente />}
+      {paso === "menu" && <PantallaMenu />}
+      {paso === "modulo" && <PantallaModulo />}
     </div>
   );
 }
 
 /* ================== Styles (solo variables del theme.json) ================== */
 const styles = {
-  /* Top bar */
-  topBarWrap: {
-    position: "sticky",
-    top: 0,
-    zIndex: 50,
-    background: T.headerBg || T.bg,
-    borderBottomWidth: 1,
-    borderBottomStyle: "solid",
-    borderBottomColor: T.headerBorder ?? T.border,
-    boxShadow: T.headerShadow ?? T.shadowSm,
+  /* Centro reutilizable para Inicio / Paciente / Menú */
+  centerCard: {
+    maxWidth: 520,
+    margin: "24px auto",
+    padding: 16,
   },
-  topBar: {
-    maxWidth: 1200,
-    margin: "0 auto",
-    padding: "12px 16px",
+
+  /* Grid menú 2×2 */
+  menuGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(5, 1fr)", // 4 módulos + Reiniciar
+    gridTemplateColumns: "1fr 1fr",
     gap: 12,
   },
-  topBtn: {
-    borderRadius: 10,
-    padding: "12px 14px",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-    transition: "all .18s ease",
-    lineHeight: 1.2,
-    borderWidth: 2,
-    borderStyle: "solid",
-  },
-  topBtnActive: {
-    backgroundColor: T.primary,
-    color: T.onPrimary,
-    borderColor: T.primaryDark,
-    boxShadow: `0 0 0 3px ${T.accentAlpha}, ${T.shadowMd}`,
-    transform: "translateY(-1px)",
-  },
-  topBtnIdle: {
-    backgroundColor: T.surface,
-    color: T.primary,
-    borderColor: T.primary,
+  menuBtn: {
+    padding: "22px 12px",
+    fontSize: 16,
+    fontWeight: 800,
   },
 
-  /* Layout principal ahora se maneja con clases .row/.col (app.css) */
+  /* Layout de módulos (misma línea visual previa) */
   contentRow: {
     alignItems: "flex-start",
+    marginTop: 12,
   },
 
-  // Mantengo anchos máximos para que en desktop se vean parecidos a tu diseño
   esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
-  formCol: {
-    flex: "0 0 400px",
-    maxWidth: 400,
-    position: "relative",
-    zIndex: 0,
-  },
-  previewCol: {
-    minWidth: 360,
-    position: "relative",
-    zIndex: 0,
-    overflow: "hidden",
-  },
+  formCol: { flex: "0 0 400px", maxWidth: 400, position: "relative", zIndex: 0 },
+  previewCol: { minWidth: 360, position: "relative", zIndex: 0, overflow: "hidden" },
 
   statusBox: {
     marginTop: 8,
