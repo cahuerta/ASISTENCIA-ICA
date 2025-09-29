@@ -64,9 +64,21 @@ function cirugiasParaZona(dolor = "") {
   return [];
 }
 
-function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "trauma" }) {
+function FormularioPaciente({
+  datos,
+  onCambiarDato,
+  onSubmit,
+  moduloActual = "trauma",
+  modoInvitado: modoInvitadoProp = undefined,
+}) {
   const [rutMsg, setRutMsg] = useState("");
   const [rutValido, setRutValido] = useState(true);
+
+  // Detecta modo invitado por prop o por sessionStorage ("guest" = "1")
+  const modoInvitado =
+    typeof modoInvitadoProp === "boolean"
+      ? modoInvitadoProp
+      : (typeof window !== "undefined" && sessionStorage.getItem("guest") === "1");
 
   // === Mostrar "Tipo de cirugía" SOLO en PREOP
   const isPreop =
@@ -121,6 +133,14 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
 
   /* ======= RUT en vivo ======= */
   const handleRutChange = (e) => {
+    // En modo invitado: no forzamos limpieza/longitud, solo guardamos lo que escribe
+    if (modoInvitado) {
+      onCambiarDato("rut", e.target.value);
+      setRutValido(true);
+      setRutMsg("");
+      return;
+    }
+
     let s = limpiarRut(e.target.value);
     if (s.length > 9) s = s.slice(0, 9);
 
@@ -147,6 +167,8 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
   };
 
   const handleRutBlur = () => {
+    if (modoInvitado) return; // En guest no autoformateamos ni validamos
+
     const s = limpiarRut(datos?.rut || "");
     if (!s) {
       setRutValido(false);
@@ -166,26 +188,31 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
     setRutMsg("RUT formateado.");
   };
 
-  /* ======= Submit (valida RUT y, si PREOP, exige tipo de cirugía) ======= */
+  /* ======= Submit =======
+     - En guest: no bloqueamos por RUT ni por tipo de cirugía
+     - En normal: validamos RUT, y si PREOP exigimos tipo de cirugía
+  */
   const handleSubmit = (e) => {
-    const v = validarRut(datos?.rut || "");
-    if (!v.valido) {
-      e.preventDefault();
-      setRutValido(false);
-      setRutMsg(v.motivo ? `RUT inválido: ${v.motivo}.` : "RUT inválido.");
-      return;
-    }
-
-    if (isPreop) {
-      if (!tipoCirugia) {
+    if (!modoInvitado) {
+      const v = validarRut(datos?.rut || "");
+      if (!v.valido) {
         e.preventDefault();
-        alert("Seleccione el TIPO DE CIRUGÍA.");
+        setRutValido(false);
+        setRutMsg(v.motivo ? `RUT inválido: ${v.motivo}.` : "RUT inválido.");
         return;
       }
-      if (tipoCirugia === "OTRO (ESPECIFICAR)" && !tipoCirugiaLibre.trim()) {
-        e.preventDefault();
-        alert("Especifique el tipo de cirugía en el campo 'Otro'.");
-        return;
+
+      if (isPreop) {
+        if (!tipoCirugia) {
+          e.preventDefault();
+          alert("Seleccione el TIPO DE CIRUGÍA.");
+          return;
+        }
+        if (tipoCirugia === "OTRO (ESPECIFICAR)" && !tipoCirugiaLibre.trim()) {
+          e.preventDefault();
+          alert("Especifique el tipo de cirugía en el campo 'Otro'.");
+          return;
+        }
       }
     }
 
@@ -207,32 +234,37 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
     }
   };
 
-  const showCirugia = isPreop;
+  const showCirugia = isPreop && !modoInvitado; // en Guest no exigimos ni mostramos ese bloque
   const listaOpciones =
     opcionesCirugia.length > 0 ? opcionesCirugia : ["OTRO (ESPECIFICAR)"];
 
+  // Helpers de "required": en modo invitado, nunca requerimos
+  const req = (v) => (modoInvitado ? undefined : v);
+
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} noValidate={modoInvitado}>
       <h1 className="h1 center mb-12">Asistente Virtual para Pacientes</h1>
 
       <label>Nombre completo:</label>
       <input
         type="text"
-        value={datos.nombre || ""}
+        value={String(datos?.nombre ?? "")}
         onChange={(e) => onCambiarDato("nombre", e.target.value)}
-        required
+        required={req(true)}
+        autoComplete="name"
+        autoCapitalize="words"
       />
 
       <label>RUT:</label>
       <input
         type="text"
-        value={datos.rut || ""}
+        value={String(datos?.rut ?? "")}
         onChange={handleRutChange}
         onBlur={handleRutBlur}
         placeholder="12.345.678-9"
         inputMode="text"
         autoComplete="off"
-        required
+        required={req(true)}
         aria-invalid={!rutValido}
         aria-describedby="rut-help"
         className={rutValido ? "" : "input-error"}
@@ -246,41 +278,42 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
           color: rutValido ? "var(--text-muted)" : "var(--primary-dark)",
         }}
       >
-        {rutMsg}
+        {modoInvitado ? "" : rutMsg}
       </div>
 
       <label>Edad:</label>
       <input
         type="number"
-        min="10"
-        max="110"
-        value={datos.edad ?? ""}
+        min={modoInvitado ? undefined : 10}
+        max={modoInvitado ? undefined : 110}
+        value={String(datos?.edad ?? "")}
         onChange={(e) => onCambiarDato("edad", e.target.value)}
-        required
+        required={req(true)}
+        inputMode="numeric"
       />
 
       <label>Género:</label>
       <select
-        value={datos.genero || ""}
+        value={String(datos?.genero ?? "")}
         onChange={(e) => onCambiarDato("genero", e.target.value)}
-        required
+        required={req(true)}
       >
-        <option value="">Seleccione…</option>
+        <option value="">{modoInvitado ? "Opcional…" : "Seleccione…"}</option>
         {/* Valores COMPATIBLES con tu app: MASCULINO / FEMENINO */}
         <option value="MASCULINO">MASCULINO</option>
         <option value="FEMENINO">FEMENINO</option>
       </select>
 
-      {/* Dolor/Lado: se ocultan en GENERALES */}
+      {/* Dolor/Lado: se ocultan en GENERALES; en guest también opcionales */}
       {!isGenerales && (
         <>
           <label>Dolor:</label>
           <select
-            value={datos.dolor || ""}
+            value={String(datos?.dolor ?? "")}
             onChange={manejoCambioDolor}
-            required
+            required={req(true)}
           >
-            <option value="">Seleccione...</option>
+            <option value="">{modoInvitado ? "Opcional…" : "Seleccione..."}</option>
             {/* existentes */}
             <option value="Rodilla">Rodilla</option>
             <option value="Cadera">Cadera</option>
@@ -297,16 +330,16 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
 
           <label>Lado:</label>
           <select
-            value={datos.lado || ""}
+            value={String(datos?.lado ?? "")}
             onChange={(e) => onCambiarDato("lado", e.target.value)}
-            required={!isZonaColumna}
+            required={req(!isZonaColumna)}
             disabled={isZonaColumna}
           >
             {isZonaColumna ? (
               <option value="">No aplica</option>
             ) : (
               <>
-                <option value="">Seleccione...</option>
+                <option value="">{modoInvitado ? "Opcional…" : "Seleccione..."}</option>
                 <option value="Derecha">Derecha</option>
                 <option value="Izquierda">Izquierda</option>
               </>
@@ -315,7 +348,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
         </>
       )}
 
-      {/* TIPO DE CIRUGÍA (solo en PREOP) */}
+      {/* TIPO DE CIRUGÍA (solo en PREOP y no en guest) */}
       {showCirugia && (
         <>
           <label>TIPO DE CIRUGÍA:</label>
@@ -344,7 +377,7 @@ function FormularioPaciente({ datos, onCambiarDato, onSubmit, moduloActual = "tr
       )}
 
       <button className="btn fullw mt-16" type="submit">
-        Generar Informe
+        {modoInvitado ? "Continuar (modo invitado)" : "Generar Informe"}
       </button>
     </form>
   );
