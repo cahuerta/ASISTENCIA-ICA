@@ -849,6 +849,7 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
           style={{ ...S.btnPrimary, marginTop: 12 }}
           onClick={handleGenerarPreview}
           disabled={generando}
+          aria-busy={generando}
         >
           {generando ? "Generando preview…" : "Generar PREVIEW IA"}
         </button>
@@ -914,6 +915,7 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
             style={{ ...S.btnPrimary, marginTop: 12 }}
             onClick={handleDescargarIA}
             disabled={descargando}
+            aria-busy={descargando}
             title={mensajeDescarga || "Verificar y descargar"}
           >
             {descargando
@@ -926,6 +928,7 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
             style={{ ...S.btnPrimary, marginTop: 8 }}
             onClick={handleDescargarOrdenIA}
             disabled={descargandoOrden}
+            aria-busy={descargandoOrden}
             title={mensajeDescargaOrden || "Verificar y descargar"}
           >
             {descargandoOrden
@@ -937,8 +940,14 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
 
       {/* ===== Modal local del Formulario de Resonancia ===== */}
       {showRM && (
-        <div style={S.modalBackdrop} role="dialog" aria-modal="true">
+        <div
+          style={S.modalBackdrop}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="rm-title"
+        >
           <div style={S.modalCard}>
+            <h4 id="rm-title" style={{ margin: 8, color: T.primary }}>Checklist de Resonancia</h4>
             <FormularioResonancia
               initial={resonanciaChecklist || {}}
               onSave={handleSaveRM}
