@@ -143,7 +143,9 @@ export default function RodillaMapper({
     IMG[vista] ||
     IMG.frente;
 
-  const debeEspejar = (lado === "izquierda") && (vista === "frente" || vista === "posterior");
+  // 🔧 FIX: sin paréntesis extra
+  const debeEspejar =
+    (lado === "izquierda") && (vista === "frente" || vista === "posterior");
 
   /* Puntos render (espejar cx cuando corresponde) */
   const puntosRender = useMemo(
@@ -254,10 +256,16 @@ export default function RodillaMapper({
       <div className="figure ratio-4x3 mt-10">
         <div className="ratio-inner" />
 
-        {/* Tabs de vista (centradas) */}
+        {/* Tabs de vista (centradas y por encima del SVG) */}
         <div
           className="ratio-overlay"
-          style={{ top: 10, left: "50%", transform: "translateX(-50%)", pointerEvents: "auto" }}
+          style={{
+            top: 10,
+            left: "50%",
+            transform: "translateX(-50%)",
+            pointerEvents: "auto",
+            zIndex: 5
+          }}
         >
           <div className="tabs" style={{ marginBottom: 0 }}>
             {["frente", "lateral", "posterior"].map((v) => (
@@ -282,12 +290,12 @@ export default function RodillaMapper({
           draggable={false}
         />
 
-        {/* Overlay de puntos (SVG) */}
+        {/* Overlay de puntos (debajo de los tabs) */}
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
           className="ratio-overlay"
-          style={{ pointerEvents: "auto" }}
+          style={{ pointerEvents: "auto", zIndex: 1 }}
         >
           {puntosRender.map((p, i) => (
             <Marker
