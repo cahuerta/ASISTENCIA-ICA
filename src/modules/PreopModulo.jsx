@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
-import "./PreopModulo.css"; // ← NUEVO: estilos movidos a CSS
 
 const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
@@ -55,7 +54,7 @@ function prettyComorb(c = {}) {
   }
 }
 
-/* ===== Helper para el resumen inicial PREOP (sin cambiar tus variables) ===== */
+/* ===== Helper para el resumen inicial PREOP ===== */
 function generoPalabra(genero = "") {
   const s = String(genero).toUpperCase();
   if (s === "MASCULINO") return "Hombre";
@@ -80,7 +79,7 @@ export default function PreopModulo({ initialDatos }) {
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
-  // Paso previo: "Continuar" → llama IA → segundo preview → pago/descarga
+  // Paso previo: "Continuar" → IA → segundo preview → pago/descarga
   const [stepStarted, setStepStarted] = useState(false);
   const [loadingIA, setLoadingIA] = useState(false);
 
@@ -133,7 +132,7 @@ export default function PreopModulo({ initialDatos }) {
 
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
-      setStepStarted(true); // ← clave: quedar en segundo preview
+      setStepStarted(true); // ← quedar en segundo preview
       if (pollerRef.current) clearInterval(pollerRef.current);
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
@@ -165,7 +164,7 @@ export default function PreopModulo({ initialDatos }) {
     try {
       setLoadingIA(true);
 
-      // refrescos defensivos por si se editaron justo antes
+      // refrescos defensivos
       try {
         const saved = sessionStorage.getItem("datosPacienteJSON");
         if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
@@ -364,26 +363,11 @@ export default function PreopModulo({ initialDatos }) {
   /* ===================== UI ===================== */
   const comorbChips = prettyComorb(comorbilidades);
 
-  // Inyección de variables del theme → CSS vars (sin tocar la lógica)
-  const cssVars = {
-    "--preop-surface": T.surface,
-    "--preop-border": T.border,
-    "--preop-text": T.text,
-    "--preop-primary": T.primary,
-    "--preop-onPrimary": T.onPrimary || "#fff",
-    "--preop-shadowSm": T.shadowSm || "0 1px 4px rgba(0,0,0,0.08)",
-    "--preop-bg": T.bg || "#fff",
-    "--preop-chipBg": T.chipBg || "#eef6ff",
-    "--preop-chipBorder": T.chipBorder || "#cfe4ff",
-    "--preop-chipText": T.chipText || T.primary || "#0b63c5",
-    "--preop-textMuted": T.textMuted || "#667085",
-  };
-
   return (
-    <div className="preop-card" style={cssVars} aria-live="polite">
-      <h3 className="preop-title">Vista previa — Exámenes preoperatorios</h3>
+    <div className="card" aria-live="polite">
+      <h3 className="h1" style={{ color: T.primary }}>Vista previa — Exámenes preoperatorios</h3>
 
-      <section className="preop-info">
+      <section style={{ marginBottom: 10 }}>
         <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
         <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
         <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
@@ -395,7 +379,7 @@ export default function PreopModulo({ initialDatos }) {
         {tipoCirugia ? (
           <div><strong>Tipo de cirugía:</strong> {tipoCirugia}</div>
         ) : (
-          <div className="preop-muted">
+          <div className="muted">
             (El tipo de cirugía se toma del formulario principal de PREOP.)
           </div>
         )}
@@ -404,11 +388,9 @@ export default function PreopModulo({ initialDatos }) {
       {/* Resumen inicial (antes de Continuar) */}
       {!stepStarted && (
         <>
-          <div className="preop-mono">
-            {resumenInicialPreop({ datos, comorb: comorbilidades, tipoCirugia })}
-          </div>
+          <div className="mono">{resumenInicialPreop({ datos, comorb: comorbilidades, tipoCirugia })}</div>
           <button
-            className="preop-btn"
+            className="btn fullw"
             style={{ marginTop: 10 }}
             onClick={handleContinuar}
             disabled={loadingIA}
@@ -424,13 +406,11 @@ export default function PreopModulo({ initialDatos }) {
         <>
           {/* Comorbilidades (chips) */}
           {comorbChips.length > 0 && (
-            <section style={{ marginTop: 8 }}>
+            <section className="mt-8">
               <strong>Comorbilidades:</strong>
-              <div className="preop-chips">
+              <div className="chips mt-6">
                 {comorbChips.map((t, i) => (
-                  <span key={`${t}-${i}`} className="preop-chip">
-                    {t}
-                  </span>
+                  <span key={`${t}-${i}`} className="chip">{t}</span>
                 ))}
               </div>
             </section>
@@ -438,9 +418,9 @@ export default function PreopModulo({ initialDatos }) {
 
           {/* PREVIEW (lista de IA si existe) */}
           {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
-            <section style={{ marginTop: 12 }}>
+            <section className="mt-12">
               <strong>Exámenes a solicitar (IA):</strong>
-              <ul className="preop-list">
+              <ul className="mt-6">
                 {examenesIA.map((e, idx) => (
                   <li key={`${e}-${idx}`}>
                     {typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}
@@ -449,24 +429,23 @@ export default function PreopModulo({ initialDatos }) {
               </ul>
             </section>
           ) : (
-            <div className="preop-muted" style={{ marginTop: 12 }}>
+            <div className="muted mt-12">
               (Aún no hay lista de exámenes. Desde el formulario principal pulsa “Generar Informe”
               para que se ejecute la IA y se muestre aquí.)
             </div>
           )}
 
           {informeIA && (
-            <section style={{ marginTop: 8 }}>
+            <section className="mt-8">
               <strong>Informe IA (resumen):</strong>
-              <div className="preop-informeBox">{informeIA}</div>
+              <div className="mono mt-6">{informeIA}</div>
             </section>
           )}
 
           {/* Acciones */}
           {pagoRealizado ? (
             <button
-              className="preop-btn"
-              style={{ marginTop: 12 }}
+              className="btn fullw mt-12"
               onClick={handleDescargarPreop}
               disabled={descargando}
               aria-busy={descargando}
@@ -476,8 +455,7 @@ export default function PreopModulo({ initialDatos }) {
             </button>
           ) : (
             <button
-              className="preop-btn"
-              style={{ marginTop: 12 }}
+              className="btn fullw mt-12"
               onClick={handlePagarDesdePreview}
             >
               Pagar ahora (Pre Op)
