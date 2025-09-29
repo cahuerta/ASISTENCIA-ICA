@@ -1,6 +1,6 @@
+// src/PreviewOrden.jsx
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import { getTheme } from "./theme.js";
 
 /* === BACKEND BASE (se mantiene aunque NO se usa en este primer preview) === */
 const BACKEND_BASE =
@@ -21,8 +21,6 @@ export default function PreviewOrden({
   onContinuar,
   seccionesExtra = [],
 }) {
-  const T = getTheme();
-
   const {
     nombre = "",
     rut = "",
@@ -111,27 +109,37 @@ export default function PreviewOrden({
   }, [scope, tipoCirugia, dolor, lado]);
 
   const titulo = "Vista previa — Resumen";
-  const styles = makeStyles(T);
 
   return (
-    <div style={styles.container}>
-      <div style={styles.logo}>
-        <h2 style={{ color: T.brand || T.primary, margin: 0 }}>
+    <div className="card">
+      <div className="center">
+        <h2 className="h1" style={{ margin: 0, color: "var(--primary)" }}>
           Instituto de Cirugía Articular
         </h2>
       </div>
 
-      <h3 style={styles.title}>{titulo}</h3>
+      <h3 className="h1 center" style={{ marginTop: 12 }}>
+        {titulo}
+      </h3>
 
       {/* MENSAJE DE SOLICITUD */}
       {solicitudMsg ? (
-        <div style={styles.noticeBox}>
+        <div
+          className="mt-12"
+          style={{
+            background: "var(--accent-alpha)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            padding: 12,
+            fontSize: 14,
+          }}
+        >
           <p style={{ margin: 0 }}>{solicitudMsg}</p>
         </div>
       ) : null}
 
       {/* Datos del paciente */}
-      <div style={styles.info}>
+      <div className="mt-12" style={{ fontSize: 16, lineHeight: 1.5 }}>
         <p><strong>Nombre:</strong> {nombre || "—"}</p>
         <p><strong>RUT:</strong> {rut || "—"}</p>
         <p><strong>Edad:</strong> {edad ? `${edad} años` : "—"}</p>
@@ -140,18 +148,38 @@ export default function PreviewOrden({
       </div>
 
       {/* Comorbilidades positivas */}
-      <div style={styles.chipsWrap}>
-        <div style={{ marginBottom: 6, fontWeight: 700, color: T.text }}>
+      <div
+        className="mt-12"
+        style={{
+          background: "var(--surface)",
+          border: "1px dashed var(--border)",
+          borderRadius: 10,
+          padding: 10,
+        }}
+      >
+        <div style={{ marginBottom: 6, fontWeight: 700 }}>
           Comorbilidades (positivas):
         </div>
         {chipsComorb.length > 0 ? (
-          <div style={styles.chips}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {chipsComorb.map((c, i) => (
-              <span key={i} style={styles.chip}>{c}</span>
+              <span
+                key={i}
+                style={{
+                  background: "var(--accent-alpha)",
+                  color: "var(--text)",
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  border: "1px solid var(--border)",
+                  fontSize: 13,
+                }}
+              >
+                {c}
+              </span>
             ))}
           </div>
         ) : (
-          <p style={{ margin: 0, color: T.textMuted }}>
+          <p style={{ margin: 0, color: "var(--text-muted)" }}>
             Sin comorbilidades positivas seleccionadas.
           </p>
         )}
@@ -160,10 +188,12 @@ export default function PreviewOrden({
       {/* Secciones extra opcionales */}
       {Array.isArray(seccionesExtra) &&
         seccionesExtra.map((sec, idx) => (
-          <div key={idx} style={styles.section}>
-            <strong style={styles.sectionTitle}>{sec.title}</strong>
+          <div key={idx} className="card mt-12" style={{ padding: 14 }}>
+            <strong style={{ display: "block", color: "var(--primary)", marginBottom: 6 }}>
+              {sec.title}
+            </strong>
             {Array.isArray(sec.lines) && sec.lines.length > 0 ? (
-              <ul style={styles.ul}>
+              <ul style={{ marginTop: 6, marginBottom: 0, paddingLeft: 20 }}>
                 {sec.lines.map((line, j) => (
                   <li key={j}>{line}</li>
                 ))}
@@ -177,7 +207,7 @@ export default function PreviewOrden({
       {/* Botón Continuar → IA */}
       <button
         type="button"
-        style={styles.primaryBtn}
+        className="btn fullw mt-16"
         onClick={() => {
           try { onContinuar?.(); } catch {}
         }}
@@ -185,83 +215,12 @@ export default function PreviewOrden({
         Continuar → Analizar con IA
       </button>
 
-      <div style={styles.firma}>
-        <hr style={{ width: "60%", margin: "20px auto", borderColor: T.border }} />
-        <p style={{ textAlign: "center", margin: 0, color: T.textMuted }}>
+      <div className="center" style={{ marginTop: 20, flexDirection: "column" }}>
+        <hr style={{ width: "60%", margin: "20px auto", borderColor: "var(--border)" }} />
+        <p style={{ textAlign: "center", margin: 0, color: "var(--text-muted)" }}>
           Firma médico tratante
         </p>
       </div>
     </div>
   );
 }
-
-/* ===================== ESTILOS CON THEME.JSON ===================== */
-function makeStyles(T) {
-  return {
-    container: {
-      border: `1.5px solid ${T.primary}`,
-      borderRadius: 12,
-      padding: 20,
-      backgroundColor: T.surfaceAlt || "#f9fbff",
-      fontFamily: T.font || "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-      color: T.text || "#002663",
-      boxShadow: T.shadowSm,
-    },
-    logo: { textAlign: "center", marginBottom: 12 },
-    title: {
-      textAlign: "center",
-      color: T.primaryDark || T.primary,
-      marginBottom: 16,
-      fontWeight: 800,
-    },
-    noticeBox: {
-      marginBottom: 12,
-      background: T.infoBg || T.accentAlpha || "#eef4ff",
-      border: `1px solid ${T.border}`,
-      borderRadius: 10,
-      padding: 12,
-      fontSize: 14,
-    },
-    info: { fontSize: 16, lineHeight: 1.5, marginBottom: 12 },
-    section: {
-      fontSize: 16,
-      backgroundColor: T.card || T.surface,
-      padding: 14,
-      borderRadius: 10,
-      border: `1px solid ${T.border}`,
-      marginTop: 10,
-    },
-    sectionTitle: { display: "block", color: T.primary, marginBottom: 6 },
-    ul: { marginTop: 6, marginBottom: 0, paddingLeft: 20 },
-    chipsWrap: {
-      marginTop: 10,
-      background: T.surface,
-      border: `1px dashed ${T.border}`,
-      borderRadius: 10,
-      padding: 10,
-    },
-    chips: { display: "flex", flexWrap: "wrap", gap: 8 },
-    chip: {
-      background: T.chipBg || T.accentAlpha || "rgba(0,0,0,0.05)",
-      color: T.chipText || T.text,
-      padding: "4px 10px",
-      borderRadius: 999,
-      border: `1px solid ${T.border}`,
-      fontSize: 13,
-    },
-    primaryBtn: {
-      marginTop: 14,
-      backgroundColor: T.primary,
-      color: T.onPrimary,
-      border: "none",
-      padding: "12px",
-      borderRadius: 8,
-      fontSize: 16,
-      cursor: "pointer",
-      width: "100%",
-      boxShadow: T.shadowSm,
-      transition: "transform .12s ease",
-    },
-    firma: { marginTop: 24 },
-  };
-            }
