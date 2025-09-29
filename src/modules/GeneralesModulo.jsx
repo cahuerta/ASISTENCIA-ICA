@@ -1,3 +1,4 @@
+// src/modules/GeneralesModulo.jsx
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
@@ -370,7 +371,7 @@ export default function GeneralesModulo({ initialDatos }) {
   };
 
   return (
-    <div style={styles.card}>
+    <div className="card" style={styles.card}>
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
         Vista previa — Exámenes Generales
       </h3>
@@ -390,9 +391,11 @@ export default function GeneralesModulo({ initialDatos }) {
           </div>
 
           <button
+            className="btn"
             style={styles.btnPrimary}
             onClick={handleContinuar}
             disabled={loadingIA}
+            aria-busy={loadingIA}
           >
             {loadingIA ? "Generando con IA…" : "Continuar"}
           </button>
@@ -416,7 +419,7 @@ export default function GeneralesModulo({ initialDatos }) {
           <div style={styles.block}>
             <strong>Exámenes solicitados (IA):</strong>
             {usarIA ? (
-              <ul style={{ marginTop: 6 }}>
+              <ul style={{ marginTop: 6, paddingLeft: 18 }}>
                 {examenesIA.map((e, idx) => (
                   <li key={`${e}-${idx}`}>{e}</li>
                 ))}
@@ -452,12 +455,14 @@ export default function GeneralesModulo({ initialDatos }) {
           {!pagoRealizado ? (
             <>
               <button
+                className="btn"
                 style={{ ...styles.btnPrimary, marginTop: 12 }}
                 onClick={handlePagarGenerales}
               >
                 Pagar ahora (Generales)
               </button>
               <button
+                className="btn"
                 style={{ ...styles.btnSecondary, marginTop: 8 }}
                 onClick={async () => {
                   const idPago = `generales_guest_${Date.now()}`;
@@ -504,9 +509,11 @@ export default function GeneralesModulo({ initialDatos }) {
             </>
           ) : (
             <button
+              className="btn"
               style={{ ...styles.btnPrimary, marginTop: 12 }}
               onClick={handleDescargarGenerales}
               disabled={descargando}
+              aria-busy={descargando}
               title={mensajeDescarga || "Verificar y descargar"}
             >
               {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
@@ -522,66 +529,68 @@ export default function GeneralesModulo({ initialDatos }) {
 function makeStyles(T) {
   return {
     card: {
-      background: T.surface ?? "#fff",
+      background: "var(--surface, #fff)",
       borderRadius: 12,
       padding: 16,
-      boxShadow: T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)",
-      border: `1px solid ${T.border ?? "#e8e8e8"}`,
-      color: T.text ?? "#1b1b1b",
+      boxShadow: "var(--shadow-sm, 0 2px 10px rgba(0,0,0,0.08))",
+      border: "1px solid var(--border, #e8e8e8)",
+      color: "var(--text, #1b1b1b)",
     },
     btnPrimary: {
-      backgroundColor: T.primary ?? "#0072CE",
-      color: T.onPrimary ?? "#fff",
-      border: "none",
+      backgroundColor: "var(--primary, #0072CE)",
+      color: "var(--on-primary, #fff)",
+      border: "1px solid var(--primary, #0072CE)",
       padding: "12px",
       borderRadius: 8,
       fontSize: 16,
       cursor: "pointer",
       width: "100%",
-      boxShadow: T.shadowSm ?? "0 1px 4px rgba(0,0,0,0.08)",
+      boxShadow: "var(--shadow-sm, 0 1px 4px rgba(0,0,0,0.08))",
+      transition: "transform .12s ease",
     },
     btnSecondary: {
-      backgroundColor: T.muted ?? "#777",
-      color: T.onMuted ?? "#fff",
-      border: "none",
+      backgroundColor: "var(--muted, #777)",
+      color: "var(--on-primary, #fff)",
+      border: "1px solid var(--muted, #777)",
       padding: "12px",
       borderRadius: 8,
       fontSize: 16,
       cursor: "pointer",
       width: "100%",
-      boxShadow: T.shadowSm ?? "0 1px 4px rgba(0,0,0,0.08)",
+      boxShadow: "var(--shadow-sm, 0 1px 4px rgba(0,0,0,0.08))",
+      transition: "transform .12s ease",
     },
     block: { marginTop: 12 },
     mono: {
       whiteSpace: "pre-wrap",
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-      background: T.codeBg ?? "#f7f7f7",
+      background: "var(--code-bg, #f7f7f7)",
       borderRadius: 8,
       padding: 10,
       fontSize: 13,
       lineHeight: 1.45,
-      border: `1px solid ${T.border ?? "#eee"}`,
-      color: T.text ?? "#1b1b1b",
+      border: "1px solid var(--border, #eee)",
+      color: "var(--text, #1b1b1b)",
     },
-    hint: { marginTop: 6, fontStyle: "italic", color: T.textMuted ?? "#666" },
+    hint: { marginTop: 6, fontStyle: "italic", color: "var(--text-muted, #666)" },
     tag: {
       display: "inline-block",
       borderRadius: 999,
       padding: "4px 10px",
       fontSize: 12,
-      background: T.chipBg ?? "#eef6ff",
-      border: `1px solid ${T.chipBorder ?? "#cfe4ff"}`,
-      color: T.chipText ?? (T.primary ? T.primary : "#0b63c5"),
+      background: "var(--chip-bg, #eef6ff)",
+      border: "1px solid var(--chip-border, #cfe4ff)",
+      color: "var(--chip-text, #0b63c5)",
       marginRight: 6,
       marginBottom: 6,
     },
     input: {
       width: "100%",
       borderRadius: 8,
-      border: `1px solid ${T.border ?? "#e8e8e8"}`,
+      border: "1px solid var(--border, #e8e8e8)",
       padding: "10px 12px",
-      background: T.bg ?? "#fff",
-      color: T.text ?? "#1b1b1b",
+      background: "var(--bg, #fff)",
+      color: "var(--text, #1b1b1b)",
       marginTop: 6,
     },
   };
