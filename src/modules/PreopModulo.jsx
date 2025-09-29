@@ -1,3 +1,4 @@
+// src/modules/PreopModulo.jsx
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
@@ -363,16 +364,14 @@ export default function PreopModulo({ initialDatos }) {
   const comorbChips = prettyComorb(comorbilidades);
 
   return (
-    <div style={styles.card}>
+    <div style={styles.card} aria-live="polite">
       <h3 style={{ marginTop: 0, color: T.primary }}>Vista previa — Exámenes preoperatorios</h3>
 
-      <div style={{ marginBottom: 10, color: T.text }}>
+      <section style={{ marginBottom: 10, color: T.text }}>
         <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
         <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
         <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
-        <div>
-          <strong>Género:</strong> {datos?.genero || "—"}
-        </div>
+        <div><strong>Género:</strong> {datos?.genero || "—"}</div>
         <div>
           <strong>Motivo/Área:</strong>{" "}
           {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
@@ -384,7 +383,7 @@ export default function PreopModulo({ initialDatos }) {
             (El tipo de cirugía se toma del formulario principal de PREOP.)
           </div>
         )}
-      </div>
+      </section>
 
       {/* Resumen inicial (antes de Continuar) */}
       {!stepStarted && (
@@ -396,6 +395,7 @@ export default function PreopModulo({ initialDatos }) {
             style={{ ...styles.btn, marginTop: 10 }}
             onClick={handleContinuar}
             disabled={loadingIA}
+            aria-busy={loadingIA}
           >
             {loadingIA ? "Generando con IA…" : "Continuar"}
           </button>
@@ -407,7 +407,7 @@ export default function PreopModulo({ initialDatos }) {
         <>
           {/* Comorbilidades (chips) */}
           {comorbChips.length > 0 && (
-            <div style={{ marginTop: 8 }}>
+            <section style={{ marginTop: 8 }}>
               <strong>Comorbilidades:</strong>
               <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {comorbChips.map((t, i) => (
@@ -426,12 +426,12 @@ export default function PreopModulo({ initialDatos }) {
                   </span>
                 ))}
               </div>
-            </div>
+            </section>
           )}
 
           {/* PREVIEW (lista de IA si existe) */}
           {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
-            <div style={{ marginTop: 12 }}>
+            <section style={{ marginTop: 12 }}>
               <strong>Exámenes a solicitar (IA):</strong>
               <ul style={{ marginTop: 6 }}>
                 {examenesIA.map((e, idx) => (
@@ -440,7 +440,7 @@ export default function PreopModulo({ initialDatos }) {
                   </li>
                 ))}
               </ul>
-            </div>
+            </section>
           ) : (
             <div style={{ color: T.textMuted, marginTop: 12 }}>
               (Aún no hay lista de exámenes. Desde el formulario principal pulsa “Generar Informe”
@@ -449,10 +449,10 @@ export default function PreopModulo({ initialDatos }) {
           )}
 
           {informeIA && (
-            <div style={{ marginTop: 8 }}>
+            <section style={{ marginTop: 8 }}>
               <strong>Informe IA (resumen):</strong>
               <div style={styles.informeBox}>{informeIA}</div>
-            </div>
+            </section>
           )}
 
           {/* Acciones */}
@@ -461,6 +461,7 @@ export default function PreopModulo({ initialDatos }) {
               style={{ ...styles.btn, marginTop: 12 }}
               onClick={handleDescargarPreop}
               disabled={descargando}
+              aria-busy={descargando}
               title={mensajeDescarga || "Verificar y descargar"}
             >
               {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
