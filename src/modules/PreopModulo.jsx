@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
+import "./PreopModulo.css"; // ← NUEVO: estilos movidos a CSS
 
 const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
@@ -363,11 +364,26 @@ export default function PreopModulo({ initialDatos }) {
   /* ===================== UI ===================== */
   const comorbChips = prettyComorb(comorbilidades);
 
-  return (
-    <div style={styles.card} aria-live="polite">
-      <h3 style={{ marginTop: 0, color: T.primary }}>Vista previa — Exámenes preoperatorios</h3>
+  // Inyección de variables del theme → CSS vars (sin tocar la lógica)
+  const cssVars = {
+    "--preop-surface": T.surface,
+    "--preop-border": T.border,
+    "--preop-text": T.text,
+    "--preop-primary": T.primary,
+    "--preop-onPrimary": T.onPrimary || "#fff",
+    "--preop-shadowSm": T.shadowSm || "0 1px 4px rgba(0,0,0,0.08)",
+    "--preop-bg": T.bg || "#fff",
+    "--preop-chipBg": T.chipBg || "#eef6ff",
+    "--preop-chipBorder": T.chipBorder || "#cfe4ff",
+    "--preop-chipText": T.chipText || T.primary || "#0b63c5",
+    "--preop-textMuted": T.textMuted || "#667085",
+  };
 
-      <section style={{ marginBottom: 10, color: T.text }}>
+  return (
+    <div className="preop-card" style={cssVars} aria-live="polite">
+      <h3 className="preop-title">Vista previa — Exámenes preoperatorios</h3>
+
+      <section className="preop-info">
         <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
         <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
         <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
@@ -379,7 +395,7 @@ export default function PreopModulo({ initialDatos }) {
         {tipoCirugia ? (
           <div><strong>Tipo de cirugía:</strong> {tipoCirugia}</div>
         ) : (
-          <div style={{ color: T.textMuted }}>
+          <div className="preop-muted">
             (El tipo de cirugía se toma del formulario principal de PREOP.)
           </div>
         )}
@@ -388,11 +404,12 @@ export default function PreopModulo({ initialDatos }) {
       {/* Resumen inicial (antes de Continuar) */}
       {!stepStarted && (
         <>
-          <div style={styles.mono}>
+          <div className="preop-mono">
             {resumenInicialPreop({ datos, comorb: comorbilidades, tipoCirugia })}
           </div>
           <button
-            style={{ ...styles.btn, marginTop: 10 }}
+            className="preop-btn"
+            style={{ marginTop: 10 }}
             onClick={handleContinuar}
             disabled={loadingIA}
             aria-busy={loadingIA}
@@ -409,19 +426,9 @@ export default function PreopModulo({ initialDatos }) {
           {comorbChips.length > 0 && (
             <section style={{ marginTop: 8 }}>
               <strong>Comorbilidades:</strong>
-              <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <div className="preop-chips">
                 {comorbChips.map((t, i) => (
-                  <span
-                    key={`${t}-${i}`}
-                    style={{
-                      background: T.chipBg ?? "#eef6ff",
-                      border: `1px solid ${T.chipBorder ?? "#cfe4ff"}`,
-                      color: T.chipText ?? (T.primary || "#0b63c5"),
-                      borderRadius: 999,
-                      padding: "4px 10px",
-                      fontSize: 12,
-                    }}
-                  >
+                  <span key={`${t}-${i}`} className="preop-chip">
                     {t}
                   </span>
                 ))}
@@ -433,7 +440,7 @@ export default function PreopModulo({ initialDatos }) {
           {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
             <section style={{ marginTop: 12 }}>
               <strong>Exámenes a solicitar (IA):</strong>
-              <ul style={{ marginTop: 6 }}>
+              <ul className="preop-list">
                 {examenesIA.map((e, idx) => (
                   <li key={`${e}-${idx}`}>
                     {typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}
@@ -442,7 +449,7 @@ export default function PreopModulo({ initialDatos }) {
               </ul>
             </section>
           ) : (
-            <div style={{ color: T.textMuted, marginTop: 12 }}>
+            <div className="preop-muted" style={{ marginTop: 12 }}>
               (Aún no hay lista de exámenes. Desde el formulario principal pulsa “Generar Informe”
               para que se ejecute la IA y se muestre aquí.)
             </div>
@@ -451,14 +458,15 @@ export default function PreopModulo({ initialDatos }) {
           {informeIA && (
             <section style={{ marginTop: 8 }}>
               <strong>Informe IA (resumen):</strong>
-              <div style={styles.informeBox}>{informeIA}</div>
+              <div className="preop-informeBox">{informeIA}</div>
             </section>
           )}
 
           {/* Acciones */}
           {pagoRealizado ? (
             <button
-              style={{ ...styles.btn, marginTop: 12 }}
+              className="preop-btn"
+              style={{ marginTop: 12 }}
               onClick={handleDescargarPreop}
               disabled={descargando}
               aria-busy={descargando}
@@ -468,7 +476,8 @@ export default function PreopModulo({ initialDatos }) {
             </button>
           ) : (
             <button
-              style={{ ...styles.btn, backgroundColor: T.primary, marginTop: 12 }}
+              className="preop-btn"
+              style={{ marginTop: 12 }}
               onClick={handlePagarDesdePreview}
             >
               Pagar ahora (Pre Op)
@@ -479,45 +488,3 @@ export default function PreopModulo({ initialDatos }) {
     </div>
   );
 }
-
-/* ================= Estilos ================= */
-const styles = {
-  card: {
-    background: T.surface,
-    borderRadius: 8,
-    padding: 16,
-    boxShadow: T.shadowSm,
-    border: `1px solid ${T.border}`,
-    color: T.text,
-  },
-  btn: {
-    backgroundColor: T.primary,
-    color: T.onPrimary || "#fff",
-    border: "none",
-    padding: "12px",
-    borderRadius: "8px",
-    fontSize: "16px",
-    cursor: "pointer",
-    width: "100%",
-    boxShadow: T.shadowSm,
-  },
-  informeBox: {
-    background: T.bg,
-    border: `1px solid ${T.border}`,
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 6,
-    whiteSpace: "pre-wrap",
-    color: T.text,
-  },
-  /* Caja de resumen */
-  mono: {
-    whiteSpace: "pre-wrap",
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
-    background: T.bg,
-    border: `1px solid ${T.border}`,
-    borderRadius: 8,
-    padding: 12,
-    color: T.text,
-  },
-};
