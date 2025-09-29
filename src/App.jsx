@@ -1013,10 +1013,10 @@ function App() {
   /* ================== Render raíz por paso ================== */
   return (
     <div className="app" style={cssVars}>
-      {paso === "inicio" && <PantallaInicio />}
-      {paso === "paciente" && <PantallaPaciente />}
-      {paso === "menu" && <PantallaMenu />}
-      {paso === "modulo" && <PantallaModulo />}
+      {paso === "inicio" && PantallaInicio()}
+      {paso === "paciente" && PantallaPaciente()}
+      {paso === "menu" && PantallaMenu()}
+      {paso === "modulo" && PantallaModulo()}
     </div>
   );
 }
