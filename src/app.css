@@ -191,7 +191,13 @@ input:focus,select:focus,textarea:focus{
 .center{ display:flex; align-items:center; justify-content:center }
 .nowrap{ white-space: nowrap }
 .fullw{ width:100% }
-.mt-8{ margin-top:8px } .mt-12{ margin-top:12px } .mt-16{ margin-top:16px }
+
+/* → utilidades ampliadas para márgenes */
+.mt-6{ margin-top:6px }      /* NUEVA */
+.mt-8{ margin-top:8px }
+.mt-10{ margin-top:10px }    /* NUEVA */
+.mt-12{ margin-top:12px }
+.mt-16{ margin-top:16px }
 .mb-8{ margin-bottom:8px } .mb-12{ margin-bottom:12px } .mb-16{ margin-bottom:16px }
 
 /* ----- Responsivo móvil ----- */
@@ -210,3 +216,79 @@ input:focus,select:focus,textarea:focus{
   display: none;
 }
 .overlay.show{ display:block }
+
+/* ==========================================================
+   Estilos específicos de módulos (migración a app.css)
+   ========================================================== */
+
+/* ===== TraumaModulo (usa variables del tema inyectadas en el contenedor) ===== */
+.trauma-card{
+  background: var(--t-surface, var(--surface));
+  color: var(--t-text, var(--text));
+  border: 1px solid var(--t-border, var(--border));
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: var(--t-shadow-sm, var(--shadow-sm));
+}
+.trauma-title{
+  margin-top: 0;
+  color: var(--t-primary-dark, var(--primary-dark));
+}
+.trauma-info{ margin-bottom: 10px; }
+.trauma-block{ margin-top: 12px; }
+.trauma-mono{
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: var(--t-code-bg, #f7f7f7);
+  border: 1px solid var(--t-border, var(--border));
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--t-text, var(--text));
+}
+.trauma-hint{
+  margin-top: 6px;
+  font-style: italic;
+  color: var(--t-text-muted, var(--text-muted));
+}
+.trauma-btn{
+  display: inline-block;
+  width: 100%;
+  border: none;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: var(--t-shadow-sm, var(--shadow-sm));
+}
+.trauma-btn.primary{
+  background: var(--t-primary, var(--primary));
+  color: var(--t-on-primary, var(--onPrimary));
+}
+.trauma-btn.secondary{
+  background: var(--t-muted, var(--muted));
+  color: var(--t-on-muted, #fff);
+}
+
+/* Modal simple del módulo */
+.trauma-modal-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+.trauma-modal-card{
+  width: min(920px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--t-surface, var(--surface));
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.18);
+  border: 1px solid var(--t-border, var(--border));
+  padding: 12px;
+}
