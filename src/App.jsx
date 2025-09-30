@@ -9,7 +9,8 @@ import EsquemaPosterior from "./EsquemaPosterior.jsx";
 import EsquemaToggleTabs from "./EsquemaToggleTabs.jsx";
 
 /* Formularios y módulos */
-import FormularioPaciente from "./FormularioPaciente.jsx";
+import FormularioPacienteBasico from "./FormularioPacienteBasico.jsx";
+import FormularioTipoCirugia from "./FormularioTipoCirugia.jsx";
 import PreopModulo from "./modules/PreopModulo.jsx";
 import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import IAModulo from "./modules/IAModulo.jsx";
@@ -56,7 +57,7 @@ const normalizarGenero = (g = "") => {
 };
 
 function App() {
-  /* ====================== ESTADO RAÍZ (flujo nuevo) ====================== */
+  /* ====================== ESTADO RAÍZ ====================== */
   // pasos: 'inicio' | 'paciente' | 'menu' | 'modulo'
   const [paso, setPaso] = useState("inicio");
   const [isGuest, setIsGuest] = useState(false);
@@ -411,7 +412,7 @@ function App() {
     else await llamarGeneralesIA(payload);
   };
 
-  /* ====== Restauración de estado útil (mantengo comportamiento existente) ====== */
+  /* ====== Restauración de estado útil ====== */
   useEffect(() => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
     if (saved) {
@@ -532,6 +533,22 @@ function App() {
     }
   };
 
+  // Helper: validar tipo de cirugía seleccionado (para PREOP)
+  const validarTipoCirugiaPreop = () => {
+    try {
+      const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
+      const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+      const elegido = fijo || otro || "";
+      if (!elegido) return { ok: false, msg: "Seleccione el TIPO DE CIRUGÍA." };
+      if (fijo === "OTRO (ESPECIFICAR)" && !otro.trim()) {
+        return { ok: false, msg: "Especifique el tipo de cirugía en el campo 'Otro'." };
+      }
+      return { ok: true };
+    } catch {
+      return { ok: false, msg: "Seleccione el TIPO DE CIRUGÍA." };
+    }
+  };
+
   // ====== Submit del formulario principal (solo cuando estamos en 'modulo') ======
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -556,6 +573,15 @@ function App() {
     }
 
     if (modulo === "preop" || modulo === "generales") {
+      // PREOP ahora valida tipo de cirugía en el PADRE
+      if (modulo === "preop") {
+        const v = validarTipoCirugiaPreop();
+        if (!v.ok) {
+          alert(v.msg);
+          return;
+        }
+      }
+
       const scope = modulo;
       if (!comorbOkRef.current[scope]) {
         setMostrarComorbilidades(true);
@@ -632,7 +658,7 @@ function App() {
   };
 
   /* ====== Reset de PREVIEW al entrar a un módulo ====== */
-  const resetPreviewForModule = (nextKey) => {
+  const resetPreviewForModule = () => {
     try {
       if (pollerRef.current) {
         clearInterval(pollerRef.current);
@@ -683,6 +709,7 @@ function App() {
           className="btn"
           onClick={() => {
             setIsGuest(false);
+            try { sessionStorage.setItem("guest", "0"); } catch {}
             setPaso("paciente");
           }}
         >
@@ -692,6 +719,7 @@ function App() {
           className="btn secondary"
           onClick={() => {
             setIsGuest(true);
+            try { sessionStorage.setItem("guest", "1"); } catch {}
             setPaso("menu");
           }}
           title="Modo prueba (permite navegar y generar documentos)"
@@ -711,16 +739,13 @@ function App() {
   const PantallaPaciente = () => (
     <div className="card" style={styles.centerCard}>
       <h2 style={{ marginTop: 0 }}>Datos del Paciente</h2>
-      {/* Usamos el mismo componente actual; la simplificación del formulario la hacemos luego */}
-      <FormularioPaciente
+      <FormularioPacienteBasico
         datos={datosPaciente}
         onCambiarDato={handleCambiarDato}
         onSubmit={(e) => {
           e.preventDefault();
-          // Pasamos a menú sin validar aquí (la validación ocurre al usar los módulos)
-          setPaso("menu");
+          setPaso("menu"); // la validación dura ocurre al usar los módulos
         }}
-        moduloActual={"generales"}
       />
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
         <button className="btn ghost" onClick={() => setPaso("inicio")}>
@@ -750,7 +775,7 @@ function App() {
         {/* Arriba: TraumaIA y ANÁLISIS MEDIANTE IA */}
         <BotonModulo
           onClick={() => {
-            resetPreviewForModule("trauma");
+            resetPreviewForModule();
             setModulo("trauma");
             setPaso("modulo");
           }}
@@ -759,7 +784,7 @@ function App() {
         </BotonModulo>
         <BotonModulo
           onClick={() => {
-            resetPreviewForModule("ia");
+            resetPreviewForModule();
             setModulo("ia");
             setPaso("modulo");
           }}
@@ -770,7 +795,7 @@ function App() {
         {/* Abajo: Preoperatorio y Generales */}
         <BotonModulo
           onClick={() => {
-            resetPreviewForModule("preop");
+            resetPreviewForModule();
             setModulo("preop");
             setPaso("modulo");
             if (!avisoOkRef.current.preop) setMostrarAviso(true);
@@ -780,7 +805,7 @@ function App() {
         </BotonModulo>
         <BotonModulo
           onClick={() => {
-            resetPreviewForModule("generales");
+            resetPreviewForModule();
             setModulo("generales");
             setPaso("modulo");
             if (!avisoOkRef.current.generales) setMostrarAviso(true);
@@ -859,15 +884,23 @@ function App() {
           </div>
         </div>
 
-        {/* Columna 2 - Formulario Paciente (se usa igual que antes) */}
+        {/* Columna 2 - Formulario básico + (si PREOP) Tipo de cirugía */}
         <div className="col" style={styles.formCol}>
           <div className="card">
-            <FormularioPaciente
+            <FormularioPacienteBasico
               datos={datosPaciente}
               onCambiarDato={handleCambiarDato}
               onSubmit={handleSubmit}
-              moduloActual={modulo}
             />
+
+            {modulo === "preop" && (
+              <div style={{ marginTop: 12 }}>
+                <FormularioTipoCirugia
+                  datos={datosPaciente}
+                  onTipoCirugiaChange={() => {}}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -948,7 +981,7 @@ function App() {
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
                         idPago,
-                        rmForm: data, // todas las respuestas (sí/no)
+                        rmForm: data,
                         observaciones:
                           typeof observaciones === "string"
                             ? observaciones
@@ -984,11 +1017,8 @@ function App() {
                 .includes("izq")
                 ? "izquierda"
                 : "derecha"}
-              /* Vista inicial:
-                 - Para Rodilla: "anterior"/"posterior" se usa tal cual (el componente normaliza).
-                 - Para Mano: usamos "palmar"/"dorsal" según la pestaña global. */
               vistaInicial={mapperId === "mano" ? (vista === "anterior" ? "palmar" : "dorsal") : vista}
-              onSave={() => setMostrarMapper(false)} // guarda en sessionStorage dentro del componente
+              onSave={() => setMostrarMapper(false)}
               onClose={() => setMostrarMapper(false)}
             />
           </div>
@@ -1013,10 +1043,10 @@ function App() {
   /* ================== Render raíz por paso ================== */
   return (
     <div className="app" style={cssVars}>
-      {paso === "inicio" && PantallaInicio()}
-      {paso === "paciente" && PantallaPaciente()}
-      {paso === "menu" && PantallaMenu()}
-      {paso === "modulo" && PantallaModulo()}
+      {paso === "inicio" && <PantallaInicio />}
+      {paso === "paciente" && <PantallaPaciente />}
+      {paso === "menu" && <PantallaMenu />}
+      {paso === "modulo" && <PantallaModulo />}
     </div>
   );
 }
