@@ -19,15 +19,14 @@ import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx"
 import PreviewOrden from "./PreviewOrden.jsx";
 import PreviewIA from "./PreviewIA.jsx";
 
-/* Host genérico de mapeadores (rodilla, mano, etc.) */
+/* Mapeadores */
 import GenericMapper from "./mappers/GenericMapper.jsx";
 import { hasMapper, resolveZonaKey } from "./mappers/mapperRegistry.js";
 
-/* Tema (JSON + helper) */
+/* Tema */
 import { getTheme } from "./theme.js";
 const T = getTheme();
 
-/* Mapea theme → variables CSS que usa app.css */
 const cssVars = {
   "--bg": T.bg,
   "--surface": T.surface,
@@ -46,7 +45,7 @@ const cssVars = {
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* Normaliza solo para el backend (UI sigue MASCULINO/FEMENINO) */
+/* Normaliza solo para backend */
 const normalizarGenero = (g = "") => {
   const s = String(g).trim().toLowerCase();
   if (s === "masculino" || s === "hombre") return "hombre";
@@ -55,12 +54,10 @@ const normalizarGenero = (g = "") => {
 };
 
 function App() {
-  /* ====================== ESTADO RAÍZ ====================== */
   // pasos: 'inicio' | 'paciente' | 'menu' | 'modulo' | 'preview'
   const [paso, setPaso] = useState("inicio");
   const [isGuest, setIsGuest] = useState(false);
 
-  // módulo activo
   const [modulo, setModulo] = useState("trauma"); // 'trauma' | 'preop' | 'generales' | 'ia'
 
   const [datosPaciente, setDatosPaciente] = useState({
@@ -72,36 +69,34 @@ function App() {
     lado: "",
   });
 
-  // Debounce para evitar “una letra por vez”
+  /* —— FIX “una letra por vez” —— */
   const ssTimerRef = useRef(null);
   const persistDatosDebounced = useCallback((next) => {
-    try {
-      if (ssTimerRef.current) clearTimeout(ssTimerRef.current);
-      ssTimerRef.current = setTimeout(() => {
-        try {
-          sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-        } catch {}
-      }, 180);
-    } catch {}
+    if (ssTimerRef.current) clearTimeout(ssTimerRef.current);
+    ssTimerRef.current = setTimeout(() => {
+      try {
+        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
+      } catch {}
+    }, 180);
   }, []);
 
-  // Preview en dos pasos: 'orden' → 'ia'
-  const [previewStep, setPreviewStep] = useState("orden");
+  // Preview en dos pasos
+  const [previewStep, setPreviewStep] = useState("orden"); // 'orden' | 'ia'
   const [loadingIA, setLoadingIA] = useState(false);
-  const pendingNextRef = useRef(null); // acción pendiente tras Aviso/Comorbilidades
+  const pendingNextRef = useRef(null); // para reintentar tras aviso/comorbilidades
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const pollerRef = useRef(null);
 
-  // Vista esquema (frontal/posterior)
+  // Vista esquema
   const [vista, setVista] = useState("anterior");
 
-  // Modal genérico de mapeadores (rodilla, mano, etc.)
+  // Mapeador
   const [mostrarMapper, setMostrarMapper] = useState(false);
   const [mapperId, setMapperId] = useState(null);
 
-  // === RM (PDF listo tras guardar el formulario) ===
+  // RM
   const [rmPdfListo, setRmPdfListo] = useState(() => {
     try {
       return sessionStorage.getItem("rm_pdf_disponible") === "1";
@@ -117,7 +112,7 @@ function App() {
     }
   });
 
-  // ====== Flags persistentes (por módulo: preop / generales) ======
+  // Flags persistentes
   const avisoOkRef = useRef({ preop: false, generales: false });
   const comorbOkRef = useRef({ preop: false, generales: false });
 
@@ -132,7 +127,6 @@ function App() {
     try {
       avisoOkRef.current.preop = sessionStorage.getItem("preop_aviso_ok") === "1";
       avisoOkRef.current.generales = sessionStorage.getItem("generales_aviso_ok") === "1";
-
       comorbOkRef.current.preop = sessionStorage.getItem("preop_comorbilidades_ok") === "1";
       comorbOkRef.current.generales = sessionStorage.getItem("generales_comorbilidades_ok") === "1";
     } catch {}
@@ -144,7 +138,6 @@ function App() {
       sessionStorage.setItem(getAvisoKey(scope), "1");
     } catch {}
   };
-
   const marcarComorbilidadesOk = (scope, payload) => {
     comorbOkRef.current[scope] = true;
     try {
@@ -153,13 +146,11 @@ function App() {
     } catch {}
   };
 
-  // ====== Aviso Legal ======
+  // Aviso legal
   const [mostrarAviso, setMostrarAviso] = useState(false);
-
   const continuarTrasAviso = async () => {
     setMostrarAviso(false);
     if (modulo === "preop" || modulo === "generales") marcarAvisoOk(modulo);
-    // Ejecuta acción pendiente (por ejemplo, llamar IA y pasar a 'ia')
     if (typeof pendingNextRef.current === "function") {
       const fn = pendingNextRef.current;
       pendingNextRef.current = null;
@@ -168,15 +159,9 @@ function App() {
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
-    try {
-      window.close();
-    } catch {}
-    setTimeout(() => {
-      if (!window.closed) window.location.href = "about:blank";
-    }, 0);
   };
 
-  // ====== RNM (checklist) compartido ======
+  // RNM checklist
   const [showReso, setShowReso] = useState(false);
   const [resolverReso, setResolverReso] = useState(null);
   const RED_FLAGS = new Set([
@@ -225,7 +210,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ datosPaciente: datos }),
       });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
       const flag =
         typeof j?.resonancia === "boolean"
@@ -239,7 +224,7 @@ function App() {
     }
   };
 
-  // ====== Comorbilidades (modal) ======
+  // Comorbilidades
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(() => {
     try {
@@ -249,8 +234,6 @@ function App() {
       return null;
     }
   });
-
-  // Mantener comorbilidades al cambiar de módulo
   useEffect(() => {
     if (modulo !== "preop" && modulo !== "generales") return;
     try {
@@ -261,7 +244,7 @@ function App() {
     }
   }, [modulo]);
 
-  // ====== LLAMADAS IA (sin UI, solo setean sessionStorage) ======
+  // Llamadas IA
   const llamarPreopIA = async (payloadComorb) => {
     let idPago = "";
     try {
@@ -271,14 +254,12 @@ function App() {
         sessionStorage.setItem("idPago", idPago);
       }
     } catch {}
-
     let tipoCirugia = "";
     try {
       const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
       const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
       tipoCirugia = fijo || otro || "";
     } catch {}
-
     let comorb = payloadComorb || comorbilidades;
     if (!comorb) {
       try {
@@ -286,22 +267,17 @@ function App() {
         if (raw) comorb = JSON.parse(raw);
       } catch {}
     }
-
     const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
-    const paciente = {
-      ...datosPaciente,
-      edad: edadNum,
-      genero: normalizarGenero(datosPaciente.genero),
-    };
+    const paciente = { ...datosPaciente, edad: edadNum, genero: normalizarGenero(datosPaciente.genero) };
 
-    const resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
+    // intento principal + fallback
+    let resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idPago, paciente, comorbilidades: comorb || {}, tipoCirugia }),
     }).catch(() => null);
-
-    let okResp = resp?.ok;
-    let j = null;
+    let okResp = !!resp?.ok;
+    let j = okResp ? await resp.json() : null;
     if (!okResp) {
       const r2 = await fetch(`${BACKEND_BASE}/ia-preop`, {
         method: "POST",
@@ -310,8 +286,6 @@ function App() {
       }).catch(() => null);
       okResp = !!r2?.ok;
       j = okResp ? await r2.json() : null;
-    } else {
-      j = await resp.json();
     }
     if (!okResp) return false;
 
@@ -333,7 +307,6 @@ function App() {
         sessionStorage.setItem("idPago", idPago);
       }
     } catch {}
-
     let comorb = payloadComorb || comorbilidades;
     if (!comorb) {
       try {
@@ -341,25 +314,17 @@ function App() {
         if (raw) comorb = JSON.parse(raw);
       } catch {}
     }
-
     const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
-    const paciente = {
-      ...datosPaciente,
-      edad: edadNum,
-      genero: normalizarGenero(datosPaciente.genero),
-    };
+    const paciente = { ...datosPaciente, edad: edadNum, genero: normalizarGenero(datosPaciente.genero) };
 
-    // Ruta específica
     let resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idPago, paciente, comorbilidades: comorb || {} }),
     }).catch(() => null);
-
     let okResp = !!resp?.ok;
     let j = okResp ? await resp.json() : null;
 
-    // Fallbacks
     if (!okResp) {
       resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
         method: "POST",
@@ -389,7 +354,7 @@ function App() {
     return true;
   };
 
-  // Guardar comorbilidades → marcar ok → continuar acción pendiente si existía
+  // Guardar comorbilidades
   const handleSaveComorbilidades = async (payload) => {
     setComorbilidades(payload);
     setMostrarComorbilidades(false);
@@ -402,7 +367,7 @@ function App() {
     }
   };
 
-  /* ====== Restauración de estado útil ====== */
+  // Restauración útil
   useEffect(() => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
     if (saved) {
@@ -410,7 +375,6 @@ function App() {
         setDatosPaciente(JSON.parse(saved));
       } catch {}
     }
-
     const vistaSS = sessionStorage.getItem("vistaEsquema");
     if (vistaSS === "anterior" || vistaSS === "posterior") setVista(vistaSS);
 
@@ -456,7 +420,7 @@ function App() {
     }
   }, []);
 
-  // Persistir vista de esquema
+  // Persistir vista del esquema
   useEffect(() => {
     try {
       sessionStorage.setItem("vistaEsquema", vista);
@@ -471,7 +435,7 @@ function App() {
     });
   };
 
-  // ====== Selección de zona (sin submódulos en Preop/Generales) ======
+  // Selección de zona (sin submódulos en Preop/Generales)
   const onSeleccionZona = (zona) => {
     let dolor = "";
     let lado = "";
@@ -513,7 +477,6 @@ function App() {
       return next;
     });
 
-    // Solo Trauma/IA permiten abrir mapper
     const key = resolveZonaKey(dolor);
     if ((modulo === "trauma" || modulo === "ia") && key && hasMapper(key)) {
       setMapperId(key);
@@ -521,7 +484,7 @@ function App() {
     }
   };
 
-  // Helper: validar tipo de cirugía (Preop)
+  // Validación tipo de cirugía
   const validarTipoCirugiaPreop = () => {
     try {
       const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
@@ -537,7 +500,7 @@ function App() {
     }
   };
 
-  // ====== Submit del módulo → ir a PREVIEW (paso ORDEN) ======
+  // Submit del módulo → ir a PREVIEW (resumen)
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
 
@@ -554,12 +517,10 @@ function App() {
         return;
       }
     }
-
     if ((modulo === "trauma" || modulo === "ia") && !datosPaciente.dolor?.trim()) {
       alert("Seleccione dolor/zona en el esquema para continuar.");
       return;
     }
-
     if (modulo === "preop") {
       const v = validarTipoCirugiaPreop();
       if (!v.ok) {
@@ -567,81 +528,46 @@ function App() {
         return;
       }
     }
-
-    // Ir a pantalla de preview (paso ORDEN)
     setMostrarVistaPrevia(true);
     setPaso("preview");
     setPreviewStep("orden");
   };
 
-  /* ====== Botón REINICIAR ====== */
+  // Reiniciar
   const handleReiniciar = async () => {
-    const ok = window.confirm(
-      "Esto reiniciará completamente la aplicación (datos, estados, caches). ¿Continuar?"
-    );
+    const ok = window.confirm("Esto reiniciará completamente la aplicación (datos, estados, caches). ¿Continuar?");
     if (!ok) return;
-
-    try {
-      if (pollerRef.current) {
-        clearInterval(pollerRef.current);
-        pollerRef.current = null;
-      }
-    } catch {}
-
+    try { if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; } } catch {}
     try {
       const maxId = setTimeout(() => {}, 0);
-      for (let i = 0; i <= maxId; i++) {
-        clearTimeout(i);
-        clearInterval(i);
-      }
+      for (let i = 0; i <= maxId; i++) { clearTimeout(i); clearInterval(i); }
     } catch {}
-
-    try {
-      sessionStorage.clear();
-    } catch {}
-    try {
-      localStorage.clear();
-    } catch {}
-
+    try { sessionStorage.clear(); } catch {}
+    try { localStorage.clear(); } catch {}
     try {
       if ("caches" in window) {
         const names = await caches.keys();
         await Promise.all(names.map((n) => caches.delete(n)));
       }
     } catch {}
-
     try {
       if ("serviceWorker" in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
         await Promise.all(regs.map((r) => r.unregister()));
       }
     } catch {}
-
     let cleanUrl = window.location.href;
     try {
       const url = new URL(window.location.href);
-      url.search = "";
-      url.hash = "";
-      cleanUrl = url.toString();
+      url.search = ""; url.hash = ""; cleanUrl = url.toString();
       window.history.replaceState(null, "", cleanUrl);
     } catch {}
-
-    try {
-      window.location.replace(cleanUrl);
-    } catch {
-      window.location.reload();
-    }
+    try { window.location.replace(cleanUrl); } catch { window.location.reload(); }
   };
 
-  /* ====== Reset al entrar a un módulo ====== */
+  // Reset al entrar a un módulo
   const resetPreviewForModule = () => {
-    try {
-      if (pollerRef.current) {
-        clearInterval(pollerRef.current);
-        pollerRef.current = null;
-      }
-    } catch {}
-
+    try { if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; } } catch {}
     setMostrarVistaPrevia(false);
     setPagoRealizado(false);
     setShowReso(false);
@@ -652,7 +578,6 @@ function App() {
     setRmIdPago("");
     setPreviewStep("orden");
     pendingNextRef.current = null;
-
     try {
       [
         "preop_ia_examenes",
@@ -664,34 +589,25 @@ function App() {
         "rm_idPago",
       ].forEach((k) => sessionStorage.removeItem(k));
     } catch {}
-
     try {
       const url = new URL(window.location.href);
-      if (url.search) {
-        url.search = "";
-        window.history.replaceState(null, "", url.toString());
-      }
+      if (url.search) { url.search = ""; window.history.replaceState(null, "", url.toString()); }
     } catch {}
   };
 
-  /* ============ LÓGICA del botón CONTINUAR en PREVIEW (Orden → IA) ============ */
+  /* —— CONTINUAR en Preview (de Orden → IA) —— */
   const runIASequence = async () => {
-    // Si faltan comorbilidades en preop/generales, abrir modal y reintentar al guardar
+    // Si falta comorbilidades en preop/generales
     if ((modulo === "preop" || modulo === "generales") && !comorbOkRef.current[modulo]) {
-      pendingNextRef.current = async () => {
-        await runIASequence();
-      };
+      pendingNextRef.current = async () => { await runIASequence(); };
       setMostrarComorbilidades(true);
       return;
     }
-
     setLoadingIA(true);
     let ok = true;
     if (modulo === "preop") ok = await llamarPreopIA();
     else if (modulo === "generales") ok = await llamarGeneralesIA();
-    // trauma/ia no requieren llamada para mostrar PreviewIA (si tu PreviewIA usa backend en estos, adapta aquí)
     setLoadingIA(false);
-
     if (!ok && (modulo === "preop" || modulo === "generales")) {
       alert("No fue posible obtener la información de IA. Intenta nuevamente.");
       return;
@@ -701,22 +617,18 @@ function App() {
 
   const handlePreviewContinuar = async () => {
     if (modulo === "preop" || modulo === "generales") {
-      // Aviso legal requerido antes de llamar IA
       if (!avisoOkRef.current[modulo]) {
-        pendingNextRef.current = async () => {
-          await runIASequence();
-        };
+        pendingNextRef.current = async () => { await runIASequence(); };
         setMostrarAviso(true);
         return;
       }
       await runIASequence();
     } else {
-      // trauma / ia: pasar directo a 'ia'
       setPreviewStep("ia");
     }
   };
 
-  /* ============================ UI POR PASOS ============================ */
+  /* ============================ UI ============================ */
   const PantallaInicio = () => (
     <div className="card" style={styles.centerCard}>
       <div style={{ textAlign: "center", marginBottom: 16 }}>
@@ -724,37 +636,16 @@ function App() {
         <p style={{ margin: 0, color: T.textMuted }}>icaricular.cl</p>
       </div>
       <div style={{ display: "grid", gap: 12 }}>
-        <button
-          className="btn"
-          onClick={() => {
-            setIsGuest(false);
-            try {
-              sessionStorage.setItem("guest", "0");
-            } catch {}
-            setPaso("paciente");
-          }}
-        >
+        <button className="btn" onClick={() => { setIsGuest(false); try { sessionStorage.setItem("guest", "0"); } catch {} setPaso("paciente"); }}>
           Ingresar Paciente
         </button>
-        <button
-          className="btn secondary"
-          onClick={() => {
-            setIsGuest(true);
-            try {
-              sessionStorage.setItem("guest", "1");
-            } catch {}
-            setPaso("menu");
-          }}
-          title="Modo prueba (permite navegar y generar documentos)"
-        >
+        <button className="btn secondary" title="Modo prueba (permite navegar y generar documentos)"
+          onClick={() => { setIsGuest(true); try { sessionStorage.setItem("guest", "1"); } catch {} setPaso("menu"); }}>
           Guest
         </button>
       </div>
-
       <div style={{ marginTop: 16 }}>
-        <button className="btn ghost" onClick={handleReiniciar}>
-          Reiniciar
-        </button>
+        <button className="btn ghost" onClick={handleReiniciar}>Reiniciar</button>
       </div>
     </div>
   );
@@ -765,149 +656,82 @@ function App() {
       <FormularioPacienteBasico
         datos={datosPaciente}
         onCambiarDato={handleCambiarDato}
-        onSubmit={(e) => {
-          e.preventDefault();
-          setPaso("menu");
-        }}
+        onSubmit={(e) => { e.preventDefault(); setPaso("menu"); }}
       />
+      {/* Solo botón Volver para evitar el duplicado de “Continuar” */}
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <button className="btn ghost" onClick={() => setPaso("inicio")}>
-          Volver
-        </button>
-        <button
-          className="btn"
-          onClick={() => setPaso("menu")}
-          style={{ marginLeft: "auto" }}
-        >
-          Continuar
-        </button>
+        <button className="btn ghost" onClick={() => setPaso("inicio")}>Volver</button>
       </div>
     </div>
   );
 
   const BotonModulo = ({ onClick, children }) => (
-    <button className="btn" style={styles.menuBtn} onClick={onClick}>
-      {children}
-    </button>
+    <button className="btn" style={styles.menuBtn} onClick={onClick}>{children}</button>
   );
 
   const PantallaMenu = () => (
     <div className="card" style={styles.centerCard}>
       <h2 style={{ marginTop: 0, textAlign: "center" }}>Menú</h2>
       <div style={styles.menuGrid}>
-        <BotonModulo
-          onClick={() => {
-            resetPreviewForModule();
-            setModulo("trauma");
-            setPaso("modulo");
-          }}
-        >
+        <BotonModulo onClick={() => { resetPreviewForModule(); setModulo("trauma"); setPaso("modulo"); }}>
           TraumaIA
         </BotonModulo>
-        <BotonModulo
-          onClick={() => {
-            resetPreviewForModule();
-            setModulo("ia");
-            setPaso("modulo");
-          }}
-        >
+        <BotonModulo onClick={() => { resetPreviewForModule(); setModulo("ia"); setPaso("modulo"); }}>
           ANÁLISIS MEDIANTE IA
         </BotonModulo>
-
-        <BotonModulo
-          onClick={() => {
-            resetPreviewForModule();
-            setModulo("preop");
-            setPaso("modulo");
-            // El aviso se mostrará cuando se presione "Continuar" en PreviewOrden
-          }}
-        >
+        <BotonModulo onClick={() => { resetPreviewForModule(); setModulo("preop"); setPaso("modulo"); }}>
           Preoperatorio
         </BotonModulo>
-        <BotonModulo
-          onClick={() => {
-            resetPreviewForModule();
-            setModulo("generales");
-            setPaso("modulo");
-          }}
-        >
+        <BotonModulo onClick={() => { resetPreviewForModule(); setModulo("generales"); setPaso("modulo"); }}>
           Generales
         </BotonModulo>
       </div>
-
       <div style={{ marginTop: 12 }}>
-        <button className="btn ghost" onClick={() => setPaso(isGuest ? "inicio" : "paciente")}>
-          Volver
-        </button>
+        <button className="btn ghost" onClick={() => setPaso(isGuest ? "inicio" : "paciente")}>Volver</button>
       </div>
     </div>
   );
 
-  // En módulos: SOLO esquema humano; en PREOP se muestra Tipo de Cirugía
+  // En módulos: SOLO esquema; en PREOP aparece Tipo de Cirugía
   const PantallaModulo = () => (
-    <>
-      <div className="row" style={styles.contentRow}>
-        <div className="col" style={{ ...styles.esquemaCol, maxWidth: 520, width: "100%" }}>
-          <div className="card">
-            <EsquemaToggleTabs vista={vista} onChange={setVista} />
-            {vista === "anterior" ? (
-              <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
-            ) : (
-              <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
-            )}
+    <div className="row" style={styles.contentRow}>
+      <div className="col" style={{ ...styles.esquemaCol, maxWidth: 520, width: "100%" }}>
+        <div className="card">
+          <EsquemaToggleTabs vista={vista} onChange={setVista} />
+          {vista === "anterior"
+            ? <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
+            : <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />}
 
-            <div aria-live="polite" role="status" style={styles.statusBox}>
-              {datosPaciente?.dolor ? (
-                <>
-                  Zona seleccionada:{" "}
-                  <strong>
-                    {datosPaciente.dolor}
-                    {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
-                  </strong>
-                  {hasMapper(resolveZonaKey(datosPaciente?.dolor)) &&
-                    (modulo === "trauma" || modulo === "ia") && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const k = resolveZonaKey(datosPaciente?.dolor);
-                          if (k && hasMapper(k)) {
-                            setMapperId(k);
-                            setMostrarMapper(true);
-                          }
-                        }}
-                        className="btn ghost"
-                        style={{ marginLeft: 8 }}
-                      >
-                        Marcar puntos
-                      </button>
-                    )}
-                </>
-              ) : (
-                "Seleccione una zona en el esquema"
-              )}
+          <div aria-live="polite" role="status" style={styles.statusBox}>
+            {datosPaciente?.dolor ? (
+              <>
+                Zona seleccionada: <strong>{datosPaciente.dolor}{datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}</strong>
+                {hasMapper(resolveZonaKey(datosPaciente?.dolor)) && (modulo === "trauma" || modulo === "ia") && (
+                  <button className="btn ghost" style={{ marginLeft: 8 }}
+                    onClick={() => { const k = resolveZonaKey(datosPaciente?.dolor); if (k && hasMapper(k)) { setMapperId(k); setMostrarMapper(true); } }}>
+                    Marcar puntos
+                  </button>
+                )}
+              </>
+            ) : "Seleccione una zona en el esquema"}
+          </div>
+
+          {modulo === "preop" && (
+            <div style={{ marginTop: 12 }}>
+              <FormularioTipoCirugia datos={datosPaciente} onTipoCirugiaChange={() => {}} />
             </div>
+          )}
 
-            {modulo === "preop" && (
-              <div style={{ marginTop: 12 }}>
-                <FormularioTipoCirugia datos={datosPaciente} onTipoCirugiaChange={() => {}} />
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-              <button className="btn ghost" onClick={() => setPaso("menu")}>
-                Volver al Menú
-              </button>
-              <button className="btn" style={{ marginLeft: "auto" }} onClick={handleSubmit}>
-                Generar vista previa
-              </button>
-            </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button className="btn ghost" onClick={() => setPaso("menu")}>Volver al Menú</button>
+            <button className="btn" style={{ marginLeft: "auto" }} onClick={handleSubmit}>Generar vista previa</button>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 
-  // Pantalla de PREVIEW (pantalla nueva) en dos pasos
+  // Pantalla PREVIEW (nueva, 2 pasos)
   const PantallaPreview = () => (
     <div className="row" style={{ marginTop: 12 }}>
       <div className="col" style={{ width: "min(980px, 96vw)", margin: "0 auto" }}>
@@ -916,14 +740,13 @@ function App() {
             <>
               <PreviewOrden
                 initialDatos={datosPaciente}
+                modulo={modulo}
                 onPedirChecklistResonancia={pedirChecklistResonancia}
                 onDetectarResonancia={detectarResonanciaEnBackend}
                 resumenResoTexto={resumenResoTexto}
               />
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button className="btn ghost" onClick={() => setPaso("modulo")}>
-                  Volver
-                </button>
+                <button className="btn ghost" onClick={() => setPaso("modulo")}>Volver</button>
                 <button className="btn" style={{ marginLeft: "auto" }} onClick={handlePreviewContinuar}>
                   {modulo === "preop" || modulo === "generales" ? "Continuar y generar IA" : "Continuar"}
                 </button>
@@ -933,8 +756,7 @@ function App() {
 
           {previewStep === "ia" && (
             <>
-              <PreviewIA initialDatos={datosPaciente} pedirChecklistResonancia={pedirChecklistResonancia} />
-              {/* Botón Formulario RM (PDF) pensado para Trauma/IA */}
+              <PreviewIA initialDatos={datosPaciente} modulo={modulo} pedirChecklistResonancia={pedirChecklistResonancia} />
               {(modulo === "trauma" || modulo === "ia") && rmPdfListo && !!rmIdPago && (
                 <div style={{ marginTop: 8 }}>
                   <a
@@ -942,32 +764,17 @@ function App() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn"
-                    style={{
-                      display: "inline-block",
-                      fontWeight: 750,
-                      fontSize: 13,
-                      textDecoration: "none",
-                      background: T?.surface,
-                      color: T?.primaryDark || "#0d47a1",
-                      border: `2px solid ${T?.primaryDark || "#0d47a1"}`,
-                    }}
+                    style={{ display: "inline-block", fontWeight: 750, fontSize: 13, textDecoration: "none",
+                      background: T?.surface, color: T?.primaryDark || "#0d47a1",
+                      border: `2px solid ${T?.primaryDark || "#0d47a1"}` }}
                   >
                     Formulario RM (PDF)
                   </a>
                 </div>
               )}
-
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button className="btn ghost" onClick={() => setPaso("menu")}>
-                  Volver al Menú
-                </button>
-                <button
-                  className="btn"
-                  style={{ marginLeft: "auto" }}
-                  onClick={() => {
-                    setPreviewStep("orden");
-                  }}
-                >
+                <button className="btn ghost" onClick={() => setPaso("menu")}>Volver al Menú</button>
+                <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setPreviewStep("orden")}>
                   Volver al resumen
                 </button>
               </div>
@@ -984,29 +791,17 @@ function App() {
     </div>
   );
 
-  /* ================== Render raíz por paso ================== */
-  return (
-    <div className="app" style={cssVars}>
-      {/* Overlays globales */}
-      <AvisoLegal
-        visible={mostrarAviso}
-        persist={false}
-        onAccept={continuarTrasAviso}
-        onReject={rechazarAviso}
-      />
-
-      {/* Modal RNM */}
+  /* —— Overlays globales —— */
+  const Overlays = () => (
+    <>
+      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
       {showReso && (
         <div className="overlay show" style={styles.modalOverlay}>
           <div className="card" style={{ width: "min(900px, 96vw)" }}>
             <FormularioResonancia
-              onCancel={() => {
-                setShowReso(false);
-                resolverReso?.({ canceled: true });
-              }}
+              onCancel={() => { setShowReso(false); resolverReso?.({ canceled: true }); }}
               onSave={async (data, { riesgos, observaciones }) => {
                 setShowReso(false);
-                // Guardar respuestas en backend y habilitar botón PDF
                 try {
                   const idPago = sessionStorage.getItem("idPago") || "";
                   if (idPago) {
@@ -1016,12 +811,8 @@ function App() {
                       body: JSON.stringify({
                         idPago,
                         rmForm: data,
-                        observaciones:
-                          typeof observaciones === "string"
-                            ? observaciones
-                            : Array.isArray(riesgos)
-                            ? riesgos.join(", ")
-                            : "",
+                        observaciones: typeof observaciones === "string" ? observaciones
+                          : Array.isArray(riesgos) ? riesgos.join(", ") : "",
                       }),
                     });
                     setRmPdfListo(true);
@@ -1030,7 +821,6 @@ function App() {
                     sessionStorage.setItem("rm_idPago", idPago);
                   }
                 } catch {}
-
                 const resumen = resumenResoTexto(data);
                 const bloquea = hasRedFlags(data);
                 resolverReso?.({ canceled: false, bloquea, data, riesgos, resumen });
@@ -1039,18 +829,12 @@ function App() {
           </div>
         </div>
       )}
-
-      {/* Modal Genérico de Mapeo (PNG+SVG) */}
       {(modulo === "trauma" || modulo === "ia") && mostrarMapper && (
         <div className="overlay show" style={styles.modalOverlay}>
           <div className="card" style={{ width: "min(900px, 96vw)" }}>
             <GenericMapper
               mapperId={mapperId}
-              ladoInicial={(datosPaciente?.lado || "")
-                .toLowerCase()
-                .includes("izq")
-                ? "izquierda"
-                : "derecha"}
+              ladoInicial={(datosPaciente?.lado || "").toLowerCase().includes("izq") ? "izquierda" : "derecha"}
               vistaInicial={mapperId === "mano" ? (vista === "anterior" ? "palmar" : "dorsal") : vista}
               onSave={() => setMostrarMapper(false)}
               onClose={() => setMostrarMapper(false)}
@@ -1058,8 +842,6 @@ function App() {
           </div>
         </div>
       )}
-
-      {/* Modal Comorbilidades */}
       {mostrarComorbilidades && (
         <div className="overlay show" style={styles.modalOverlay}>
           <div className="card" style={{ width: "min(900px, 96vw)" }}>
@@ -1071,8 +853,13 @@ function App() {
           </div>
         </div>
       )}
+    </>
+  );
 
-      {/* Contenido por pasos */}
+  /* —— Render raíz —— */
+  return (
+    <div className="app" style={cssVars}>
+      <Overlays />
       {paso === "inicio" && <PantallaInicio />}
       {paso === "paciente" && <PantallaPaciente />}
       {paso === "menu" && <PantallaMenu />}
@@ -1082,7 +869,7 @@ function App() {
   );
 }
 
-/* ================== Styles (solo variables del theme.json) ================== */
+/* Styles */
 const styles = {
   centerCard: { maxWidth: 520, margin: "24px auto", padding: 16 },
   menuGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
@@ -1090,26 +877,13 @@ const styles = {
   contentRow: { alignItems: "flex-start", marginTop: 12 },
   esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
   statusBox: {
-    marginTop: 8,
-    fontSize: 14,
-    color: T.textMuted,
-    background: T.surface,
-    padding: "6px 8px",
-    borderRadius: 8,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: T.border,
-    minHeight: 30,
+    marginTop: 8, fontSize: 14, color: T.textMuted, background: T.surface,
+    padding: "6px 8px", borderRadius: 8, borderWidth: 1, borderStyle: "solid",
+    borderColor: T.border, minHeight: 30,
   },
   modalOverlay: {
-    position: "fixed",
-    inset: 0,
-    background: T.overlay,
-    display: "grid",
-    placeItems: "center",
-    zIndex: 2147483000,
-    padding: 12,
-    pointerEvents: "auto",
+    position: "fixed", inset: 0, background: T.overlay, display: "grid", placeItems: "center",
+    zIndex: 2147483000, padding: 12, pointerEvents: "auto",
   },
 };
 
