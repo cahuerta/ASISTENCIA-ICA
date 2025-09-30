@@ -68,35 +68,6 @@ function App() {
     lado: "",
   });
 
-  /* —— FIX “una letra por vez”: debounce de persistencia + onChange robusto —— */
-  const ssTimerRef = useRef(null);
-  const persistDatosDebounced = useCallback((next) => {
-    if (ssTimerRef.current) clearTimeout(ssTimerRef.current);
-    ssTimerRef.current = setTimeout(() => {
-      try {
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-      } catch {}
-    }, 180);
-  }, []);
-
-  // 🔧 onChange robusto: acepta (campo, string) o (campo, event)
-  const handleCambiarDato = useCallback(
-    (campo, valor) => {
-      const v =
-        typeof valor === "string"
-          ? valor
-          : (valor && valor.target && typeof valor.target.value !== "undefined")
-          ? valor.target.value
-          : "";
-      setDatosPaciente((prev) => {
-        const next = { ...prev, [campo]: v };
-        persistDatosDebounced(next);
-        return next;
-      });
-    },
-    [persistDatosDebounced]
-  );
-
   // Preview en dos pasos
   const [previewStep, setPreviewStep] = useState("orden"); // 'orden' | 'ia'
   const [loadingIA, setLoadingIA] = useState(false);
@@ -399,6 +370,10 @@ function App() {
     try { sessionStorage.setItem("vistaEsquema", vista); } catch {}
   }, [vista]);
 
+  const handleCambiarDato = (campo, valor) => {
+    setDatosPaciente((prev) => ({ ...prev, [campo]: valor }));
+  };
+
   // Selección de zona (sin submódulos en Preop/Generales)
   const onSeleccionZona = (zona) => {
     let dolor = "";
@@ -417,7 +392,6 @@ function App() {
 
     setDatosPaciente((prev) => {
       const next = { ...prev, dolor, lado };
-      persistDatosDebounced(next);
       return next;
     });
 
@@ -637,4 +611,172 @@ function App() {
 
   // Pantalla PREVIEW (nueva, 2 pasos)
   const PantallaPreview = () => (
-    <div className="row" style={{ margin
+    <div className="row" style={{ marginTop: 12 }}>
+      <div className="col" style={{ width: "min(980px, 96vw)", margin: "0 auto" }}>
+        <div className="card">
+          {previewStep === "orden" && (
+            <>
+              {/* ⬇⬇⬇  AQUÍ VA CON LAS PROPS QUE ESPERA TU PreviewOrden ⬇⬇⬇ */}
+              <PreviewOrden
+                scope={modulo}           // "preop" | "generales" | otros (no usan mensaje)
+                datos={datosPaciente}    // <-- TUS VARIABLES: nombre, rut, edad, genero, dolor, lado
+                onContinuar={handlePreviewContinuar}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button className="btn ghost" onClick={() => setPaso("modulo")}>Volver</button>
+                <button className="btn" style={{ marginLeft: "auto" }} onClick={handlePreviewContinuar}>
+                  {modulo === "preop" || modulo === "generales" ? "Continuar y generar IA" : "Continuar"}
+                </button>
+              </div>
+            </>
+          )}
+
+          {previewStep === "ia" && (
+            <>
+              {/* Paso 2: respuesta del backend */}
+              <PreviewIA
+                scope={modulo}
+                datos={datosPaciente}
+                /* también paso los alias por compatibilidad */
+                initialDatos={datosPaciente}
+                modulo={modulo}
+                pedirChecklistResonancia={pedirChecklistResonancia}
+              />
+              {(modulo === "trauma" || modulo === "ia") && rmPdfListo && !!rmIdPago && (
+                <div style={{ marginTop: 8 }}>
+                  <a
+                    href={`${BACKEND_BASE}/pdf-rm/${rmIdPago}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn"
+                    style={{
+                      display: "inline-block",
+                      fontWeight: 750,
+                      fontSize: 13,
+                      textDecoration: "none",
+                      background: T?.surface,
+                      color: T?.primaryDark || "#0d47a1",
+                      border: `2px solid ${T?.primaryDark || "#0d47a1"}`
+                    }}
+                  >
+                    Formulario RM (PDF)
+                  </a>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button className="btn ghost" onClick={() => setPaso("menu")}>Volver al Menú</button>
+                <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setPreviewStep("orden")}>
+                  Volver al resumen
+                </button>
+              </div>
+            </>
+          )}
+
+          {loadingIA && (
+            <div style={{ marginTop: 10, fontSize: 14, color: T.textMuted }}>
+              Generando informe con IA…
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  /* —— Overlays globales —— */
+  const Overlays = () => (
+    <>
+      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
+      {showReso && (
+        <div className="overlay show" style={styles.modalOverlay}>
+          <div className="card" style={{ width: "min(900px, 96vw)" }}>
+            <FormularioResonancia
+              onCancel={() => { setShowReso(false); resolverReso?.({ canceled: true }); }}
+              onSave={async (data, { riesgos, observaciones }) => {
+                setShowReso(false);
+                try {
+                  const idPago = sessionStorage.getItem("idPago") || "";
+                  if (idPago) {
+                    await fetch(`${BACKEND_BASE}/guardar-rm`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        idPago,
+                        rmForm: data,
+                        observaciones:
+                          typeof observaciones === "string" ? observaciones :
+                          Array.isArray(riesgos) ? riesgos.join(", ") : "",
+                      }),
+                    });
+                    setRmPdfListo(true);
+                    setRmIdPago(idPago);
+                    sessionStorage.setItem("rm_pdf_disponible", "1");
+                    sessionStorage.setItem("rm_idPago", idPago);
+                  }
+                } catch {}
+                const resumen = resumenResoTexto(data);
+                const bloquea = hasRedFlags(data);
+                resolverReso?.({ canceled: false, bloquea, data, riesgos, resumen });
+              }}
+            />
+          </div>
+        </div>
+      )}
+      {(modulo === "trauma" || modulo === "ia") && mostrarMapper && (
+        <div className="overlay show" style={styles.modalOverlay}>
+          <div className="card" style={{ width: "min(900px, 96vw)" }}>
+            <GenericMapper
+              mapperId={mapperId}
+              ladoInicial={(datosPaciente?.lado || "").toLowerCase().includes("izq") ? "izquierda" : "derecha"}
+              vistaInicial={mapperId === "mano" ? (vista === "anterior" ? "palmar" : "dorsal") : vista}
+              onSave={() => setMostrarMapper(false)}
+              onClose={() => setMostrarMapper(false)}
+            />
+          </div>
+        </div>
+      )}
+      {mostrarComorbilidades && (
+        <div className="overlay show" style={styles.modalOverlay}>
+          <div className="card" style={{ width: "min(900px, 96vw)" }}>
+            <FormularioComorbilidades
+              initial={comorbilidades || {}}
+              onSave={handleSaveComorbilidades}
+              onCancel={() => setMostrarComorbilidades(false)}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  /* —— Render raíz —— */
+  return (
+    <div className="app" style={cssVars}>
+      <Overlays />
+      {paso === "inicio" && <PantallaInicio />}
+      {paso === "paciente" && <PantallaPaciente />}
+      {paso === "menu" && <PantallaMenu />}
+      {paso === "modulo" && <PantallaModulo />}
+      {paso === "preview" && <PantallaPreview />}
+    </div>
+  );
+}
+
+/* Styles */
+const styles = {
+  centerCard: { maxWidth: 520, margin: "24px auto", padding: 16 },
+  menuGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
+  menuBtn: { padding: "22px 12px", fontSize: 16, fontWeight: 800 },
+  contentRow: { alignItems: "flex-start", marginTop: 12 },
+  esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
+  statusBox: {
+    marginTop: 8, fontSize: 14, color: T.textMuted, background: T.surface,
+    padding: "6px 8px", borderRadius: 8, borderWidth: 1, borderStyle: "solid",
+    borderColor: T.border, minHeight: 30,
+  },
+  modalOverlay: {
+    position: "fixed", inset: 0, background: T.overlay, display: "grid", placeItems: "center",
+    zIndex: 2147483000, padding: 12, pointerEvents: "auto",
+  },
+};
+
+export default App;
