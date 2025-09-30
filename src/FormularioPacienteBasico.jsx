@@ -2,7 +2,7 @@
 "use client";
 import React, { useState } from "react";
 
-/* ====== Utilidades RUT (mismas reglas, simplificadas) ====== */
+/* ================= Utilidades RUT (Chile) ================= */
 function limpiarRut(str = "") {
   return String(str).replace(/[^0-9kK]/g, "").toUpperCase();
 }
@@ -40,22 +40,25 @@ function validarRut(str = "") {
   return { valido, motivo: valido ? "" : `DV incorrecto, debería ser ${dvOk}` };
 }
 
-/**
- * Formulario básico para la pantalla inicial.
- * Solo recoge: Nombre, RUT (con DV), Edad, Género.
- * No muestra Dolor/Lado ni Tipo de cirugía.
- *
- * Props:
- *  - datos: { nombre, rut, edad, genero, ... }
- *  - onCambiarDato(campo, valor)
- *  - onSubmit(e)  -> el padre decide “paso a menú”
- */
-function FormularioPacienteBasico({ datos, onCambiarDato, onSubmit }) {
+/* ================= Formulario básico (solo datos personales) ================= */
+function FormularioPacienteBasico({
+  datos,
+  onCambiarDato,
+  onSubmit,
+  modoInvitado = false, // si es true, no valida RUT estrictamente ni exige campos
+}) {
   const [rutMsg, setRutMsg] = useState("");
   const [rutValido, setRutValido] = useState(true);
 
-  // RUT en vivo
+  /* ======= RUT en vivo ======= */
   const handleRutChange = (e) => {
+    if (modoInvitado) {
+      onCambiarDato("rut", e.target.value);
+      setRutValido(true);
+      setRutMsg("");
+      return;
+    }
+
     let s = limpiarRut(e.target.value);
     if (s.length > 9) s = s.slice(0, 9);
 
@@ -82,6 +85,8 @@ function FormularioPacienteBasico({ datos, onCambiarDato, onSubmit }) {
   };
 
   const handleRutBlur = () => {
+    if (modoInvitado) return;
+
     const s = limpiarRut(datos?.rut || "");
     if (!s) {
       setRutValido(false);
@@ -101,47 +106,60 @@ function FormularioPacienteBasico({ datos, onCambiarDato, onSubmit }) {
     setRutMsg("RUT formateado.");
   };
 
+  /* ======= Submit ======= */
   const handleSubmit = (e) => {
-    // Validación suave: dejamos que el flujo “Guest” pase igual,
-    // la validación “dura” la hará el padre según sea demo o real.
-    const v = validarRut(datos?.rut || "");
-    if (!v.valido) {
-      e.preventDefault();
-      setRutValido(false);
-      setRutMsg(v.motivo ? `RUT inválido: ${v.motivo}.` : "RUT inválido.");
-      return;
+    if (!modoInvitado) {
+      const v = validarRut(datos?.rut || "");
+      if (!v.valido) {
+        e.preventDefault();
+        setRutValido(false);
+        setRutMsg(v.motivo ? `RUT inválido: ${v.motivo}.` : "RUT inválido.");
+        return;
+      }
+      // Edad mínima 18
+      const edadNum = Number(datos?.edad);
+      if (!Number.isFinite(edadNum) || edadNum < 18 || edadNum > 110) {
+        e.preventDefault();
+        alert("Edad fuera de rango (debe ser entre 18 y 110).");
+        return;
+      }
     }
-    onSubmit?.(e);
+    onSubmit(e);
   };
 
+  // Helper para required (en invitado no exigimos)
+  const req = (v) => (modoInvitado ? undefined : v);
+
   return (
-    <form onSubmit={handleSubmit}>
-      <h1 className="h1 center mb-12">Asistente Virtual — Datos Iniciales</h1>
+    <form onSubmit={handleSubmit} noValidate={modoInvitado}>
+      <h1 className="h1 center mb-12">Asistente Virtual para Pacientes</h1>
 
       <label>Nombre completo:</label>
       <input
         type="text"
-        value={datos.nombre || ""}
+        value={String(datos?.nombre ?? "")}
         onChange={(e) => onCambiarDato("nombre", e.target.value)}
-        required
+        required={req(true)}
+        autoComplete="name"
+        autoCapitalize="words"
       />
 
       <label>RUT:</label>
       <input
         type="text"
-        value={datos.rut || ""}
+        value={String(datos?.rut ?? "")}
         onChange={handleRutChange}
         onBlur={handleRutBlur}
         placeholder="12.345.678-9"
         inputMode="text"
         autoComplete="off"
-        required
+        required={req(true)}
         aria-invalid={!rutValido}
-        aria-describedby="rut-help-basic"
+        aria-describedby="rut-help"
         className={rutValido ? "" : "input-error"}
       />
       <div
-        id="rut-help-basic"
+        id="rut-help"
         style={{
           fontSize: 12,
           marginTop: 4,
@@ -149,32 +167,34 @@ function FormularioPacienteBasico({ datos, onCambiarDato, onSubmit }) {
           color: rutValido ? "var(--text-muted)" : "var(--primary-dark)",
         }}
       >
-        {rutMsg}
+        {modoInvitado ? "" : rutMsg}
       </div>
 
       <label>Edad:</label>
       <input
         type="number"
-        min="10"
-        max="110"
-        value={datos.edad ?? ""}
+        min={modoInvitado ? undefined : 18}
+        max={modoInvitado ? undefined : 110}
+        value={String(datos?.edad ?? "")}
         onChange={(e) => onCambiarDato("edad", e.target.value)}
-        required
+        required={req(true)}
+        inputMode="numeric"
       />
 
       <label>Género:</label>
       <select
-        value={datos.genero || ""}
+        value={String(datos?.genero ?? "")}
         onChange={(e) => onCambiarDato("genero", e.target.value)}
-        required
+        required={req(true)}
       >
-        <option value="">Seleccione…</option>
+        <option value="">{modoInvitado ? "Opcional…" : "Seleccione…"}</option>
+        {/* Valores compatibles con el resto de la app */}
         <option value="MASCULINO">MASCULINO</option>
         <option value="FEMENINO">FEMENINO</option>
       </select>
 
       <button className="btn fullw mt-16" type="submit">
-        Continuar
+        {modoInvitado ? "Continuar (modo invitado)" : "Continuar"}
       </button>
     </form>
   );
