@@ -57,7 +57,6 @@ function App() {
   // pasos: 'inicio' | 'paciente' | 'menu' | 'modulo' | 'preview'
   const [paso, setPaso] = useState("inicio");
   const [isGuest, setIsGuest] = useState(false);
-
   const [modulo, setModulo] = useState("trauma"); // 'trauma' | 'preop' | 'generales' | 'ia'
 
   const [datosPaciente, setDatosPaciente] = useState({
@@ -69,7 +68,7 @@ function App() {
     lado: "",
   });
 
-  /* —— FIX “una letra por vez” —— */
+  /* —— Arreglo “una letra por vez” (debounce de persistencia) —— */
   const ssTimerRef = useRef(null);
   const persistDatosDebounced = useCallback((next) => {
     if (ssTimerRef.current) clearTimeout(ssTimerRef.current);
@@ -83,9 +82,8 @@ function App() {
   // Preview en dos pasos
   const [previewStep, setPreviewStep] = useState("orden"); // 'orden' | 'ia'
   const [loadingIA, setLoadingIA] = useState(false);
-  const pendingNextRef = useRef(null); // para reintentar tras aviso/comorbilidades
+  const pendingNextRef = useRef(null);
 
-  const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const pollerRef = useRef(null);
 
@@ -98,18 +96,10 @@ function App() {
 
   // RM
   const [rmPdfListo, setRmPdfListo] = useState(() => {
-    try {
-      return sessionStorage.getItem("rm_pdf_disponible") === "1";
-    } catch {
-      return false;
-    }
+    try { return sessionStorage.getItem("rm_pdf_disponible") === "1"; } catch { return false; }
   });
   const [rmIdPago, setRmIdPago] = useState(() => {
-    try {
-      return sessionStorage.getItem("rm_idPago") || "";
-    } catch {
-      return "";
-    }
+    try { return sessionStorage.getItem("rm_idPago") || ""; } catch { return ""; }
   });
 
   // Flags persistentes
@@ -134,9 +124,7 @@ function App() {
 
   const marcarAvisoOk = (scope) => {
     avisoOkRef.current[scope] = true;
-    try {
-      sessionStorage.setItem(getAvisoKey(scope), "1");
-    } catch {}
+    try { sessionStorage.setItem(getAvisoKey(scope), "1"); } catch {}
   };
   const marcarComorbilidadesOk = (scope, payload) => {
     comorbOkRef.current[scope] = true;
@@ -157,38 +145,23 @@ function App() {
       await fn();
     }
   };
-  const rechazarAviso = () => {
-    setMostrarAviso(false);
-  };
+  const rechazarAviso = () => { setMostrarAviso(false); };
 
   // RNM checklist
   const [showReso, setShowReso] = useState(false);
   const [resolverReso, setResolverReso] = useState(null);
   const RED_FLAGS = new Set([
-    "marcapasos",
-    "coclear_o_neuro",
-    "clips_aneurisma",
-    "valvula_cardiaca_metal",
-    "fragmentos_metalicos",
+    "marcapasos","coclear_o_neuro","clips_aneurisma","valvula_cardiaca_metal","fragmentos_metalicos"
   ]);
   const pedirChecklistResonancia = () =>
-    new Promise((resolve) => {
-      setResolverReso(() => resolve);
-      setShowReso(true);
-    });
+    new Promise((resolve) => { setResolverReso(() => resolve); setShowReso(true); });
   const hasRedFlags = (data) =>
     Object.entries(data || {}).some(([k, v]) => RED_FLAGS.has(k) && v === true);
   const resumenResoTexto = (data) => {
     const si =
-      Object.entries(data || {})
-        .filter(([_, v]) => v === true)
-        .map(([k]) => k)
-        .join(", ") || "—";
+      Object.entries(data || {}).filter(([_, v]) => v === true).map(([k]) => k).join(", ") || "—";
     const no =
-      Object.entries(data || {})
-        .filter(([_, v]) => v === false)
-        .map(([k]) => k)
-        .join(", ") || "—";
+      Object.entries(data || {}).filter(([_, v]) => v === false).map(([k]) => k).join(", ") || "—";
     return [
       "FORMULARIO DE SEGURIDAD PARA RESONANCIA MAGNÉTICA",
       `Sí: ${si}`,
@@ -198,7 +171,7 @@ function App() {
     ].join("\n");
   };
 
-  // Utilidades expuestas
+  // Utilidad expuesta
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
@@ -210,7 +183,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ datosPaciente: datos }),
       });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
       const flag =
         typeof j?.resonancia === "boolean"
@@ -230,21 +203,17 @@ function App() {
     try {
       const raw = sessionStorage.getItem(getComorbStorageKey("preop"));
       return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   });
   useEffect(() => {
     if (modulo !== "preop" && modulo !== "generales") return;
     try {
       const raw = sessionStorage.getItem(getComorbStorageKey(modulo));
       setComorbilidades(raw ? JSON.parse(raw) : null);
-    } catch {
-      setComorbilidades(null);
-    }
+    } catch { setComorbilidades(null); }
   }, [modulo]);
 
-  // Llamadas IA
+  // IA
   const llamarPreopIA = async (payloadComorb) => {
     let idPago = "";
     try {
@@ -270,7 +239,6 @@ function App() {
     const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
     const paciente = { ...datosPaciente, edad: edadNum, genero: normalizarGenero(datosPaciente.genero) };
 
-    // intento principal + fallback
     let resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -278,6 +246,7 @@ function App() {
     }).catch(() => null);
     let okResp = !!resp?.ok;
     let j = okResp ? await resp.json() : null;
+
     if (!okResp) {
       const r2 = await fetch(`${BACKEND_BASE}/ia-preop`, {
         method: "POST",
@@ -371,9 +340,7 @@ function App() {
   useEffect(() => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
     if (saved) {
-      try {
-        setDatosPaciente(JSON.parse(saved));
-      } catch {}
+      try { setDatosPaciente(JSON.parse(saved)); } catch {}
     }
     const vistaSS = sessionStorage.getItem("vistaEsquema");
     if (vistaSS === "anterior" || vistaSS === "posterior") setVista(vistaSS);
@@ -384,30 +351,20 @@ function App() {
     const idPagoSS = sessionStorage.getItem("idPago");
     const idFinal = idPagoURL || idPagoSS || "";
 
-    if (pollerRef.current) {
-      clearInterval(pollerRef.current);
-      pollerRef.current = null;
-    }
+    if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; }
 
     if (pago === "ok" && idFinal) {
       sessionStorage.setItem("idPago", idFinal);
-      setMostrarVistaPrevia(true);
       setPagoRealizado(true);
       setPaso("preview");
       setPreviewStep("orden");
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
-        try {
-          await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`);
-        } catch {}
-        if (intentos >= 30) {
-          clearInterval(pollerRef.current);
-          pollerRef.current = null;
-        }
+        try { await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`); } catch {}
+        if (intentos >= 30) { clearInterval(pollerRef.current); pollerRef.current = null; }
       }, 2000);
     } else if (!pago && idFinal) {
-      setMostrarVistaPrevia(true);
       setPagoRealizado(true);
       setPaso("preview");
       setPreviewStep("orden");
@@ -415,16 +372,13 @@ function App() {
       alert("No recibimos idPago en el retorno. Intenta nuevamente.");
     } else if (pago === "cancelado") {
       alert("Pago cancelado.");
-      setMostrarVistaPrevia(false);
       setPagoRealizado(false);
     }
   }, []);
 
   // Persistir vista del esquema
   useEffect(() => {
-    try {
-      sessionStorage.setItem("vistaEsquema", vista);
-    } catch {}
+    try { sessionStorage.setItem("vistaEsquema", vista); } catch {}
   }, [vista]);
 
   const handleCambiarDato = (campo, valor) => {
@@ -439,37 +393,17 @@ function App() {
   const onSeleccionZona = (zona) => {
     let dolor = "";
     let lado = "";
-    const z = String(zona || "");
-    const zl = z.toLowerCase();
+    const zl = String(zona || "").toLowerCase();
 
-    if (zl.includes("columna cervical")) {
-      dolor = "Columna cervical";
-      lado = "";
-    } else if (zl.includes("columna dorsal")) {
-      dolor = "Columna dorsal";
-      lado = "";
-    } else if (zl.includes("columna lumbar") || zl.includes("columna")) {
-      dolor = "Columna lumbar";
-      lado = "";
-    } else if (zl.includes("cadera")) {
-      dolor = "Cadera";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zl.includes("rodilla")) {
-      dolor = "Rodilla";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zl.includes("hombro")) {
-      dolor = "Hombro";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zl.includes("codo")) {
-      dolor = "Codo";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zl.includes("mano")) {
-      dolor = "Mano";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zl.includes("tobillo")) {
-      dolor = "Tobillo";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    }
+    if (zl.includes("columna cervical")) { dolor = "Columna cervical"; lado = ""; }
+    else if (zl.includes("columna dorsal")) { dolor = "Columna dorsal"; lado = ""; }
+    else if (zl.includes("columna lumbar") || zl.includes("columna")) { dolor = "Columna lumbar"; lado = ""; }
+    else if (zl.includes("cadera")) { dolor = "Cadera"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("rodilla")) { dolor = "Rodilla"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("hombro")) { dolor = "Hombro"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("codo")) { dolor = "Codo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("mano")) { dolor = "Mano"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("tobillo")) { dolor = "Tobillo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
 
     setDatosPaciente((prev) => {
       const next = { ...prev, dolor, lado };
@@ -495,9 +429,7 @@ function App() {
         return { ok: false, msg: "Especifique el tipo de cirugía en el campo 'Otro'." };
       }
       return { ok: true };
-    } catch {
-      return { ok: false, msg: "Seleccione el TIPO DE CIRUGÍA." };
-    }
+    } catch { return { ok: false, msg: "Seleccione el TIPO DE CIRUGÍA." }; }
   };
 
   // Submit del módulo → ir a PREVIEW (resumen)
@@ -506,12 +438,7 @@ function App() {
 
     if (!isGuest) {
       const edadNum = Number(datosPaciente.edad);
-      if (
-        !datosPaciente.nombre?.trim() ||
-        !datosPaciente.rut?.trim() ||
-        !Number.isFinite(edadNum) ||
-        edadNum <= 0
-      ) {
+      if (!datosPaciente.nombre?.trim() || !datosPaciente.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
         alert("Por favor complete nombre, RUT y edad (>0).");
         setPaso("paciente");
         return;
@@ -523,52 +450,16 @@ function App() {
     }
     if (modulo === "preop") {
       const v = validarTipoCirugiaPreop();
-      if (!v.ok) {
-        alert(v.msg);
-        return;
-      }
+      if (!v.ok) { alert(v.msg); return; }
     }
-    setMostrarVistaPrevia(true);
+
     setPaso("preview");
     setPreviewStep("orden");
-  };
-
-  // Reiniciar
-  const handleReiniciar = async () => {
-    const ok = window.confirm("Esto reiniciará completamente la aplicación (datos, estados, caches). ¿Continuar?");
-    if (!ok) return;
-    try { if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; } } catch {}
-    try {
-      const maxId = setTimeout(() => {}, 0);
-      for (let i = 0; i <= maxId; i++) { clearTimeout(i); clearInterval(i); }
-    } catch {}
-    try { sessionStorage.clear(); } catch {}
-    try { localStorage.clear(); } catch {}
-    try {
-      if ("caches" in window) {
-        const names = await caches.keys();
-        await Promise.all(names.map((n) => caches.delete(n)));
-      }
-    } catch {}
-    try {
-      if ("serviceWorker" in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map((r) => r.unregister()));
-      }
-    } catch {}
-    let cleanUrl = window.location.href;
-    try {
-      const url = new URL(window.location.href);
-      url.search = ""; url.hash = ""; cleanUrl = url.toString();
-      window.history.replaceState(null, "", cleanUrl);
-    } catch {}
-    try { window.location.replace(cleanUrl); } catch { window.location.reload(); }
   };
 
   // Reset al entrar a un módulo
   const resetPreviewForModule = () => {
     try { if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; } } catch {}
-    setMostrarVistaPrevia(false);
     setPagoRealizado(false);
     setShowReso(false);
     setResolverReso(null);
@@ -580,13 +471,9 @@ function App() {
     pendingNextRef.current = null;
     try {
       [
-        "preop_ia_examenes",
-        "preop_ia_resumen",
-        "generales_ia_examenes",
-        "generales_ia_resumen",
-        "solicitaResonancia",
-        "rm_pdf_disponible",
-        "rm_idPago",
+        "preop_ia_examenes","preop_ia_resumen",
+        "generales_ia_examenes","generales_ia_resumen",
+        "solicitaResonancia","rm_pdf_disponible","rm_idPago",
       ].forEach((k) => sessionStorage.removeItem(k));
     } catch {}
     try {
@@ -597,7 +484,6 @@ function App() {
 
   /* —— CONTINUAR en Preview (de Orden → IA) —— */
   const runIASequence = async () => {
-    // Si falta comorbilidades en preop/generales
     if ((modulo === "preop" || modulo === "generales") && !comorbOkRef.current[modulo]) {
       pendingNextRef.current = async () => { await runIASequence(); };
       setMostrarComorbilidades(true);
@@ -636,16 +522,22 @@ function App() {
         <p style={{ margin: 0, color: T.textMuted }}>icaricular.cl</p>
       </div>
       <div style={{ display: "grid", gap: 12 }}>
-        <button className="btn" onClick={() => { setIsGuest(false); try { sessionStorage.setItem("guest", "0"); } catch {} setPaso("paciente"); }}>
+        <button
+          className="btn"
+          onClick={() => { setIsGuest(false); try { sessionStorage.setItem("guest", "0"); } catch {} setPaso("paciente"); }}
+        >
           Ingresar Paciente
         </button>
-        <button className="btn secondary" title="Modo prueba (permite navegar y generar documentos)"
-          onClick={() => { setIsGuest(true); try { sessionStorage.setItem("guest", "1"); } catch {} setPaso("menu"); }}>
+        <button
+          className="btn secondary"
+          title="Modo prueba (permite navegar y generar documentos)"
+          onClick={() => { setIsGuest(true); try { sessionStorage.setItem("guest", "1"); } catch {} setPaso("menu"); }}
+        >
           Guest
         </button>
       </div>
       <div style={{ marginTop: 16 }}>
-        <button className="btn ghost" onClick={handleReiniciar}>Reiniciar</button>
+        <button className="btn ghost" onClick={() => window.location.reload()}>Reiniciar</button>
       </div>
     </div>
   );
@@ -707,8 +599,10 @@ function App() {
               <>
                 Zona seleccionada: <strong>{datosPaciente.dolor}{datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}</strong>
                 {hasMapper(resolveZonaKey(datosPaciente?.dolor)) && (modulo === "trauma" || modulo === "ia") && (
-                  <button className="btn ghost" style={{ marginLeft: 8 }}
-                    onClick={() => { const k = resolveZonaKey(datosPaciente?.dolor); if (k && hasMapper(k)) { setMapperId(k); setMostrarMapper(true); } }}>
+                  <button
+                    className="btn ghost" style={{ marginLeft: 8 }}
+                    onClick={() => { const k = resolveZonaKey(datosPaciente?.dolor); if (k && hasMapper(k)) { setMapperId(k); setMostrarMapper(true); } }}
+                  >
                     Marcar puntos
                   </button>
                 )}
@@ -738,12 +632,11 @@ function App() {
         <div className="card">
           {previewStep === "orden" && (
             <>
+              {/* ⬇⬇⬇  AQUÍ VA CON LAS PROPS QUE ESPERA TU PreviewOrden ⬇⬇⬇ */}
               <PreviewOrden
-                initialDatos={datosPaciente}
-                modulo={modulo}
-                onPedirChecklistResonancia={pedirChecklistResonancia}
-                onDetectarResonancia={detectarResonanciaEnBackend}
-                resumenResoTexto={resumenResoTexto}
+                scope={modulo}           // "preop" | "generales" | otros (no usan mensaje)
+                datos={datosPaciente}    // <-- TUS VARIABLES: nombre, rut, edad, genero, dolor, lado
+                onContinuar={handlePreviewContinuar}
               />
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                 <button className="btn ghost" onClick={() => setPaso("modulo")}>Volver</button>
@@ -756,7 +649,15 @@ function App() {
 
           {previewStep === "ia" && (
             <>
-              <PreviewIA initialDatos={datosPaciente} modulo={modulo} pedirChecklistResonancia={pedirChecklistResonancia} />
+              {/* Paso 2: respuesta del backend */}
+              <PreviewIA
+                scope={modulo}
+                datos={datosPaciente}
+                /* también paso los alias por compatibilidad */
+                initialDatos={datosPaciente}
+                modulo={modulo}
+                pedirChecklistResonancia={pedirChecklistResonancia}
+              />
               {(modulo === "trauma" || modulo === "ia") && rmPdfListo && !!rmIdPago && (
                 <div style={{ marginTop: 8 }}>
                   <a
@@ -764,9 +665,15 @@ function App() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn"
-                    style={{ display: "inline-block", fontWeight: 750, fontSize: 13, textDecoration: "none",
-                      background: T?.surface, color: T?.primaryDark || "#0d47a1",
-                      border: `2px solid ${T?.primaryDark || "#0d47a1"}` }}
+                    style={{
+                      display: "inline-block",
+                      fontWeight: 750,
+                      fontSize: 13,
+                      textDecoration: "none",
+                      background: T?.surface,
+                      color: T?.primaryDark || "#0d47a1",
+                      border: `2px solid ${T?.primaryDark || "#0d47a1"}`
+                    }}
                   >
                     Formulario RM (PDF)
                   </a>
@@ -811,8 +718,9 @@ function App() {
                       body: JSON.stringify({
                         idPago,
                         rmForm: data,
-                        observaciones: typeof observaciones === "string" ? observaciones
-                          : Array.isArray(riesgos) ? riesgos.join(", ") : "",
+                        observaciones:
+                          typeof observaciones === "string" ? observaciones :
+                          Array.isArray(riesgos) ? riesgos.join(", ") : "",
                       }),
                     });
                     setRmPdfListo(true);
