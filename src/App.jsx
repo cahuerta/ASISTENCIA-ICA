@@ -1,6 +1,6 @@
 // src/App.jsx
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import "./app.css";
 
 /* Esquema corporal */
@@ -8,22 +8,20 @@ import EsquemaAnterior from "./EsquemaAnterior.jsx";
 import EsquemaPosterior from "./EsquemaPosterior.jsx";
 import EsquemaToggleTabs from "./EsquemaToggleTabs.jsx";
 
-/* Formularios y módulos */
+/* Formularios y utilidades */
 import FormularioPacienteBasico from "./FormularioPacienteBasico.jsx";
 import FormularioTipoCirugia from "./FormularioTipoCirugia.jsx";
-import PreopModulo from "./modules/PreopModulo.jsx";
-import GeneralesModulo from "./modules/GeneralesModulo.jsx";
-import IAModulo from "./modules/IAModulo.jsx";
-import TraumaModulo from "./modules/TraumaModulo.jsx";
+import AvisoLegal from "./components/AvisoLegal.jsx";
+import FormularioResonancia from "./components/FormularioResonancia.jsx";
+import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx";
+
+/* PREVIEW (pantalla nueva) */
+import PreviewAI from "./PreviewAI.jsx";
+import PreviewOrden from "./PreviewOrden.jsx";
 
 /* Host genérico de mapeadores (rodilla, mano, etc.) */
 import GenericMapper from "./mappers/GenericMapper.jsx";
 import { hasMapper, resolveZonaKey } from "./mappers/mapperRegistry.js";
-
-/* Utilidades existentes */
-import AvisoLegal from "./components/AvisoLegal.jsx";
-import FormularioResonancia from "./components/FormularioResonancia.jsx";
-import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx";
 
 /* Tema (JSON + helper) */
 import { getTheme } from "./theme.js";
@@ -58,11 +56,11 @@ const normalizarGenero = (g = "") => {
 
 function App() {
   /* ====================== ESTADO RAÍZ ====================== */
-  // pasos: 'inicio' | 'paciente' | 'menu' | 'modulo'
+  // pasos: 'inicio' | 'paciente' | 'menu' | 'modulo' | 'preview'
   const [paso, setPaso] = useState("inicio");
   const [isGuest, setIsGuest] = useState(false);
 
-  // módulo activo dentro del paso 'modulo'
+  // módulo activo
   const [modulo, setModulo] = useState("trauma"); // 'trauma' | 'preop' | 'generales' | 'ia'
 
   const [datosPaciente, setDatosPaciente] = useState({
@@ -73,6 +71,19 @@ function App() {
     dolor: "",
     lado: "",
   });
+
+  // Debounce para evitar “una letra por vez”
+  const ssTimerRef = useRef(null);
+  const persistDatosDebounced = useCallback((next) => {
+    try {
+      if (ssTimerRef.current) clearTimeout(ssTimerRef.current);
+      ssTimerRef.current = setTimeout(() => {
+        try {
+          sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
+        } catch {}
+      }, 180);
+    } catch {}
+  }, []);
 
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
@@ -147,6 +158,7 @@ function App() {
     if (pendingPreview) {
       setMostrarVistaPrevia(true);
       setPendingPreview(false);
+      setPaso("preview"); // ← preview en pantalla nueva
     }
   };
   const rechazarAviso = () => {
@@ -197,7 +209,7 @@ function App() {
     ].join("\n");
   };
 
-  // Expuesto para módulos que lo necesiten
+  // Expuesto para módulos/preview que lo necesiten
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
@@ -223,7 +235,7 @@ function App() {
     }
   };
 
-  // ====== Comorbilidades (modal suelto) ======
+  // ====== Comorbilidades (modal) ======
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
   const [comorbilidades, setComorbilidades] = useState(() => {
     try {
@@ -307,10 +319,11 @@ function App() {
         sessionStorage.setItem("preop_ia_resumen", resumen || "");
       } catch {}
 
-      // Mostrar preview directo si Aviso ya aceptado; si no, abrirlo (una vez)
+      // Preview en pantalla nueva
       if (avisoOkRef.current.preop) {
         setMostrarVistaPrevia(true);
         setPendingPreview(false);
+        setPaso("preview");
       } else {
         setPendingPreview(true);
         setMostrarAviso(true);
@@ -349,11 +362,7 @@ function App() {
       genero: normalizarGenero(datosPaciente.genero),
     };
 
-    const body = {
-      idPago,
-      paciente,
-      comorbilidades: comorb || {},
-    };
+    const body = { idPago, paciente, comorbilidades: comorb || {} };
 
     try {
       // 1) Nueva ruta específica
@@ -363,7 +372,7 @@ function App() {
         body: JSON.stringify(body),
       });
 
-      // 2) Fallback a endpoints existentes
+      // 2) Fallback
       if (!resp.ok) {
         resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
           method: "POST",
@@ -392,6 +401,7 @@ function App() {
       if (avisoOkRef.current.generales) {
         setMostrarVistaPrevia(true);
         setPendingPreview(false);
+        setPaso("preview");
       } else {
         setPendingPreview(true);
         setMostrarAviso(true);
@@ -439,6 +449,7 @@ function App() {
       sessionStorage.setItem("idPago", idFinal);
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
+      setPaso("preview"); // ← abrir preview directo
 
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
@@ -454,6 +465,7 @@ function App() {
     } else if (!pago && idFinal) {
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
+      setPaso("preview");
     } else if (pago === "ok" && !idFinal) {
       alert("No recibimos idPago en el retorno. Intenta nuevamente.");
     } else if (pago === "cancelado") {
@@ -473,9 +485,7 @@ function App() {
   const handleCambiarDato = (campo, valor) => {
     setDatosPaciente((prev) => {
       const next = { ...prev, [campo]: valor };
-      try {
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-      } catch {}
+      persistDatosDebounced(next);
       return next;
     });
   };
@@ -519,13 +529,11 @@ function App() {
 
     setDatosPaciente((prev) => {
       const next = { ...prev, dolor, lado };
-      try {
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-      } catch {}
+      persistDatosDebounced(next);
       return next;
     });
 
-    // Abrir mapper genérico si existe (en Trauma o IA)
+    // Abrir mapper genérico si existe (solo Trauma o IA)
     const key = resolveZonaKey(dolor);
     if ((modulo === "trauma" || modulo === "ia") && key && hasMapper(key)) {
       setMapperId(key);
@@ -549,12 +557,13 @@ function App() {
     }
   };
 
-  // ====== Submit del formulario principal (solo cuando estamos en 'modulo') ======
+  // ====== Submit para generar PREVIEW ======
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    const edadNum = Number(datosPaciente.edad);
+    e?.preventDefault?.();
 
+    // Validación mínima si no es Guest
     if (!isGuest) {
+      const edadNum = Number(datosPaciente.edad);
       if (
         !datosPaciente.nombre?.trim() ||
         !datosPaciente.rut?.trim() ||
@@ -562,18 +571,18 @@ function App() {
         edadNum <= 0
       ) {
         alert("Por favor complete nombre, RUT y edad (>0).");
+        setPaso("paciente");
         return;
       }
     }
 
-    // Solo TRAUMA exige dolor/lado
-    if (modulo === "trauma" && !datosPaciente.dolor?.trim()) {
+    // Solo TRAUMA/IA exige zona
+    if ((modulo === "trauma" || modulo === "ia") && !datosPaciente.dolor?.trim()) {
       alert("Seleccione dolor/zona en el esquema para continuar.");
       return;
     }
 
     if (modulo === "preop" || modulo === "generales") {
-      // PREOP ahora valida tipo de cirugía en el PADRE
       if (modulo === "preop") {
         const v = validarTipoCirugiaPreop();
         if (!v.ok) {
@@ -581,7 +590,6 @@ function App() {
           return;
         }
       }
-
       const scope = modulo;
       if (!comorbOkRef.current[scope]) {
         setMostrarComorbilidades(true);
@@ -592,10 +600,11 @@ function App() {
       return;
     }
 
-    // Otros módulos (trauma/ia)
+    // Trauma / IA → preview directa
     setMostrarVistaPrevia(true);
     setPagoRealizado(false);
     setPendingPreview(false);
+    setPaso("preview");
   };
 
   /* ====== Botón REINICIAR ====== */
@@ -657,7 +666,7 @@ function App() {
     }
   };
 
-  /* ====== Reset de PREVIEW al entrar a un módulo ====== */
+  /* ====== Reset de PREVIEW y estados al entrar a un módulo ====== */
   const resetPreviewForModule = () => {
     try {
       if (pollerRef.current) {
@@ -744,7 +753,7 @@ function App() {
         onCambiarDato={handleCambiarDato}
         onSubmit={(e) => {
           e.preventDefault();
-          setPaso("menu"); // la validación dura ocurre al usar los módulos
+          setPaso("menu");
         }}
       />
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
@@ -823,20 +832,11 @@ function App() {
     </div>
   );
 
+  // En módulos: SOLO esquema humano (y, si es preop, tipo de cirugía). Sin formulario paciente.
   const PantallaModulo = () => (
     <>
-      {/* Modal Aviso Legal (para preop/generales) */}
-      <AvisoLegal
-        visible={mostrarAviso}
-        persist={false}
-        onAccept={continuarTrasAviso}
-        onReject={rechazarAviso}
-      />
-
-      {/* Contenido principal: 3 columnas que se apilan en móvil */}
       <div className="row" style={styles.contentRow}>
-        {/* Columna 1 - Esquema */}
-        <div className="col" style={styles.esquemaCol}>
+        <div className="col" style={{ ...styles.esquemaCol, maxWidth: 520, width: "100%" }}>
           <div className="card">
             <EsquemaToggleTabs vista={vista} onChange={setVista} />
             {vista === "anterior" ? (
@@ -876,23 +876,7 @@ function App() {
               )}
             </div>
 
-            <div style={{ marginTop: 8 }}>
-              <button className="btn ghost" onClick={() => setPaso("menu")}>
-                Volver al Menú
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Columna 2 - Formulario básico + (si PREOP) Tipo de cirugía */}
-        <div className="col" style={styles.formCol}>
-          <div className="card">
-            <FormularioPacienteBasico
-              datos={datosPaciente}
-              onCambiarDato={handleCambiarDato}
-              onSubmit={handleSubmit}
-            />
-
+            {/* Solo en PREOP: Tipo de cirugía debajo del esquema */}
             {modulo === "preop" && (
               <div style={{ marginTop: 12 }}>
                 <FormularioTipoCirugia
@@ -901,67 +885,93 @@ function App() {
                 />
               </div>
             )}
-          </div>
-        </div>
 
-        {/* Columna 3 - Previews / Acciones */}
-        <div className="col" style={styles.previewCol} data-preview-col>
-          <div className="card">
-            {mostrarVistaPrevia && modulo === "trauma" && (
-              <TraumaModulo
-                initialDatos={datosPaciente}
-                onPedirChecklistResonancia={pedirChecklistResonancia}
-                onDetectarResonancia={detectarResonanciaEnBackend}
-                resumenResoTexto={resumenResoTexto}
-              />
-            )}
-
-            {mostrarVistaPrevia && modulo === "preop" && (
-              <PreopModulo initialDatos={datosPaciente} />
-            )}
-
-            {mostrarVistaPrevia && modulo === "generales" && (
-              <GeneralesModulo initialDatos={datosPaciente} />
-            )}
-
-            {mostrarVistaPrevia && modulo === "ia" && (
-              <IAModulo
-                key={`ia-${modulo}`}
-                initialDatos={datosPaciente}
-                pedirChecklistResonancia={pedirChecklistResonancia}
-              />
-            )}
-
-            {/* Botón Formulario RM (PDF) pintado en el PADRE, debajo del módulo */}
-            {mostrarVistaPrevia &&
-              (modulo === "trauma" || modulo === "ia") &&
-              rmPdfListo &&
-              !!rmIdPago && (
-                <div style={{ marginTop: 8 }}>
-                  <a
-                    href={`${BACKEND_BASE}/pdf-rm/${rmIdPago}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn"
-                    style={{
-                      display: "inline-block",
-                      fontWeight: 750,
-                      fontSize: 13,
-                      textDecoration: "none",
-                      background: T?.surface,
-                      color: T?.primaryDark || "#0d47a1",
-                      border: `2px solid ${T?.primaryDark || "#0d47a1"}`,
-                    }}
-                  >
-                    Formulario RM (PDF)
-                  </a>
-                </div>
-              )}
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button className="btn ghost" onClick={() => setPaso("menu")}>
+                Volver al Menú
+              </button>
+              <button className="btn" style={{ marginLeft: "auto" }} onClick={handleSubmit}>
+                Generar vista previa
+              </button>
+            </div>
           </div>
         </div>
       </div>
+    </>
+  );
 
-      {/* ===== Modal RNM ===== */}
+  // Pantalla de PREVIEW (pantalla nueva)
+  const PantallaPreview = () => (
+    <div className="row" style={{ marginTop: 12 }}>
+      <div className="col" style={{ width: "min(980px, 96vw)", margin: "0 auto" }}>
+        <div className="card">
+          {mostrarVistaPrevia && modulo === "trauma" && (
+            <PreviewOrden
+              initialDatos={datosPaciente}
+              onPedirChecklistResonancia={pedirChecklistResonancia}
+              onDetectarResonancia={detectarResonanciaEnBackend}
+              resumenResoTexto={resumenResoTexto}
+            />
+          )}
+
+          {mostrarVistaPrevia && (modulo === "preop" || modulo === "generales" || modulo === "ia") && (
+            <PreviewAI
+              initialDatos={datosPaciente}
+              pedirChecklistResonancia={pedirChecklistResonancia}
+            />
+          )}
+
+          {/* Botón Formulario RM (PDF) para Trauma/IA */}
+          {mostrarVistaPrevia &&
+            (modulo === "trauma" || modulo === "ia") &&
+            rmPdfListo &&
+            !!rmIdPago && (
+              <div style={{ marginTop: 8 }}>
+                <a
+                  href={`${BACKEND_BASE}/pdf-rm/${rmIdPago}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn"
+                  style={{
+                    display: "inline-block",
+                    fontWeight: 750,
+                    fontSize: 13,
+                    textDecoration: "none",
+                    background: T?.surface,
+                    color: T?.primaryDark || "#0d47a1",
+                    border: `2px solid ${T?.primaryDark || "#0d47a1"}`,
+                  }}
+                >
+                  Formulario RM (PDF)
+                </a>
+              </div>
+            )}
+
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button className="btn ghost" onClick={() => setPaso("menu")}>
+              Volver al Menú
+            </button>
+            <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setPaso("modulo")}>
+              Volver al Módulo
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  /* ================== Render raíz por paso ================== */
+  return (
+    <div className="app" style={cssVars}>
+      {/* Overlays globales para que funcionen en Módulo y Preview */}
+      <AvisoLegal
+        visible={mostrarAviso}
+        persist={false}
+        onAccept={continuarTrasAviso}
+        onReject={rechazarAviso}
+      />
+
+      {/* Modal RNM */}
       {showReso && (
         <div className="overlay show" style={styles.modalOverlay}>
           <div className="card" style={{ width: "min(900px, 96vw)" }}>
@@ -1006,7 +1016,7 @@ function App() {
         </div>
       )}
 
-      {/* ===== Modal Genérico de Mapeo (PNG+SVG) ===== */}
+      {/* Modal Genérico de Mapeo (PNG+SVG) */}
       {(modulo === "trauma" || modulo === "ia") && mostrarMapper && (
         <div className="overlay show" style={styles.modalOverlay}>
           <div className="card" style={{ width: "min(900px, 96vw)" }}>
@@ -1025,7 +1035,7 @@ function App() {
         </div>
       )}
 
-      {/* ===== Modal Comorbilidades ===== */}
+      {/* Modal Comorbilidades */}
       {mostrarComorbilidades && (
         <div className="overlay show" style={styles.modalOverlay}>
           <div className="card" style={{ width: "min(900px, 96vw)" }}>
@@ -1037,16 +1047,13 @@ function App() {
           </div>
         </div>
       )}
-    </>
-  );
 
-  /* ================== Render raíz por paso ================== */
-  return (
-    <div className="app" style={cssVars}>
+      {/* Contenido por pasos */}
       {paso === "inicio" && <PantallaInicio />}
       {paso === "paciente" && <PantallaPaciente />}
       {paso === "menu" && <PantallaMenu />}
       {paso === "modulo" && <PantallaModulo />}
+      {paso === "preview" && <PantallaPreview />}
     </div>
   );
 }
@@ -1072,16 +1079,13 @@ const styles = {
     fontWeight: 800,
   },
 
-  /* Layout de módulos (misma línea visual previa) */
+  /* Layout */
   contentRow: {
     alignItems: "flex-start",
     marginTop: 12,
   },
 
   esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
-  formCol: { flex: "0 0 400px", maxWidth: 400, position: "relative", zIndex: 0 },
-  previewCol: { minWidth: 360, position: "relative", zIndex: 0, overflow: "hidden" },
-
   statusBox: {
     marginTop: 8,
     fontSize: 14,
