@@ -15,9 +15,9 @@ import AvisoLegal from "./components/AvisoLegal.jsx";
 import FormularioResonancia from "./components/FormularioResonancia.jsx";
 import FormularioComorbilidades from "./components/FormularioComorbilidades.jsx";
 
-/* PREVIEW (pantalla nueva) - ambos previews siempre */
-import PreviewAI from "./PreviewAI.jsx";
+/* PREVIEW (pantalla nueva) en DOS PASOS */
 import PreviewOrden from "./PreviewOrden.jsx";
+import PreviewIA from "./PreviewIA.jsx";
 
 /* Host genérico de mapeadores (rodilla, mano, etc.) */
 import GenericMapper from "./mappers/GenericMapper.jsx";
@@ -46,7 +46,7 @@ const cssVars = {
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* === Normaliza solo para el backend (UI sigue: MASCULINO / FEMENINO) === */
+/* Normaliza solo para el backend (UI sigue MASCULINO/FEMENINO) */
 const normalizarGenero = (g = "") => {
   const s = String(g).trim().toLowerCase();
   if (s === "masculino" || s === "hombre") return "hombre";
@@ -85,6 +85,11 @@ function App() {
     } catch {}
   }, []);
 
+  // Preview en dos pasos: 'orden' → 'ia'
+  const [previewStep, setPreviewStep] = useState("orden");
+  const [loadingIA, setLoadingIA] = useState(false);
+  const pendingNextRef = useRef(null); // acción pendiente tras Aviso/Comorbilidades
+
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const pollerRef = useRef(null);
@@ -94,7 +99,7 @@ function App() {
 
   // Modal genérico de mapeadores (rodilla, mano, etc.)
   const [mostrarMapper, setMostrarMapper] = useState(false);
-  const [mapperId, setMapperId] = useState(null); // "rodilla" | "mano" | ...
+  const [mapperId, setMapperId] = useState(null);
 
   // === RM (PDF listo tras guardar el formulario) ===
   const [rmPdfListo, setRmPdfListo] = useState(() => {
@@ -150,20 +155,19 @@ function App() {
 
   // ====== Aviso Legal ======
   const [mostrarAviso, setMostrarAviso] = useState(false);
-  const [pendingPreview, setPendingPreview] = useState(false); // preview sólo tras IA + aceptar
 
-  const continuarTrasAviso = () => {
+  const continuarTrasAviso = async () => {
     setMostrarAviso(false);
     if (modulo === "preop" || modulo === "generales") marcarAvisoOk(modulo);
-    if (pendingPreview) {
-      setMostrarVistaPrevia(true);
-      setPendingPreview(false);
-      setPaso("preview");
+    // Ejecuta acción pendiente (por ejemplo, llamar IA y pasar a 'ia')
+    if (typeof pendingNextRef.current === "function") {
+      const fn = pendingNextRef.current;
+      pendingNextRef.current = null;
+      await fn();
     }
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
-    setPendingPreview(false);
     try {
       window.close();
     } catch {}
@@ -209,7 +213,7 @@ function App() {
     ].join("\n");
   };
 
-  // Expuesto para módulos/preview
+  // Utilidades expuestas
   const esResonanciaTexto = (t = "") => {
     const s = (t || "").toLowerCase();
     return s.includes("resonancia") || s.includes("resonancia magn") || /\brm\b/i.test(t);
@@ -246,6 +250,7 @@ function App() {
     }
   });
 
+  // Mantener comorbilidades al cambiar de módulo
   useEffect(() => {
     if (modulo !== "preop" && modulo !== "generales") return;
     try {
@@ -256,7 +261,7 @@ function App() {
     }
   }, [modulo]);
 
-  // ---- IA PREOP ----
+  // ====== LLAMADAS IA (sin UI, solo setean sessionStorage) ======
   const llamarPreopIA = async (payloadComorb) => {
     let idPago = "";
     try {
@@ -266,12 +271,14 @@ function App() {
         sessionStorage.setItem("idPago", idPago);
       }
     } catch {}
+
     let tipoCirugia = "";
     try {
       const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
       const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
       tipoCirugia = fijo || otro || "";
     } catch {}
+
     let comorb = payloadComorb || comorbilidades;
     if (!comorb) {
       try {
@@ -279,40 +286,44 @@ function App() {
         if (raw) comorb = JSON.parse(raw);
       } catch {}
     }
+
     const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
-    const paciente = { ...datosPaciente, edad: edadNum, genero: normalizarGenero(datosPaciente.genero) };
-    const postIA = async (path) =>
-      fetch(`${BACKEND_BASE}${path}`, {
+    const paciente = {
+      ...datosPaciente,
+      edad: edadNum,
+      genero: normalizarGenero(datosPaciente.genero),
+    };
+
+    const resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idPago, paciente, comorbilidades: comorb || {}, tipoCirugia }),
+    }).catch(() => null);
+
+    let okResp = resp?.ok;
+    let j = null;
+    if (!okResp) {
+      const r2 = await fetch(`${BACKEND_BASE}/ia-preop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idPago, paciente, comorbilidades: comorb || {}, tipoCirugia }),
-      });
-    try {
-      let resp = await postIA("/preop-ia");
-      if (!resp.ok) resp = await postIA("/ia-preop");
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const j = await resp.json();
-      const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
-      const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
-      try {
-        sessionStorage.setItem("preop_ia_examenes", JSON.stringify(examenes));
-        sessionStorage.setItem("preop_ia_resumen", resumen || "");
-      } catch {}
-      if (avisoOkRef.current.preop) {
-        setMostrarVistaPrevia(true);
-        setPendingPreview(false);
-        setPaso("preview");
-      } else {
-        setPendingPreview(true);
-        setMostrarAviso(true);
-      }
-    } catch {
-      alert("No fue posible obtener la información de IA desde el backend. Intenta nuevamente.");
-      setPendingPreview(false);
+      }).catch(() => null);
+      okResp = !!r2?.ok;
+      j = okResp ? await r2.json() : null;
+    } else {
+      j = await resp.json();
     }
+    if (!okResp) return false;
+
+    const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
+    const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
+    try {
+      sessionStorage.setItem("preop_ia_examenes", JSON.stringify(examenes));
+      sessionStorage.setItem("preop_ia_resumen", resumen || "");
+    } catch {}
+    return true;
   };
 
-  // ---- IA GENERALES ----
   const llamarGeneralesIA = async (payloadComorb) => {
     let idPago = "";
     try {
@@ -322,6 +333,7 @@ function App() {
         sessionStorage.setItem("idPago", idPago);
       }
     } catch {}
+
     let comorb = payloadComorb || comorbilidades;
     if (!comorb) {
       try {
@@ -329,67 +341,76 @@ function App() {
         if (raw) comorb = JSON.parse(raw);
       } catch {}
     }
+
     const edadNum = Number(datosPaciente.edad) || datosPaciente.edad;
-    const paciente = { ...datosPaciente, edad: edadNum, genero: normalizarGenero(datosPaciente.genero) };
-    const body = { idPago, paciente, comorbilidades: comorb || {} };
-    try {
-      let resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
+    const paciente = {
+      ...datosPaciente,
+      edad: edadNum,
+      genero: normalizarGenero(datosPaciente.genero),
+    };
+
+    // Ruta específica
+    let resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ idPago, paciente, comorbilidades: comorb || {} }),
+    }).catch(() => null);
+
+    let okResp = !!resp?.ok;
+    let j = okResp ? await resp.json() : null;
+
+    // Fallbacks
+    if (!okResp) {
+      resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!resp.ok) {
-        resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...body, tipoCirugia: "" }),
-        });
-      }
-      if (!resp.ok) {
-        resp = await fetch(`${BACKEND_BASE}/ia-preop`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...body, tipoCirugia: "" }),
-        });
-      }
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const j = await resp.json();
-      const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
-      const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
-      try {
-        sessionStorage.setItem("generales_ia_examenes", JSON.stringify(examenes));
-        sessionStorage.setItem("generales_ia_resumen", resumen || "");
-      } catch {}
-      if (avisoOkRef.current.generales) {
-        setMostrarVistaPrevia(true);
-        setPendingPreview(false);
-        setPaso("preview");
-      } else {
-        setPendingPreview(true);
-        setMostrarAviso(true);
-      }
-    } catch {
-      alert("No fue posible obtener la información de IA (Generales). Intenta nuevamente.");
-      setPendingPreview(false);
+        body: JSON.stringify({ idPago, paciente, comorbilidades: comorb || {}, tipoCirugia: "" }),
+      }).catch(() => null);
+      okResp = !!resp?.ok;
+      j = okResp ? await resp.json() : null;
     }
+    if (!okResp) {
+      resp = await fetch(`${BACKEND_BASE}/ia-preop`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idPago, paciente, comorbilidades: comorb || {}, tipoCirugia: "" }),
+      }).catch(() => null);
+      okResp = !!resp?.ok;
+      j = okResp ? await resp.json() : null;
+    }
+    if (!okResp) return false;
+
+    const examenes = Array.isArray(j?.examenes) ? j.examenes : [];
+    const resumen = typeof j?.informeIA === "string" ? j.informeIA : "";
+    try {
+      sessionStorage.setItem("generales_ia_examenes", JSON.stringify(examenes));
+      sessionStorage.setItem("generales_ia_resumen", resumen || "");
+    } catch {}
+    return true;
   };
 
-  // Guardar comorbilidades → marcar ok → llamar IA del scope
+  // Guardar comorbilidades → marcar ok → continuar acción pendiente si existía
   const handleSaveComorbilidades = async (payload) => {
     setComorbilidades(payload);
     setMostrarComorbilidades(false);
     const scope = modulo === "generales" ? "generales" : "preop";
     marcarComorbilidadesOk(scope, payload);
-    if (scope === "preop") await llamarPreopIA(payload);
-    else await llamarGeneralesIA(payload);
+    if (typeof pendingNextRef.current === "function") {
+      const fn = pendingNextRef.current;
+      pendingNextRef.current = null;
+      await fn();
+    }
   };
 
   /* ====== Restauración de estado útil ====== */
   useEffect(() => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
     if (saved) {
-      try { setDatosPaciente(JSON.parse(saved)); } catch {}
+      try {
+        setDatosPaciente(JSON.parse(saved));
+      } catch {}
     }
+
     const vistaSS = sessionStorage.getItem("vistaEsquema");
     if (vistaSS === "anterior" || vistaSS === "posterior") setVista(vistaSS);
 
@@ -409,10 +430,13 @@ function App() {
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
       setPaso("preview");
+      setPreviewStep("orden");
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
-        try { await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`); } catch {}
+        try {
+          await fetch(`${BACKEND_BASE}/obtener-datos/${idFinal}`);
+        } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
           pollerRef.current = null;
@@ -422,6 +446,7 @@ function App() {
       setMostrarVistaPrevia(true);
       setPagoRealizado(true);
       setPaso("preview");
+      setPreviewStep("orden");
     } else if (pago === "ok" && !idFinal) {
       alert("No recibimos idPago en el retorno. Intenta nuevamente.");
     } else if (pago === "cancelado") {
@@ -433,7 +458,9 @@ function App() {
 
   // Persistir vista de esquema
   useEffect(() => {
-    try { sessionStorage.setItem("vistaEsquema", vista); } catch {}
+    try {
+      sessionStorage.setItem("vistaEsquema", vista);
+    } catch {}
   }, [vista]);
 
   const handleCambiarDato = (campo, valor) => {
@@ -451,15 +478,34 @@ function App() {
     const z = String(zona || "");
     const zl = z.toLowerCase();
 
-    if (zl.includes("columna cervical")) { dolor = "Columna cervical"; lado = ""; }
-    else if (zl.includes("columna dorsal")) { dolor = "Columna dorsal"; lado = ""; }
-    else if (zl.includes("columna lumbar") || zl.includes("columna")) { dolor = "Columna lumbar"; lado = ""; }
-    else if (zl.includes("cadera")) { dolor = "Cadera"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("rodilla")) { dolor = "Rodilla"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("hombro")) { dolor = "Hombro"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("codo")) { dolor = "Codo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("mano")) { dolor = "Mano"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("tobillo")) { dolor = "Tobillo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    if (zl.includes("columna cervical")) {
+      dolor = "Columna cervical";
+      lado = "";
+    } else if (zl.includes("columna dorsal")) {
+      dolor = "Columna dorsal";
+      lado = "";
+    } else if (zl.includes("columna lumbar") || zl.includes("columna")) {
+      dolor = "Columna lumbar";
+      lado = "";
+    } else if (zl.includes("cadera")) {
+      dolor = "Cadera";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("rodilla")) {
+      dolor = "Rodilla";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("hombro")) {
+      dolor = "Hombro";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("codo")) {
+      dolor = "Codo";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("mano")) {
+      dolor = "Mano";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("tobillo")) {
+      dolor = "Tobillo";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    }
 
     setDatosPaciente((prev) => {
       const next = { ...prev, dolor, lado };
@@ -491,13 +537,18 @@ function App() {
     }
   };
 
-  // ====== Submit → PREVIEW ======
+  // ====== Submit del módulo → ir a PREVIEW (paso ORDEN) ======
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
 
     if (!isGuest) {
       const edadNum = Number(datosPaciente.edad);
-      if (!datosPaciente.nombre?.trim() || !datosPaciente.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
+      if (
+        !datosPaciente.nombre?.trim() ||
+        !datosPaciente.rut?.trim() ||
+        !Number.isFinite(edadNum) ||
+        edadNum <= 0
+      ) {
         alert("Por favor complete nombre, RUT y edad (>0).");
         setPaso("paciente");
         return;
@@ -509,46 +560,56 @@ function App() {
       return;
     }
 
-    if (modulo === "preop" || modulo === "generales") {
-      if (modulo === "preop") {
-        const v = validarTipoCirugiaPreop();
-        if (!v.ok) { alert(v.msg); return; }
+    if (modulo === "preop") {
+      const v = validarTipoCirugiaPreop();
+      if (!v.ok) {
+        alert(v.msg);
+        return;
       }
-      const scope = modulo;
-      if (!comorbOkRef.current[scope]) {
-        setMostrarComorbilidades(true);
-      } else {
-        if (scope === "preop") await llamarPreopIA();
-        else await llamarGeneralesIA();
-      }
-      return;
     }
 
-    // Trauma / IA → preview directa
+    // Ir a pantalla de preview (paso ORDEN)
     setMostrarVistaPrevia(true);
-    setPagoRealizado(false);
-    setPendingPreview(false);
     setPaso("preview");
+    setPreviewStep("orden");
   };
 
   /* ====== Botón REINICIAR ====== */
   const handleReiniciar = async () => {
-    const ok = window.confirm("Esto reiniciará completamente la aplicación (datos, estados, caches). ¿Continuar?");
+    const ok = window.confirm(
+      "Esto reiniciará completamente la aplicación (datos, estados, caches). ¿Continuar?"
+    );
     if (!ok) return;
 
-    try { if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; } } catch {}
+    try {
+      if (pollerRef.current) {
+        clearInterval(pollerRef.current);
+        pollerRef.current = null;
+      }
+    } catch {}
+
     try {
       const maxId = setTimeout(() => {}, 0);
-      for (let i = 0; i <= maxId; i++) { clearTimeout(i); clearInterval(i); }
+      for (let i = 0; i <= maxId; i++) {
+        clearTimeout(i);
+        clearInterval(i);
+      }
     } catch {}
-    try { sessionStorage.clear(); } catch {}
-    try { localStorage.clear(); } catch {}
+
+    try {
+      sessionStorage.clear();
+    } catch {}
+    try {
+      localStorage.clear();
+    } catch {}
+
     try {
       if ("caches" in window) {
         const names = await caches.keys();
         await Promise.all(names.map((n) => caches.delete(n)));
       }
     } catch {}
+
     try {
       if ("serviceWorker" in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
@@ -559,24 +620,39 @@ function App() {
     let cleanUrl = window.location.href;
     try {
       const url = new URL(window.location.href);
-      url.search = ""; url.hash = ""; cleanUrl = url.toString();
+      url.search = "";
+      url.hash = "";
+      cleanUrl = url.toString();
       window.history.replaceState(null, "", cleanUrl);
     } catch {}
-    try { window.location.replace(cleanUrl); } catch { window.location.reload(); }
+
+    try {
+      window.location.replace(cleanUrl);
+    } catch {
+      window.location.reload();
+    }
   };
 
-  /* ====== Reset de PREVIEW/estados al entrar a un módulo ====== */
+  /* ====== Reset al entrar a un módulo ====== */
   const resetPreviewForModule = () => {
-    try { if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; } } catch {}
+    try {
+      if (pollerRef.current) {
+        clearInterval(pollerRef.current);
+        pollerRef.current = null;
+      }
+    } catch {}
+
     setMostrarVistaPrevia(false);
     setPagoRealizado(false);
-    setPendingPreview(false);
     setShowReso(false);
     setResolverReso(null);
     setMostrarMapper(false);
     setMostrarComorbilidades(false);
     setRmPdfListo(false);
     setRmIdPago("");
+    setPreviewStep("orden");
+    pendingNextRef.current = null;
+
     try {
       [
         "preop_ia_examenes",
@@ -588,10 +664,56 @@ function App() {
         "rm_idPago",
       ].forEach((k) => sessionStorage.removeItem(k));
     } catch {}
+
     try {
       const url = new URL(window.location.href);
-      if (url.search) { url.search = ""; window.history.replaceState(null, "", url.toString()); }
+      if (url.search) {
+        url.search = "";
+        window.history.replaceState(null, "", url.toString());
+      }
     } catch {}
+  };
+
+  /* ============ LÓGICA del botón CONTINUAR en PREVIEW (Orden → IA) ============ */
+  const runIASequence = async () => {
+    // Si faltan comorbilidades en preop/generales, abrir modal y reintentar al guardar
+    if ((modulo === "preop" || modulo === "generales") && !comorbOkRef.current[modulo]) {
+      pendingNextRef.current = async () => {
+        await runIASequence();
+      };
+      setMostrarComorbilidades(true);
+      return;
+    }
+
+    setLoadingIA(true);
+    let ok = true;
+    if (modulo === "preop") ok = await llamarPreopIA();
+    else if (modulo === "generales") ok = await llamarGeneralesIA();
+    // trauma/ia no requieren llamada para mostrar PreviewIA (si tu PreviewIA usa backend en estos, adapta aquí)
+    setLoadingIA(false);
+
+    if (!ok && (modulo === "preop" || modulo === "generales")) {
+      alert("No fue posible obtener la información de IA. Intenta nuevamente.");
+      return;
+    }
+    setPreviewStep("ia");
+  };
+
+  const handlePreviewContinuar = async () => {
+    if (modulo === "preop" || modulo === "generales") {
+      // Aviso legal requerido antes de llamar IA
+      if (!avisoOkRef.current[modulo]) {
+        pendingNextRef.current = async () => {
+          await runIASequence();
+        };
+        setMostrarAviso(true);
+        return;
+      }
+      await runIASequence();
+    } else {
+      // trauma / ia: pasar directo a 'ia'
+      setPreviewStep("ia");
+    }
   };
 
   /* ============================ UI POR PASOS ============================ */
@@ -602,16 +724,37 @@ function App() {
         <p style={{ margin: 0, color: T.textMuted }}>icaricular.cl</p>
       </div>
       <div style={{ display: "grid", gap: 12 }}>
-        <button className="btn" onClick={() => { setIsGuest(false); try { sessionStorage.setItem("guest", "0"); } catch {}; setPaso("paciente"); }}>
+        <button
+          className="btn"
+          onClick={() => {
+            setIsGuest(false);
+            try {
+              sessionStorage.setItem("guest", "0");
+            } catch {}
+            setPaso("paciente");
+          }}
+        >
           Ingresar Paciente
         </button>
-        <button className="btn secondary" onClick={() => { setIsGuest(true); try { sessionStorage.setItem("guest", "1"); } catch {}; setPaso("menu"); }}
-          title="Modo prueba (permite navegar y generar documentos)">
+        <button
+          className="btn secondary"
+          onClick={() => {
+            setIsGuest(true);
+            try {
+              sessionStorage.setItem("guest", "1");
+            } catch {}
+            setPaso("menu");
+          }}
+          title="Modo prueba (permite navegar y generar documentos)"
+        >
           Guest
         </button>
       </div>
+
       <div style={{ marginTop: 16 }}>
-        <button className="btn ghost" onClick={handleReiniciar}>Reiniciar</button>
+        <button className="btn ghost" onClick={handleReiniciar}>
+          Reiniciar
+        </button>
       </div>
     </div>
   );
@@ -622,30 +765,80 @@ function App() {
       <FormularioPacienteBasico
         datos={datosPaciente}
         onCambiarDato={handleCambiarDato}
-        onSubmit={(e) => { e.preventDefault(); setPaso("menu"); }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          setPaso("menu");
+        }}
       />
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <button className="btn ghost" onClick={() => setPaso("inicio")}>Volver</button>
-        <button className="btn" onClick={() => setPaso("menu")} style={{ marginLeft: "auto" }}>Continuar</button>
+        <button className="btn ghost" onClick={() => setPaso("inicio")}>
+          Volver
+        </button>
+        <button
+          className="btn"
+          onClick={() => setPaso("menu")}
+          style={{ marginLeft: "auto" }}
+        >
+          Continuar
+        </button>
       </div>
     </div>
   );
 
   const BotonModulo = ({ onClick, children }) => (
-    <button className="btn" style={styles.menuBtn} onClick={onClick}>{children}</button>
+    <button className="btn" style={styles.menuBtn} onClick={onClick}>
+      {children}
+    </button>
   );
 
   const PantallaMenu = () => (
     <div className="card" style={styles.centerCard}>
       <h2 style={{ marginTop: 0, textAlign: "center" }}>Menú</h2>
       <div style={styles.menuGrid}>
-        <BotonModulo onClick={() => { resetPreviewForModule(); setModulo("trauma"); setPaso("modulo"); }}>TraumaIA</BotonModulo>
-        <BotonModulo onClick={() => { resetPreviewForModule(); setModulo("ia"); setPaso("modulo"); }}>ANÁLISIS MEDIANTE IA</BotonModulo>
-        <BotonModulo onClick={() => { resetPreviewForModule(); setModulo("preop"); setPaso("modulo"); if (!avisoOkRef.current.preop) setMostrarAviso(true); }}>Preoperatorio</BotonModulo>
-        <BotonModulo onClick={() => { resetPreviewForModule(); setModulo("generales"); setPaso("modulo"); if (!avisoOkRef.current.generales) setMostrarAviso(true); }}>Generales</BotonModulo>
+        <BotonModulo
+          onClick={() => {
+            resetPreviewForModule();
+            setModulo("trauma");
+            setPaso("modulo");
+          }}
+        >
+          TraumaIA
+        </BotonModulo>
+        <BotonModulo
+          onClick={() => {
+            resetPreviewForModule();
+            setModulo("ia");
+            setPaso("modulo");
+          }}
+        >
+          ANÁLISIS MEDIANTE IA
+        </BotonModulo>
+
+        <BotonModulo
+          onClick={() => {
+            resetPreviewForModule();
+            setModulo("preop");
+            setPaso("modulo");
+            // El aviso se mostrará cuando se presione "Continuar" en PreviewOrden
+          }}
+        >
+          Preoperatorio
+        </BotonModulo>
+        <BotonModulo
+          onClick={() => {
+            resetPreviewForModule();
+            setModulo("generales");
+            setPaso("modulo");
+          }}
+        >
+          Generales
+        </BotonModulo>
       </div>
+
       <div style={{ marginTop: 12 }}>
-        <button className="btn ghost" onClick={() => setPaso(isGuest ? "inicio" : "paciente")}>Volver</button>
+        <button className="btn ghost" onClick={() => setPaso(isGuest ? "inicio" : "paciente")}>
+          Volver
+        </button>
       </div>
     </div>
   );
@@ -657,24 +850,41 @@ function App() {
         <div className="col" style={{ ...styles.esquemaCol, maxWidth: 520, width: "100%" }}>
           <div className="card">
             <EsquemaToggleTabs vista={vista} onChange={setVista} />
-            {vista === "anterior"
-              ? <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
-              : <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />}
+            {vista === "anterior" ? (
+              <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
+            ) : (
+              <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
+            )}
 
             <div aria-live="polite" role="status" style={styles.statusBox}>
               {datosPaciente?.dolor ? (
                 <>
-                  Zona seleccionada: <strong>{datosPaciente.dolor}{datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}</strong>
-                  {hasMapper(resolveZonaKey(datosPaciente?.dolor)) && (modulo === "trauma" || modulo === "ia") && (
-                    <button type="button" onClick={() => {
-                      const k = resolveZonaKey(datosPaciente?.dolor);
-                      if (k && hasMapper(k)) { setMapperId(k); setMostrarMapper(true); }
-                    }} className="btn ghost" style={{ marginLeft: 8 }}>
-                      Marcar puntos
-                    </button>
-                  )}
+                  Zona seleccionada:{" "}
+                  <strong>
+                    {datosPaciente.dolor}
+                    {datosPaciente.lado ? ` — ${datosPaciente.lado}` : ""}
+                  </strong>
+                  {hasMapper(resolveZonaKey(datosPaciente?.dolor)) &&
+                    (modulo === "trauma" || modulo === "ia") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const k = resolveZonaKey(datosPaciente?.dolor);
+                          if (k && hasMapper(k)) {
+                            setMapperId(k);
+                            setMostrarMapper(true);
+                          }
+                        }}
+                        className="btn ghost"
+                        style={{ marginLeft: 8 }}
+                      >
+                        Marcar puntos
+                      </button>
+                    )}
                 </>
-              ) : "Seleccione una zona en el esquema"}
+              ) : (
+                "Seleccione una zona en el esquema"
+              )}
             </div>
 
             {modulo === "preop" && (
@@ -684,8 +894,12 @@ function App() {
             )}
 
             <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-              <button className="btn ghost" onClick={() => setPaso("menu")}>Volver al Menú</button>
-              <button className="btn" style={{ marginLeft: "auto" }} onClick={handleSubmit}>Generar vista previa</button>
+              <button className="btn ghost" onClick={() => setPaso("menu")}>
+                Volver al Menú
+              </button>
+              <button className="btn" style={{ marginLeft: "auto" }} onClick={handleSubmit}>
+                Generar vista previa
+              </button>
             </div>
           </div>
         </div>
@@ -693,12 +907,12 @@ function App() {
     </>
   );
 
-  // PREVIEW: SIEMPRE ambos previews (Orden + IA) en la misma pantalla
+  // Pantalla de PREVIEW (pantalla nueva) en dos pasos
   const PantallaPreview = () => (
     <div className="row" style={{ marginTop: 12 }}>
       <div className="col" style={{ width: "min(980px, 96vw)", margin: "0 auto" }}>
         <div className="card">
-          {mostrarVistaPrevia && (
+          {previewStep === "orden" && (
             <>
               <PreviewOrden
                 initialDatos={datosPaciente}
@@ -706,41 +920,65 @@ function App() {
                 onDetectarResonancia={detectarResonanciaEnBackend}
                 resumenResoTexto={resumenResoTexto}
               />
-              <div style={{ height: 12 }} />
-              <PreviewAI
-                initialDatos={datosPaciente}
-                pedirChecklistResonancia={pedirChecklistResonancia}
-              />
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button className="btn ghost" onClick={() => setPaso("modulo")}>
+                  Volver
+                </button>
+                <button className="btn" style={{ marginLeft: "auto" }} onClick={handlePreviewContinuar}>
+                  {modulo === "preop" || modulo === "generales" ? "Continuar y generar IA" : "Continuar"}
+                </button>
+              </div>
             </>
           )}
 
-          {/* Botón Formulario RM (PDF) pensado para Trauma/IA */}
-          {mostrarVistaPrevia && (modulo === "trauma" || modulo === "ia") && rmPdfListo && !!rmIdPago && (
-            <div style={{ marginTop: 8 }}>
-              <a
-                href={`${BACKEND_BASE}/pdf-rm/${rmIdPago}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn"
-                style={{
-                  display: "inline-block",
-                  fontWeight: 750,
-                  fontSize: 13,
-                  textDecoration: "none",
-                  background: T?.surface,
-                  color: T?.primaryDark || "#0d47a1",
-                  border: `2px solid ${T?.primaryDark || "#0d47a1"}`,
-                }}
-              >
-                Formulario RM (PDF)
-              </a>
-            </div>
+          {previewStep === "ia" && (
+            <>
+              <PreviewIA initialDatos={datosPaciente} pedirChecklistResonancia={pedirChecklistResonancia} />
+              {/* Botón Formulario RM (PDF) pensado para Trauma/IA */}
+              {(modulo === "trauma" || modulo === "ia") && rmPdfListo && !!rmIdPago && (
+                <div style={{ marginTop: 8 }}>
+                  <a
+                    href={`${BACKEND_BASE}/pdf-rm/${rmIdPago}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn"
+                    style={{
+                      display: "inline-block",
+                      fontWeight: 750,
+                      fontSize: 13,
+                      textDecoration: "none",
+                      background: T?.surface,
+                      color: T?.primaryDark || "#0d47a1",
+                      border: `2px solid ${T?.primaryDark || "#0d47a1"}`,
+                    }}
+                  >
+                    Formulario RM (PDF)
+                  </a>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button className="btn ghost" onClick={() => setPaso("menu")}>
+                  Volver al Menú
+                </button>
+                <button
+                  className="btn"
+                  style={{ marginLeft: "auto" }}
+                  onClick={() => {
+                    setPreviewStep("orden");
+                  }}
+                >
+                  Volver al resumen
+                </button>
+              </div>
+            </>
           )}
 
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button className="btn ghost" onClick={() => setPaso("menu")}>Volver al Menú</button>
-            <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setPaso("modulo")}>Volver al Módulo</button>
-          </div>
+          {loadingIA && (
+            <div style={{ marginTop: 10, fontSize: 14, color: T.textMuted }}>
+              Generando informe con IA…
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -750,15 +988,25 @@ function App() {
   return (
     <div className="app" style={cssVars}>
       {/* Overlays globales */}
-      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
+      <AvisoLegal
+        visible={mostrarAviso}
+        persist={false}
+        onAccept={continuarTrasAviso}
+        onReject={rechazarAviso}
+      />
 
+      {/* Modal RNM */}
       {showReso && (
         <div className="overlay show" style={styles.modalOverlay}>
           <div className="card" style={{ width: "min(900px, 96vw)" }}>
             <FormularioResonancia
-              onCancel={() => { setShowReso(false); resolverReso?.({ canceled: true }); }}
+              onCancel={() => {
+                setShowReso(false);
+                resolverReso?.({ canceled: true });
+              }}
               onSave={async (data, { riesgos, observaciones }) => {
                 setShowReso(false);
+                // Guardar respuestas en backend y habilitar botón PDF
                 try {
                   const idPago = sessionStorage.getItem("idPago") || "";
                   if (idPago) {
@@ -768,8 +1016,12 @@ function App() {
                       body: JSON.stringify({
                         idPago,
                         rmForm: data,
-                        observaciones: typeof observaciones === "string" ? observaciones
-                          : Array.isArray(riesgos) ? riesgos.join(", ") : "",
+                        observaciones:
+                          typeof observaciones === "string"
+                            ? observaciones
+                            : Array.isArray(riesgos)
+                            ? riesgos.join(", ")
+                            : "",
                       }),
                     });
                     setRmPdfListo(true);
@@ -778,6 +1030,7 @@ function App() {
                     sessionStorage.setItem("rm_idPago", idPago);
                   }
                 } catch {}
+
                 const resumen = resumenResoTexto(data);
                 const bloquea = hasRedFlags(data);
                 resolverReso?.({ canceled: false, bloquea, data, riesgos, resumen });
@@ -787,12 +1040,17 @@ function App() {
         </div>
       )}
 
+      {/* Modal Genérico de Mapeo (PNG+SVG) */}
       {(modulo === "trauma" || modulo === "ia") && mostrarMapper && (
         <div className="overlay show" style={styles.modalOverlay}>
           <div className="card" style={{ width: "min(900px, 96vw)" }}>
             <GenericMapper
               mapperId={mapperId}
-              ladoInicial={(datosPaciente?.lado || "").toLowerCase().includes("izq") ? "izquierda" : "derecha"}
+              ladoInicial={(datosPaciente?.lado || "")
+                .toLowerCase()
+                .includes("izq")
+                ? "izquierda"
+                : "derecha"}
               vistaInicial={mapperId === "mano" ? (vista === "anterior" ? "palmar" : "dorsal") : vista}
               onSave={() => setMostrarMapper(false)}
               onClose={() => setMostrarMapper(false)}
@@ -801,6 +1059,7 @@ function App() {
         </div>
       )}
 
+      {/* Modal Comorbilidades */}
       {mostrarComorbilidades && (
         <div className="overlay show" style={styles.modalOverlay}>
           <div className="card" style={{ width: "min(900px, 96vw)" }}>
@@ -813,6 +1072,7 @@ function App() {
         </div>
       )}
 
+      {/* Contenido por pasos */}
       {paso === "inicio" && <PantallaInicio />}
       {paso === "paciente" && <PantallaPaciente />}
       {paso === "menu" && <PantallaMenu />}
@@ -830,12 +1090,26 @@ const styles = {
   contentRow: { alignItems: "flex-start", marginTop: 12 },
   esquemaCol: { flex: "0 0 400px", maxWidth: 400 },
   statusBox: {
-    marginTop: 8, fontSize: 14, color: T.textMuted, background: T.surface, padding: "6px 8px",
-    borderRadius: 8, borderWidth: 1, borderStyle: "solid", borderColor: T.border, minHeight: 30,
+    marginTop: 8,
+    fontSize: 14,
+    color: T.textMuted,
+    background: T.surface,
+    padding: "6px 8px",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: T.border,
+    minHeight: 30,
   },
   modalOverlay: {
-    position: "fixed", inset: 0, background: T.overlay, display: "grid", placeItems: "center",
-    zIndex: 2147483000, padding: 12, pointerEvents: "auto",
+    position: "fixed",
+    inset: 0,
+    background: T.overlay,
+    display: "grid",
+    placeItems: "center",
+    zIndex: 2147483000,
+    padding: 12,
+    pointerEvents: "auto",
   },
 };
 
