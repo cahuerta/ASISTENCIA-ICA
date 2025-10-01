@@ -359,3 +359,97 @@ input:focus,select:focus,textarea:focus{
     box-shadow: var(--shadow-md);
   }
 }
+
+/* ==========================================================
+   Pantalla 1 — Ingreso Personas (con logo y botón Guest abajo)
+   ========================================================== */
+
+.ica-p1{
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+}
+
+.ica-p1__header{
+  width: 100%;
+  padding: 2.5rem 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ica-p1__logo{
+  max-width: 220px;
+  width: 100%;
+  height: auto;
+  user-select: none;
+}
+
+.ica-p1__main{
+  flex: 1;
+  width: 100%;
+  padding: 0 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ica-p1__title{
+  font-size: var(--fs-title);
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  text-align: center;
+  color: var(--text);
+}
+
+.ica-p1__subtitle{
+  font-size: var(--fs-small);
+  opacity: 0.8;
+  text-align: center;
+  margin: 0 0 2rem 0;
+  color: var(--text-muted);
+}
+
+.ica-p1__footer{
+  width: 100%;
+  padding: 0.75rem 1.25rem 1.25rem;
+  position: sticky;
+  bottom: 0;
+  backdrop-filter: blur(6px);
+  background: linear-gradient(to top, rgba(255,255,255,0.95), rgba(255,255,255,0.6));
+  border-top: 1px solid rgba(0,0,0,0.06);
+}
+
+/* Botón Guest heredando tokens globales */
+.btn.btn--guest{
+  background: #ffffff;
+  color: #111;
+  border: 1px solid rgba(0,0,0,0.12);
+  box-shadow: var(--shadow-sm);
+}
+.btn.btn--guest:active{ transform: scale(0.98); }
+
+.ica-p1__note{
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  text-align: center;
+  opacity: 0.7;
+  color: var(--text-muted);
+}
+
+/* Responsivo específico de Pantalla 1 */
+@media (min-width: 768px){
+  .ica-p1__footer{
+    padding-left: 2rem;
+    padding-right: 2rem;
+    background: rgba(255,255,255,0.9);
+  }
+  .btn.btn--guest{ max-width: 520px; margin: 0 auto; }
+}
+@media (min-width: 1100px){
+  .ica-p1__header{ padding-top: 3rem; }
+  .ica-p1__main{ max-width: 900px; margin: 0 auto; }
+  .btn.btn--guest{ max-width: 560px; }
+}
