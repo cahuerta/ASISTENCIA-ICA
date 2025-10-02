@@ -4,6 +4,15 @@ import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 
+/* === NUEVOS: solo para el paso "esquema" (sin mapper) === */
+import EsquemaAnterior from "../EsquemaAnterior.jsx";
+import EsquemaPosterior from "../EsquemaPosterior.jsx";
+import EsquemaToggleTabs from "../EsquemaToggleTabs.jsx";
+
+/* === NUEVOS: pasos "tipo" y "comorb" usando tus formularios === */
+import FormularioTipoCirugia from "../FormularioTipoCirugia.jsx";
+import FormularioComorbilidades from "../components/FormularioComorbilidades.jsx";
+
 const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
@@ -73,6 +82,11 @@ function resumenInicialPreop({ datos = {}, comorb = {}, tipoCirugia = "" }) {
 }
 
 export default function PreopModulo({ initialDatos }) {
+  /* ===== NUEVO: stepper interno de UX =====
+     esquema -> tipo -> comorb -> preview */
+  const [fase, setFase] = useState("esquema");
+
+  /* ===== Datos y estado original ===== */
   const [datos, setDatos] = useState(initialDatos || {});
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [descargando, setDescargando] = useState(false);
@@ -83,14 +97,17 @@ export default function PreopModulo({ initialDatos }) {
   const [stepStarted, setStepStarted] = useState(false);
   const [loadingIA, setLoadingIA] = useState(false);
 
-  // Salida IA y metadatos guardados POR App.jsx
+  // Salida IA y metadatos guardados POR App.jsx (se mantienen)
   const [examenesIA, setExamenesIA] = useState([]);
   const [informeIA, setInformeIA] = useState("");
   const [comorbilidades, setComorbilidades] = useState({});
   const [tipoCirugia, setTipoCirugia] = useState("");
 
+  /* ===== NUEVO: UI para esquema (solo toggle) ===== */
+  const [vista, setVista] = useState("anterior");
+
   useEffect(() => {
-    // Datos paciente (para mostrar)
+    // Datos paciente (para mostrar y persistir)
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
@@ -123,6 +140,11 @@ export default function PreopModulo({ initialDatos }) {
       const inf = sessionStorage.getItem("preop_ia_resumen") || "";
       setExamenesIA(Array.isArray(ex) ? ex : []);
       setInformeIA(inf);
+      // Si ya había IA previa, podemos ir directo a preview si el flujo vuelve
+      if ((Array.isArray(ex) && ex.length) || inf) {
+        setStepStarted(true);
+        setFase("preview");
+      }
     } catch {}
 
     // Retorno de pago (marcar listo, mostrar SEGUNDO preview y hacer polling)
@@ -132,7 +154,8 @@ export default function PreopModulo({ initialDatos }) {
 
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
-      setStepStarted(true); // ← quedar en segundo preview
+      setStepStarted(true);  // ← segundo preview
+      setFase("preview");    // ← ir directo a preview
       if (pollerRef.current) clearInterval(pollerRef.current);
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
@@ -159,7 +182,27 @@ export default function PreopModulo({ initialDatos }) {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /* ===================== Continuar → LLAMA IA y pasa al preview ===================== */
+  /* ===== NUEVO: handler del esquema (SIN mapper) ===== */
+  const onSeleccionZona = (zona) => {
+    let dolor = "", lado = "";
+    const zl = String(zona || "").toLowerCase();
+
+    if (zl.includes("columna cervical")) { dolor = "Columna cervical"; lado = ""; }
+    else if (zl.includes("columna dorsal")) { dolor = "Columna dorsal"; lado = ""; }
+    else if (zl.includes("columna lumbar") || zl.includes("columna")) { dolor = "Columna lumbar"; lado = ""; }
+    else if (zl.includes("cadera")) { dolor = "Cadera"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("rodilla")) { dolor = "Rodilla"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("hombro")) { dolor = "Hombro"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("codo")) { dolor = "Codo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("mano")) { dolor = "Mano"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("tobillo")) { dolor = "Tobillo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+
+    const next = { ...datos, dolor, lado };
+    setDatos(next);
+    try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
+  };
+
+  /* ===================== Continuar → LLAMA IA y pasa al preview (se mantiene) ===================== */
   const handleContinuar = async () => {
     try {
       setLoadingIA(true);
@@ -221,6 +264,7 @@ export default function PreopModulo({ initialDatos }) {
       setExamenesIA(ex);
       setInformeIA(inf);
       setStepStarted(true);
+      setFase("preview"); // ← NUEVO: avanzar al preview tras IA
     } catch (err) {
       console.error(err);
       alert("No fue posible obtener la información de IA (Preop). Intenta nuevamente.");
@@ -367,99 +411,204 @@ export default function PreopModulo({ initialDatos }) {
     <div className="card" aria-live="polite">
       <h3 className="h1" style={{ color: T.primary }}>Vista previa — Exámenes preoperatorios</h3>
 
-      <section style={{ marginBottom: 10 }}>
-        <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
-        <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
-        <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
-        <div><strong>Género:</strong> {datos?.genero || "—"}</div>
-        <div>
-          <strong>Motivo/Área:</strong>{" "}
-          {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
-        </div>
-        {tipoCirugia ? (
-          <div><strong>Tipo de cirugía:</strong> {tipoCirugia}</div>
-        ) : (
-          <div className="muted">
-            (El tipo de cirugía se toma del formulario principal de PREOP.)
+      {/* ====== FASE 1: ESQUEMA (SIN mapper) ====== */}
+      {fase === "esquema" && (
+        <div className="card" style={{ marginTop: 8 }}>
+          <EsquemaToggleTabs vista={vista} onChange={setVista} />
+          {vista === "anterior" ? (
+            <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
+          ) : (
+            <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
+          )}
+          <div className="mt-8 muted">
+            {datos?.dolor
+              ? <>Zona: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong></>
+              : "Seleccione una zona del esquema para continuar"}
           </div>
-        )}
-      </section>
-
-      {/* Resumen inicial (antes de Continuar) */}
-      {!stepStarted && (
-        <>
-          <div className="mono">{resumenInicialPreop({ datos, comorb: comorbilidades, tipoCirugia })}</div>
-          <button
-            className="btn fullw"
-            style={{ marginTop: 10 }}
-            onClick={handleContinuar}
-            disabled={loadingIA}
-            aria-busy={loadingIA}
-          >
-            {loadingIA ? "Generando con IA…" : "Continuar"}
-          </button>
-        </>
+          <div className="toolbar right mt-16">
+            <button
+              className="btn"
+              disabled={!datos?.dolor}
+              onClick={() => setFase("tipo")}
+            >
+              Continuar → Tipo de cirugía
+            </button>
+          </div>
+        </div>
       )}
 
-      {/* Después de Continuar: chips, lista IA e informe, y acciones */}
-      {stepStarted && (
-        <>
-          {/* Comorbilidades (chips) */}
-          {comorbChips.length > 0 && (
-            <section className="mt-8">
-              <strong>Comorbilidades:</strong>
-              <div className="chips mt-6">
-                {comorbChips.map((t, i) => (
-                  <span key={`${t}-${i}`} className="chip">{t}</span>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* PREVIEW (lista de IA si existe) */}
-          {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
-            <section className="mt-12">
-              <strong>Exámenes a solicitar (IA):</strong>
-              <ul className="mt-6">
-                {examenesIA.map((e, idx) => (
-                  <li key={`${e}-${idx}`}>
-                    {typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : (
-            <div className="muted mt-12">
-              (Aún no hay lista de exámenes. Desde el formulario principal pulsa “Generar Informe”
-              para que se ejecute la IA y se muestre aquí.)
+      {/* ====== FASE 2: TIPO DE CIRUGÍA ====== */}
+      {fase === "tipo" && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <div className="section">
+            <h2 className="h1" style={{ margin: 0 }}>Tipo de cirugía</h2>
+            <div className="muted">
+              {datos?.dolor
+                ? <>Zona: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong></>
+                : "Seleccione una zona en el paso anterior"}
             </div>
+          </div>
+          <div className="divider" />
+          <FormularioTipoCirugia
+            datos={datos}
+            onTipoCirugiaChange={() => {
+              // El propio formulario persiste en sessionStorage:
+              // preop_tipoCirugia / preop_tipoCirugia_otro
+              try {
+                const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
+                const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
+                const final = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
+                setTipoCirugia(final || "");
+              } catch {}
+            }}
+          />
+          <div className="toolbar right mt-16">
+            <button
+              className="btn"
+              onClick={() => {
+                const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "");
+                const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "");
+                const ok = (fijo && fijo !== "OTRO (ESPECIFICAR)") || (fijo === "OTRO (ESPECIFICAR)" && (otro || "").trim());
+                if (!ok) {
+                  alert("Seleccione el tipo de cirugía o especifique 'OTRO'.");
+                  return;
+                }
+                setFase("comorb");
+              }}
+            >
+              Continuar → Comorbilidades
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ====== FASE 3: COMORBILIDADES ====== */}
+      {fase === "comorb" && (
+        <div className="card" style={{ marginTop: 12 }}>
+          <div className="section">
+            <h2 className="h1" style={{ margin: 0 }}>Comorbilidades</h2>
+            <div className="muted">Complete y guarde para continuar al preview.</div>
+          </div>
+          <div className="divider" />
+          <FormularioComorbilidades
+            initial={comorbilidades || {}}
+            onSave={async (payload) => {
+              try {
+                sessionStorage.setItem("preop_comorbilidades_data", JSON.stringify(payload || {}));
+                sessionStorage.setItem("preop_comorbilidades_ok", "1");
+              } catch {}
+              setComorbilidades(payload || {});
+              // Llamamos IA y vamos a preview (reutiliza tu flujo existente)
+              await handleContinuar();
+              setFase("preview");
+            }}
+            onCancel={() => {
+              // Si cancelan, se quedan en esta fase sin romper nada
+            }}
+          />
+        </div>
+      )}
+
+      {/* ====== FASE 4: PREVIEW (tu bloque actual) ====== */}
+      {fase === "preview" && (
+        <>
+          <section style={{ marginBottom: 10 }}>
+            <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
+            <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
+            <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
+            <div><strong>Género:</strong> {datos?.genero || "—"}</div>
+            <div>
+              <strong>Motivo/Área:</strong>{" "}
+              {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
+            </div>
+            {tipoCirugia ? (
+              <div><strong>Tipo de cirugía:</strong> {tipoCirugia}</div>
+            ) : (
+              <div className="muted">
+                (El tipo de cirugía se toma del formulario principal de PREOP.)
+              </div>
+            )}
+          </section>
+
+          {/* Resumen inicial (si aún no se generó IA) */}
+          {!stepStarted && (
+            <>
+              <div className="mono">{resumenInicialPreop({ datos, comorb: comorbilidades, tipoCirugia })}</div>
+              <button
+                className="btn fullw"
+                style={{ marginTop: 10 }}
+                onClick={handleContinuar}
+                disabled={loadingIA}
+                aria-busy={loadingIA}
+              >
+                {loadingIA ? "Generando con IA…" : "Continuar"}
+              </button>
+            </>
           )}
 
-          {informeIA && (
-            <section className="mt-8">
-              <strong>Informe IA (resumen):</strong>
-              <div className="mono mt-6">{informeIA}</div>
-            </section>
-          )}
+          {/* Después de Continuar: chips, lista IA e informe, y acciones */}
+          {stepStarted && (
+            <>
+              {/* Comorbilidades (chips) */}
+              {(() => {
+                const chips = prettyComorb(comorbilidades);
+                return chips.length > 0 ? (
+                  <section className="mt-8">
+                    <strong>Comorbilidades:</strong>
+                    <div className="chips mt-6">
+                      {chips.map((t, i) => (
+                        <span key={`${t}-${i}`} className="chip">{t}</span>
+                      ))}
+                    </div>
+                  </section>
+                ) : null;
+              })()}
 
-          {/* Acciones */}
-          {pagoRealizado ? (
-            <button
-              className="btn fullw mt-12"
-              onClick={handleDescargarPreop}
-              disabled={descargando}
-              aria-busy={descargando}
-              title={mensajeDescarga || "Verificar y descargar"}
-            >
-              {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
-            </button>
-          ) : (
-            <button
-              className="btn fullw mt-12"
-              onClick={handlePagarDesdePreview}
-            >
-              Pagar ahora (Pre Op)
-            </button>
+              {/* PREVIEW (lista de IA si existe) */}
+              {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
+                <section className="mt-12">
+                  <strong>Exámenes a solicitar (IA):</strong>
+                  <ul className="mt-6">
+                    {examenesIA.map((e, idx) => (
+                      <li key={`${typeof e === "string" ? e : e?.nombre || "item"}-${idx}`}>
+                        {typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : (
+                <div className="muted mt-12">
+                  (Aún no hay lista de exámenes. Pulsa “Generar con IA…” para que se ejecute y aparezcan aquí.)
+                </div>
+              )}
+
+              {informeIA && (
+                <section className="mt-8">
+                  <strong>Informe IA (resumen):</strong>
+                  <div className="mono mt-6">{informeIA}</div>
+                </section>
+              )}
+
+              {/* Acciones */}
+              {pagoRealizado ? (
+                <button
+                  className="btn fullw mt-12"
+                  onClick={handleDescargarPreop}
+                  disabled={descargando}
+                  aria-busy={descargando}
+                  title={mensajeDescarga || "Verificar y descargar"}
+                >
+                  {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
+                </button>
+              ) : (
+                <button
+                  className="btn fullw mt-12"
+                  onClick={handlePagarDesdePreview}
+                >
+                  Pagar ahora (Pre Op)
+                </button>
+              )}
+            </>
           )}
         </>
       )}
