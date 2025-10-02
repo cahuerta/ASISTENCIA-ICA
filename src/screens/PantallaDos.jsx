@@ -1,103 +1,115 @@
 // src/screens/PantallaDos.jsx
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 
-/* Módulos existentes (sin cambiar nombres ni props) */
+/* Módulos (sin tocar su lógica interna) */
 import IAModulo from "../modules/IAModulo.jsx";
 import TraumaModulo from "../modules/TraumaModulo.jsx";
 import GeneralesModulo from "../modules/GeneralesModulo.jsx";
 import PreopModulo from "../modules/PreopModulo.jsx";
 
 /**
- * Pantalla 2 — Selector y render directo de módulos
- * - Muestra 4 botones (IA / Trauma / Generales / Preop).
- * - Al presionar, abre **directamente** el módulo seleccionado (sin otra pantalla).
- * - Usa solo clases CSS de app.css (sin estilos inline).
- *
- * Props:
- *  - initialDatos?: object   // datos del paciente (opcional)
- *  - onVolver?: () => void   // volver al ingreso (opcional)
+ * PantallaDos
+ * - Solo orquesta: selector de módulo + render del módulo activo.
+ * - No incluye esquema ni mappers. Eso lo maneja cada MÓDULO internamente (IA/Trauma).
+ * - Pasa initialDatos a todos los módulos (compat).
+ * - Expone onUpdateDatos opcional: si un módulo lo llama, actualiza estado y sessionStorage["datosPacienteJSON"].
+ * - Opcionalmente recibe onPagarTrauma / onSimularPagoGuest para módulos que lo soporten.
  */
-export default function PantallaDos({ initialDatos = {}, onVolver }) {
-  const [modulo, setModulo] = useState(null); // null = selector; otro = módulo abierto
+export default function PantallaDos({
+  initialDatos = {},
+  onVolver,
+  onPagarTrauma,       // opcional: si Trauma/IA lo usan
+  onSimularPagoGuest,  // opcional: si Trauma/IA lo usan
+}) {
+  const [modulo, setModulo] = useState("ia");      // "ia" | "trauma" | "generales" | "preop"
+  const [datos, setDatos] = useState(initialDatos || {});
 
-  const Titulo = () => (
-    <div className="section">
-      <h1 className="h1">
-        {modulo === null ? "Selecciona un módulo" :
-          modulo === "ia" ? "IA" :
-          modulo === "trauma" ? "Trauma" :
-          modulo === "generales" ? "Generales" :
-          modulo === "preop" ? "Preoperatorio" : ""}
-      </h1>
+  // Sincronizar si initialDatos cambia (ej. al volver desde otra pantalla)
+  useEffect(() => {
+    setDatos(initialDatos || {});
+    // Sincronía defensiva: dejar reflejo en sessionStorage para módulos que leen directo
+    try {
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(initialDatos || {}));
+    } catch {}
+  }, [initialDatos]);
 
-      {/* Botón Volver (si estás viendo un módulo vuelve al selector; si estás en selector y pasas onVolver, vuelve al ingreso) */}
-      {modulo !== null ? (
-        <button className="btn secondary nowrap" onClick={() => setModulo(null)}>
-          Volver
-        </button>
-      ) : (
-        onVolver && (
-          <button className="btn secondary nowrap" onClick={onVolver}>
-            Volver
-          </button>
-        )
-      )}
-    </div>
-  );
+  // Orquestador: permite que un módulo actualice datos del paciente si lo desea
+  const onUpdateDatos = useCallback((patch = {}) => {
+    setDatos((prev) => {
+      const next = { ...prev, ...(patch || {}) };
+      try {
+        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   return (
-    <div className="app ica-p2">
+    <div className="app">
       <div className="card">
-        <Titulo />
+        <div className="section">
+          <h1 className="h1">Selecciona un módulo</h1>
+          {onVolver && (
+            <button className="btn secondary nowrap" onClick={onVolver}>
+              Volver
+            </button>
+          )}
+        </div>
         <div className="divider" />
 
-        {/* ===== Selector (modulo === null) ===== */}
-        {modulo === null && (
-          <div className="grid-autofit">
-            <div className="card">
-              <h3 className="h1">IA</h3>
-              <div className="toolbar mt-12">
-                <button className="btn fullw" onClick={() => setModulo("ia")}>
-                  Abrir IA
-                </button>
-              </div>
-            </div>
+        {/* Selector de módulos – simple y claro */}
+        <div className="grid-autofit">
+          {[
+            { key: "ia", title: "IA" },
+            { key: "trauma", title: "Trauma" },
+            { key: "generales", title: "Generales" },
+            { key: "preop", title: "Preoperatorio" },
+          ].map((m) => (
+            <button
+              key={m.key}
+              className={`btn ${modulo === m.key ? "" : "secondary"} fullw`}
+              onClick={() => setModulo(m.key)}
+            >
+              {modulo === m.key ? `✓ ${m.title}` : `Abrir ${m.title}`}
+            </button>
+          ))}
+        </div>
 
-            <div className="card">
-              <h3 className="h1">Trauma</h3>
-              <div className="toolbar mt-12">
-                <button className="btn fullw" onClick={() => setModulo("trauma")}>
-                  Abrir Trauma
-                </button>
-              </div>
-            </div>
+        {/* Render directo del módulo activo — sin esquema aquí */}
+        <div className="card mt-16">
+          {modulo === "ia" && (
+            <IAModulo
+              initialDatos={datos}
+              onUpdateDatos={onUpdateDatos}    // opcional
+              onPagarAhora={onPagarTrauma}     // opcional (si tu módulo lo usa)
+              onSimularPago={onSimularPagoGuest}
+            />
+          )}
 
-            <div className="card">
-              <h3 className="h1">Generales</h3>
-              <div className="toolbar mt-12">
-                <button className="btn fullw" onClick={() => setModulo("generales")}>
-                  Abrir Generales
-                </button>
-              </div>
-            </div>
+          {modulo === "trauma" && (
+            <TraumaModulo
+              initialDatos={datos}
+              onUpdateDatos={onUpdateDatos}    // opcional
+              onPagarAhora={onPagarTrauma}     // opcional
+              onSimularPago={onSimularPagoGuest}
+            />
+          )}
 
-            <div className="card">
-              <h3 className="h1">Preoperatorio</h3>
-              <div className="toolbar mt-12">
-                <button className="btn fullw" onClick={() => setModulo("preop")}>
-                  Abrir Preop
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+          {modulo === "generales" && (
+            <GeneralesModulo
+              initialDatos={datos}
+              onUpdateDatos={onUpdateDatos}    // opcional
+            />
+          )}
 
-        {/* ===== Render directo del módulo ===== */}
-        {modulo === "ia" && <IAModulo initialDatos={initialDatos} />}
-        {modulo === "trauma" && <TraumaModulo initialDatos={initialDatos} />}
-        {modulo === "generales" && <GeneralesModulo initialDatos={initialDatos} />}
-        {modulo === "preop" && <PreopModulo initialDatos={initialDatos} />}
+          {modulo === "preop" && (
+            <PreopModulo
+              initialDatos={datos}
+              onUpdateDatos={onUpdateDatos}    // opcional
+            />
+          )}
+        </div>
       </div>
     </div>
   );
