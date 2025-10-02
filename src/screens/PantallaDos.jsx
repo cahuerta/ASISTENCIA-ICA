@@ -1,116 +1,122 @@
 // src/screens/PantallaDos.jsx
 "use client";
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
+import { getTheme } from "../theme.js";
 
-/* Módulos (sin tocar su lógica interna) */
 import IAModulo from "../modules/IAModulo.jsx";
 import TraumaModulo from "../modules/TraumaModulo.jsx";
 import GeneralesModulo from "../modules/GeneralesModulo.jsx";
 import PreopModulo from "../modules/PreopModulo.jsx";
 
-/**
- * PantallaDos
- * - Solo orquesta: selector de módulo + render del módulo activo.
- * - No incluye esquema ni mappers. Eso lo maneja cada MÓDULO internamente (IA/Trauma).
- * - Pasa initialDatos a todos los módulos (compat).
- * - Expone onUpdateDatos opcional: si un módulo lo llama, actualiza estado y sessionStorage["datosPacienteJSON"].
- * - Opcionalmente recibe onPagarTrauma / onSimularPagoGuest para módulos que lo soporten.
- */
-export default function PantallaDos({
-  initialDatos = {},
-  onVolver,
-  onPagarTrauma,       // opcional: si Trauma/IA lo usan
-  onSimularPagoGuest,  // opcional: si Trauma/IA lo usan
-}) {
-  const [modulo, setModulo] = useState("ia");      // "ia" | "trauma" | "generales" | "preop"
-  const [datos, setDatos] = useState(initialDatos || {});
+const T = getTheme();
 
-  // Sincronizar si initialDatos cambia (ej. al volver desde otra pantalla)
-  useEffect(() => {
-    setDatos(initialDatos || {});
-    // Sincronía defensiva: dejar reflejo en sessionStorage para módulos que leen directo
+export default function PantallaDos() {
+  // modo = "seleccion" (solo botones) | "modulo" (solo módulo activo)
+  const [modo, setModo] = useState(() => {
     try {
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(initialDatos || {}));
-    } catch {}
-  }, [initialDatos]);
+      const m = sessionStorage.getItem("modulo");
+      return m ? "modulo" : "seleccion";
+    } catch {
+      return "seleccion";
+    }
+  });
 
-  // Orquestador: permite que un módulo actualice datos del paciente si lo desea
-  const onUpdateDatos = useCallback((patch = {}) => {
-    setDatos((prev) => {
-      const next = { ...prev, ...(patch || {}) };
-      try {
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-      } catch {}
-      return next;
-    });
+  const [modulo, setModulo] = useState(() => {
+    try {
+      const m = sessionStorage.getItem("modulo");
+      return ["ia", "trauma", "generales", "preop"].includes(m) ? m : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Datos del paciente para pasar a los módulos (compatibilidad total)
+  const [datosPaciente, setDatosPaciente] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("datosPacienteJSON");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("datosPacienteJSON");
+      if (raw) setDatosPaciente(JSON.parse(raw));
+    } catch {}
   }, []);
 
-  return (
-    <div className="app">
-      <div className="card">
-        <div className="section">
-          <h1 className="h1">Selecciona un módulo</h1>
-          {onVolver && (
-            <button className="btn secondary nowrap" onClick={onVolver}>
-              Volver
-            </button>
-          )}
-        </div>
-        <div className="divider" />
+  const activarModulo = (key) => {
+    setModulo(key);
+    setModo("modulo");
+    try { sessionStorage.setItem("modulo", key); } catch {}
+  };
 
-        {/* Selector de módulos – simple y claro */}
+  const volverASeleccion = () => {
+    setModo("seleccion");
+    // mantenemos el módulo en sessionStorage por si recargas y quieres “continuar”;
+    // si prefieres limpiar, descomenta la siguiente línea:
+    // try { sessionStorage.removeItem("modulo"); } catch {}
+  };
+
+  return (
+    <div className="card" style={{ padding: 16 }}>
+      {/* ENCABEZADO */}
+      <div className="section">
+        <h2 className="h1" style={{ margin: 0 }}>Selecciona un módulo</h2>
+        {modo === "modulo" && (
+          <button className="btn secondary" onClick={volverASeleccion}>
+            Volver
+          </button>
+        )}
+      </div>
+      <div className="divider" />
+
+      {/* SOLO SELECTOR */}
+      {modo === "seleccion" && (
         <div className="grid-autofit">
           {[
-            { key: "ia", title: "IA" },
-            { key: "trauma", title: "Trauma" },
-            { key: "generales", title: "Generales" },
-            { key: "preop", title: "Preoperatorio" },
-          ].map((m) => (
-            <button
-              key={m.key}
-              className={`btn ${modulo === m.key ? "" : "secondary"} fullw`}
-              onClick={() => setModulo(m.key)}
-            >
-              {modulo === m.key ? `✓ ${m.title}` : `Abrir ${m.title}`}
-            </button>
+            { key: "ia", label: "IA" },
+            { key: "trauma", label: "Trauma" },
+            { key: "generales", label: "Generales" },
+            { key: "preop", label: "Preoperatorio" },
+          ].map((b) => (
+            <div key={b.key} className="card">
+              <div className="section">
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{b.label}</div>
+              </div>
+              <button
+                className="btn fullw mt-12"
+                onClick={() => activarModulo(b.key)}
+              >
+                Abrir {b.label}
+              </button>
+            </div>
           ))}
         </div>
+      )}
 
-        {/* Render directo del módulo activo — sin esquema aquí */}
-        <div className="card mt-16">
+      {/* SOLO MÓDULO ACTIVO */}
+      {modo === "modulo" && (
+        <div className="mt-12">
           {modulo === "ia" && (
-            <IAModulo
-              initialDatos={datos}
-              onUpdateDatos={onUpdateDatos}    // opcional
-              onPagarAhora={onPagarTrauma}     // opcional (si tu módulo lo usa)
-              onSimularPago={onSimularPagoGuest}
-            />
+            <IAModulo initialDatos={datosPaciente} />
           )}
-
           {modulo === "trauma" && (
             <TraumaModulo
-              initialDatos={datos}
-              onUpdateDatos={onUpdateDatos}    // opcional
-              onPagarAhora={onPagarTrauma}     // opcional
-              onSimularPago={onSimularPagoGuest}
+              initialDatos={datosPaciente}
+              // props opcionales se mantienen; si no los usas, no afectan
             />
           )}
-
           {modulo === "generales" && (
-            <GeneralesModulo
-              initialDatos={datos}
-              onUpdateDatos={onUpdateDatos}    // opcional
-            />
+            <GeneralesModulo initialDatos={datosPaciente} />
           )}
-
           {modulo === "preop" && (
-            <PreopModulo
-              initialDatos={datos}
-              onUpdateDatos={onUpdateDatos}    // opcional
-            />
+            <PreopModulo initialDatos={datosPaciente} />
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 }
