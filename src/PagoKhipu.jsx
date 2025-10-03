@@ -1,14 +1,12 @@
 // src/PagoKhipu.jsx
 // Frontend: inicia pago llamando al backend y redirige a la URL que éste responda.
 
-// ---- Resolución de BACKEND_BASE (Vite / Next / window.__ENV__)
 const BACKEND_BASE =
   (typeof window !== "undefined" && window.__ENV__?.BACKEND_BASE) ||
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_BACKEND_BASE) ||
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BACKEND_BASE) ||
   "https://asistencia-ica-backend.onrender.com";
 
-// Une la base con una ruta evitando dobles barras
 function joinURL(base, path) {
   if (!base) return path;
   const b = String(base).replace(/\/+$/, "");
@@ -33,11 +31,7 @@ async function fetchJSON(url, options = {}, { timeoutMs = 30000 } = {}) {
 
     const raw = await r.text();
     let data = null;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      // si el backend devuelve HTML/errores no-JSON, lo exponemos en raw
-    }
+    try { data = JSON.parse(raw); } catch {}
     return { ok: r.ok, status: r.status, data, raw };
   } finally {
     clearTimeout(t);
@@ -69,13 +63,7 @@ export async function guardarDatos(idPago, datosPaciente, modulo = "trauma") {
   return true;
 }
 
-export async function crearPagoKhipu({
-  idPago,
-  datosPaciente,
-  modulo = "trauma",
-  modoGuest = false,
-}) {
-  // Soporta ambos endpoints del backend: /crear-pago-khipu (nuevo) y /crear-pago (alias)
+export async function crearPagoKhipu({ idPago, datosPaciente, modulo = "trauma", modoGuest = false }) {
   const url = joinURL(BACKEND_BASE, "/crear-pago-khipu");
   const { ok, status, data, raw } = await fetchJSON(url, {
     method: "POST",
@@ -92,26 +80,74 @@ export async function crearPagoKhipu({
     const msg = data?.error || `Fallo HTTP ${status}`;
     throw new Error(`${msg}${det}`);
   }
-  return data.url; // URL de Khipu (real) o retorno (guest)
+  return data.url;
 }
 
-export async function irAPagoKhipu(datosPaciente, opts = {}) {
-  const edadNum = Number(datosPaciente?.edad);
+/* ==================== GUEST integrado ==================== */
+const GUEST_PERFIL = {
+  nombre: "guest",
+  rut: "11.111.111-1",
+  edad: 50,
+  genero: "FEMENINO",
+};
 
-  // Determinar módulo (permite que Generales/Preop no exijan "dolor")
+function normRut(str) {
+  return String(str || "").replace(/[^0-9kK]/g, "").toUpperCase();
+}
+function esGuest(datos) {
+  return (
+    String(datos?.nombre || "").trim().toLowerCase() === "guest" &&
+    normRut(datos?.rut) === normRut(GUEST_PERFIL.rut) &&
+    Number(datos?.edad) === Number(GUEST_PERFIL.edad) &&
+    String(datos?.genero || "").trim().toUpperCase() === GUEST_PERFIL.genero
+  );
+}
+
+async function simularPagoGuest(datosPaciente, modulo) {
+  const idPago = generarIdPago(`${modulo}_guest`);
+
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem("idPago", idPago);
+    sessionStorage.setItem("modulo", modulo);
+    sessionStorage.setItem(
+      "datosPacienteJSON",
+      JSON.stringify({ ...datosPaciente, edad: Number(datosPaciente?.edad) })
+    );
+  }
+
+  // Guardamos datos para permitir PDF/consulta posterior
+  await guardarDatos(idPago, { ...datosPaciente, edad: Number(datosPaciente?.edad) }, modulo);
+
+  // Redirige como si el pago hubiese sido OK (igual a tus simuladores por módulo)
+  const url = new URL(window.location.href);
+  url.searchParams.set("pago", "ok");
+  url.searchParams.set("idPago", idPago);
+  window.location.href = url.toString();
+}
+
+/* ==================== Flujo principal ==================== */
+export async function irAPagoKhipu(datosPaciente, opts = {}) {
   const modulo = (
     opts?.modulo ||
     (typeof window !== "undefined" && sessionStorage.getItem("modulo")) ||
     "trauma"
   ).toLowerCase();
 
+  // GUEST: si coincide EXACTAMENTE con el perfil guest → simular pago y salir
+  if (esGuest(datosPaciente)) {
+    await simularPagoGuest(datosPaciente, modulo);
+    return;
+  }
+
+  const edadNum = Number(datosPaciente?.edad);
+
+  // Validaciones estándar
   const baseIncompleto =
     !datosPaciente?.nombre?.trim() ||
     !datosPaciente?.rut?.trim() ||
     !Number.isFinite(edadNum) ||
     edadNum <= 0;
 
-  // Solo TRAUMA exige "dolor"
   const faltaDolor = modulo === "trauma" && !datosPaciente?.dolor?.trim();
 
   if (baseIncompleto || faltaDolor) {
@@ -121,9 +157,7 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
 
   const idPago =
     opts?.idPago ||
-    generarIdPago(
-      modulo === "preop" ? "preop" : modulo === "generales" ? "generales" : "pago"
-    );
+    generarIdPago(modulo === "preop" ? "preop" : modulo === "generales" ? "generales" : "pago");
 
   if (typeof window !== "undefined") {
     sessionStorage.setItem("idPago", idPago);
@@ -134,10 +168,8 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
     );
   }
 
-  // 1) guarda datos para que el backend pueda generar el PDF con el mismo contenido
   await guardarDatos(idPago, { ...datosPaciente, edad: edadNum }, modulo);
 
-  // 2) crea pago y redirige
   const urlPago = await crearPagoKhipu({
     idPago,
     datosPaciente: { ...datosPaciente, edad: edadNum },
@@ -148,7 +180,7 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
   window.location.href = urlPago;
 }
 
-// Compat: descarga PDF “trauma”
+/* ==================== Descargar PDF (trauma) ==================== */
 export async function descargarPDF(nombreArchivo = "orden.pdf", idPagoParam) {
   const idPago =
     idPagoParam ||
