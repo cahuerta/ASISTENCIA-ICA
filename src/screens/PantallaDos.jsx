@@ -1,43 +1,69 @@
 // src/PantallaDos.jsx
 "use client";
-import React, { useState } from "react";
+import React from "react";
 
-/* Importamos los módulos */
-import IAModulo from "./modules/IAModulo.jsx";
-import TraumaModulo from "./modules/TraumaModulo.jsx";
-import GeneralesModulo from "./modules/GeneralesModulo.jsx";
-import PreopModulo from "./modules/PreopModulo.jsx";
+/**
+ * PantallaDos
+ * - Muestra SOLO el selector de módulos.
+ * - No importa ni renderiza ningún módulo.
+ * - Cada botón llama onOpen(<modulo>) para que el PADRE haga la navegación.
+ */
+export default function PantallaDos({ onOpen, onVolver }) {
+  const abrir = (key) => {
+    try { sessionStorage.setItem("modulo", key); } catch {}
+    onOpen?.(key);
+  };
 
-export default function PantallaDos({ onVolver }) {
-  const [moduloActivo, setModuloActivo] = useState(null);
-
-  // Renderizar el módulo seleccionado
-  if (moduloActivo === "ia") return <IAModulo initialDatos={{}} />;
-  if (moduloActivo === "trauma") return <TraumaModulo initialDatos={{}} />;
-  if (moduloActivo === "generales") return <GeneralesModulo initialDatos={{}} />;
-  if (moduloActivo === "preop") return <PreopModulo initialDatos={{}} />;
-
-  // Vista inicial: solo los botones
   return (
-    <div className="card">
-      <h2>Selecciona un módulo</h2>
+    <div className="card" style={{ padding: 16 }}>
+      <h2 className="h1" style={{ marginTop: 0, marginBottom: 8 }}>Selecciona un módulo</h2>
+      <p className="muted" style={{ marginTop: 0, marginBottom: 16 }}>
+        Elige el flujo que quieres iniciar
+      </p>
 
-      <button className="btn fullw" onClick={() => setModuloActivo("ia")}>
-        Abrir IA
-      </button>
-      <button className="btn fullw" onClick={() => setModuloActivo("trauma")}>
-        Abrir Trauma
-      </button>
-      <button className="btn fullw" onClick={() => setModuloActivo("generales")}>
-        Abrir Generales
-      </button>
-      <button className="btn fullw" onClick={() => setModuloActivo("preop")}>
-        Abrir Preoperatorio
-      </button>
+      <div className="grid-autofit">
+        <div className="card">
+          <div className="section">
+            <strong>IA</strong>
+          </div>
+          <button className="btn fullw mt-12" onClick={() => abrir("ia")}>
+            Abrir IA
+          </button>
+        </div>
 
-      <button className="btn muted mt-6" onClick={onVolver}>
-        Volver
-      </button>
+        <div className="card">
+          <div className="section">
+            <strong>Trauma</strong>
+          </div>
+          <button className="btn fullw mt-12" onClick={() => abrir("trauma")}>
+            Abrir Trauma
+          </button>
+        </div>
+
+        <div className="card">
+          <div className="section">
+            <strong>Generales</strong>
+          </div>
+          <button className="btn fullw mt-12" onClick={() => abrir("generales")}>
+            Abrir Generales
+          </button>
+        </div>
+
+        <div className="card">
+          <div className="section">
+            <strong>Preoperatorio</strong>
+          </div>
+          <button className="btn fullw mt-12" onClick={() => abrir("preop")}>
+            Abrir Preoperatorio
+          </button>
+        </div>
+      </div>
+
+      {onVolver && (
+        <div className="toolbar mt-16">
+          <button className="btn secondary" onClick={onVolver}>Volver</button>
+        </div>
+      )}
     </div>
   );
 }
