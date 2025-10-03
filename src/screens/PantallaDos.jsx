@@ -2,13 +2,12 @@
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
 
-/* Módulos existentes (no se tocan) */
+/* Módulos existentes (sin tocarlos) */
 import IAModulo from "./modules/IAModulo.jsx";
 import TraumaModulo from "./modules/TraumaModulo.jsx";
 import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import PreopModulo from "./modules/PreopModulo.jsx";
 
-/* Botón simple */
 function Btn({ children, onClick }) {
   return (
     <button className="btn fullw" type="button" onClick={onClick} style={{ marginBottom: 12 }}>
@@ -17,18 +16,11 @@ function Btn({ children, onClick }) {
   );
 }
 
-/**
- * PantallaDos (versión correcta y funcional)
- * - Solo muestra 4 botones.
- * - Al pulsar, reemplaza la vista por el módulo elegido (sin sobre-render).
- * - Pasa initialDatos desde sessionStorage (o desde props si se proveen).
- * - No escribe ni modifica otras claves; deja que cada módulo gestione su flujo.
- */
-export default function PantallaDos({ onVolver, initialDatos: initialDatosProp }) {
+export default function PantallaDos({ onVolver }) {
   const [moduloActivo, setModuloActivo] = useState(null);
   const [datosSS, setDatosSS] = useState(null);
 
-  // Carga defensiva desde sessionStorage (igual clave que usa el resto de la app)
+  // Carga datos del paciente desde sessionStorage (misma clave que usa la app)
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem("datosPacienteJSON");
@@ -38,12 +30,9 @@ export default function PantallaDos({ onVolver, initialDatos: initialDatosProp }
     }
   }, []);
 
-  // initialDatos a pasar a los módulos (prioriza SS; luego prop; si no, objeto vacío)
   const initialDatos = useMemo(() => {
-    if (datosSS && typeof datosSS === "object") return datosSS;
-    if (initialDatosProp && typeof initialDatosProp === "object") return initialDatosProp;
-    return {};
-  }, [datosSS, initialDatosProp]);
+    return (datosSS && typeof datosSS === "object") ? datosSS : {};
+  }, [datosSS]);
 
   // Si hay módulo activo → render exclusivo del módulo (sin menú alrededor)
   if (moduloActivo) {
@@ -67,19 +56,15 @@ export default function PantallaDos({ onVolver, initialDatos: initialDatosProp }
     if (moduloActivo === "preop") return (<><VolverBtn /><PreopModulo initialDatos={initialDatos} /></>);
   }
 
-  // Vista inicial: SOLO los botones
+  // Vista inicial: SOLO los botones (sin nada más)
   return (
     <div className="card" style={{ maxWidth: 720, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2 style={{ margin: 0 }}>Selecciona un módulo</h2>
-        {onVolver && (
-          <button className="btn ghost" type="button" onClick={onVolver}>
-            Volver
-          </button>
-        )}
+      <div className="section">
+        <h2 className="h1" style={{ margin: 0 }}>Selecciona un módulo</h2>
+        {onVolver && <button className="btn ghost" type="button" onClick={onVolver}>Salir</button>}
       </div>
-
-      <div style={{ marginTop: 16 }}>
+      <div className="divider" />
+      <div style={{ marginTop: 8 }}>
         <Btn onClick={() => setModuloActivo("ia")}>Abrir IA</Btn>
         <Btn onClick={() => setModuloActivo("trauma")}>Abrir Trauma</Btn>
         <Btn onClick={() => setModuloActivo("generales")}>Abrir Generales</Btn>
