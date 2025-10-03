@@ -1,120 +1,58 @@
 // src/App.jsx
 "use client";
-import React, { useEffect, useState } from "react";
-import "./app.css";                // CSS global (se mantiene)
-import { getTheme } from "./theme.js"; // Para coherencia de UX (sin sobreescribir estilos de las pantallas)
+import React, { useState } from "react";
+import "./app.css";
 
-// Pantallas
+// Pantallas (en src/screens)
 import PantallaUno from "./screens/PantallaUno.jsx";
 import PantallaDos from "./screens/PantallaDos.jsx";
 import PantallaTres from "./screens/PantallaTres.jsx";
 
-const T = getTheme();
-
 /**
- * Flujo:
- * - PantallaUno: Logo + botones (Ingreso Persona / Guest). Al guardar o Guest → PantallaDos.
- * - PantallaDos: Selector de módulos (Trauma / Preop / Generales / IA). Usa initialDatos (no repite formulario).
- * - PantallaTres: Vista previa/resultado del módulo seleccionado, usando los datos ya guardados.
+ * Orquestación mínima:
+ * - PantallaUno: muestra logo + botones (Ingreso Persona / Guest). Al continuar → PantallaDos.
+ * - PantallaDos: selección y ejecución de módulos (usa datos ya guardados, no repite formulario).
+ * - PantallaTres: vista/preview final del módulo (lee lo necesario, no reimplementa lógica).
  *
- * Notas:
- * - No se altera la lógica interna de tus módulos.
- * - Los datos del paciente se guardan/leen desde sessionStorage (compatibles con tu flujo actual).
- * - Si necesitas que PantallaDos “avise” el módulo elegido para PantallaTres, aquí ya está el
- *   `goPantallaTres(modulo)`. Puedes llamarlo desde donde lo definas (sin cambiar la lógica de módulos).
+ * No se alteran: sessionStorage, flujos internos, ni props de tus módulos.
  */
 export default function App() {
   const [pantalla, setPantalla] = useState("uno"); // "uno" | "dos" | "tres"
-  const [datosPaciente, setDatosPaciente] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem("datosPacienteJSON");
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
 
-  // Módulo seleccionado para la vista previa (PantallaTres)
-  const [moduloActual, setModuloActual] = useState(() => {
-    try {
-      const m = sessionStorage.getItem("modulo");
-      return ["trauma", "preop", "generales", "ia"].includes(m) ? m : "trauma";
-    } catch {
-      return "trauma";
-    }
-  });
+  // Avanzar desde la pantalla 1 a la 2 (PantallaUno ya guarda datos si corresponde)
+  const irPantallaDos = () => setPantalla("dos");
 
-  // Mantener coherencia con sessionStorage (no cambia tu lógica, solo sincroniza estado local)
-  useEffect(() => {
-    try {
-      if (moduloActual) sessionStorage.setItem("modulo", moduloActual);
-    } catch {}
-  }, [moduloActual]);
+  // Avanzar desde la 2 a la 3 (si PantallaDos decide previsualizar)
+  const irPantallaTres = () => setPantalla("tres");
 
-  /** Navegación desde PantallaUno → PantallaDos */
-  const goPantallaDos = (datosOpcionales) => {
-    // Si PantallaUno entrega datos, los guardamos; si no, usamos lo que ya está en sessionStorage.
-    const next =
-      datosOpcionales && typeof datosOpcionales === "object"
-        ? datosOpcionales
-        : (() => {
-            try {
-              const raw = sessionStorage.getItem("datosPacienteJSON");
-              return raw ? JSON.parse(raw) : null;
-            } catch {
-              return null;
-            }
-          })();
+  // Volver si hace falta
+  const volverPantallaUno = () => setPantalla("uno");
+  const volverPantallaDos = () => setPantalla("dos");
 
-    if (next) {
-      try {
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-      } catch {}
-      setDatosPaciente(next);
-    }
-    setPantalla("dos");
-  };
+  if (pantalla === "uno") {
+    return (
+      <PantallaUno
+        onIrPantallaDos={irPantallaDos}
+      />
+    );
+  }
 
-  /** (Opcional) Navegación a PantallaTres, permitiendo fijar el módulo a previsualizar */
-  const goPantallaTres = (moduloElegido) => {
-    if (moduloElegido && ["trauma", "preop", "generales", "ia"].includes(moduloElegido)) {
-      setModuloActual(moduloElegido);
-      try { sessionStorage.setItem("modulo", moduloElegido); } catch {}
-    }
-    setPantalla("tres");
-  };
+  if (pantalla === "dos") {
+    return (
+      <PantallaDos
+        // Prop opcional por si luego quieres navegar a la preview desde aquí
+        onIrPantallaTres={irPantallaTres}
+        // No paso más props para no modificar tu lógica:
+        // cada módulo dentro de PantallaDos lee/usa lo que ya tienes guardado.
+      />
+    );
+  }
 
-  /** Volver a PantallaUno (si lo necesitas) */
-  const goPantallaUno = () => setPantalla("uno");
-
-  // No aplico estilos de theme aquí para no duplicar wrappers; cada Pantalla ya usa theme y app.css.
+  // pantalla === "tres"
   return (
-    <>
-      {pantalla === "uno" && (
-        <PantallaUno
-          onIrPantallaDos={goPantallaDos}
-        />
-      )}
-
-      {pantalla === "dos" && (
-        <PantallaDos
-          initialDatos={datosPaciente}
-          // Si deseas, desde algún punto puedes llamar a goPantallaTres("preop" | "trauma" | "generales" | "ia")
-          // pasándolo como prop. No activo nada extra para no cambiar tu lógica.
-          // onIrPantallaTres={goPantallaTres}
-        />
-      )}
-
-      {pantalla === "tres" && (
-        <PantallaTres
-          initialDatos={datosPaciente}
-          moduloInicial={moduloActual}
-          // Props opcionales por si las usas en módulos de Trauma/IA:
-          // onPedirChecklistResonancia={...}
-          // onDetectarResonancia={...}
-          // resumenResoTexto={...}
-        />
-      )}
-    </>
+    <PantallaTres
+      // onVolver es opcional; si lo usas, vuelve a módulos
+      onVolver={volverPantallaDos}
+    />
   );
 }
