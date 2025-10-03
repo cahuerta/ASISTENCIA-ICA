@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import "../app.css";
 import { getTheme } from "../theme.js";
 import FormularioPacienteBasico from "../FormularioPacienteBasico.jsx";
-import logoICA from "../assets/ica.jpg"; // LOGO
+import logoICA from "../assets/ica.jpg";
 
 const T = getTheme();
 const cssVars = {
@@ -18,7 +18,6 @@ const cssVars = {
 export default function PantallaUno({ onIrPantallaDos }) {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
-  // Avanza a PantallaDos leyendo lo que guardó el formulario en sessionStorage
   const continuar = () => {
     let datos = null;
     try {
@@ -28,26 +27,19 @@ export default function PantallaUno({ onIrPantallaDos }) {
     if (typeof onIrPantallaDos === "function") onIrPantallaDos(datos);
   };
 
-  // Invitado: persiste datos de prueba compatibles y navega
+  // INVITADO: escribe los mismos campos que usa el resto de módulos
   const entrarComoInvitado = () => {
-    const guest = {
-      nombre: "guest",
-      rut: "11.111.111-1",
-      edad: 50,
-      genero: "FEMENINO",
-    };
-    try {
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(guest));
-    } catch {}
+    const guest = { nombre: "guest", rut: "11.111.111-1", edad: 50, genero: "FEMENINO" };
+    try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(guest)); } catch {}
     if (typeof onIrPantallaDos === "function") onIrPantallaDos(guest);
   };
 
   return (
     <div className="app" style={{ ...cssVars }}>
-      <div style={styles.viewport}>
-        <div style={styles.wrap}>
-          {/* LOGO: mismo ancho que los botones (full-width) */}
-          <div style={styles.logoBox}>
+      <main style={styles.viewport}>
+        <section style={styles.wrap}>
+          {/* Header card: mismo ancho visual que la card de los botones */}
+          <div style={styles.headerCard} aria-hidden="true">
             <img src={logoICA} alt="Instituto de Cirugía Articular" style={styles.logoImg} />
           </div>
 
@@ -57,7 +49,7 @@ export default function PantallaUno({ onIrPantallaDos }) {
                 <h2 style={styles.title}>Bienvenido(a)</h2>
                 <p style={styles.subtitle}>Elige cómo deseas continuar.</p>
 
-                <div style={styles.btnRow}>
+                <div style={styles.btnCol}>
                   <button
                     type="button"
                     className="btn"
@@ -81,16 +73,14 @@ export default function PantallaUno({ onIrPantallaDos }) {
               <div style={styles.formWrap}>
                 <div style={styles.formHeader}>
                   <h3 style={styles.formTitle}>Datos básicos del paciente</h3>
-                  <div>
-                    <button
-                      type="button"
-                      className="btn secondary"
-                      style={{ ...styles.smallBtn, ...styles.btnGhost }}
-                      onClick={() => setMostrarFormulario(false)}
-                    >
-                      VOLVER
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    style={{ ...styles.smallBtn, ...styles.btnGhost }}
+                    onClick={() => setMostrarFormulario(false)}
+                  >
+                    VOLVER
+                  </button>
                 </div>
 
                 {/* El formulario es autónomo; al enviar navega a PantallaDos */}
@@ -105,37 +95,42 @@ export default function PantallaUno({ onIrPantallaDos }) {
               </div>
             )}
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 }
 
-/* ===== Styles responsivos (web y móvil) ===== */
+/* ===== UI responsiva y alineada ===== */
 const styles = {
   viewport: {
     minHeight: "100svh",
     display: "grid",
     placeItems: "start center",
-    padding: "clamp(12px, 3vh, 32px) 12px",
+    padding: "clamp(10px, 3vh, 28px) 12px",
   },
+  // un poco más ancho pero controlado
   wrap: {
-    width: "min(92vw, 520px)",
+    width: "min(94vw, 560px)",
   },
 
-  logoBox: {
-    display: "grid",
-    placeItems: "center",
-    marginBottom: "clamp(8px, 2.5vh, 18px)",
+  // “Header card” para el logo: mismo ancho visual que la card principal
+  headerCard: {
+    background: T.surface,
+    border: `1px solid ${T.border}`,
+    borderRadius: 14,
+    boxShadow: T.shadowSm,
+    padding: "clamp(10px, 2vw, 14px)",
+    marginBottom: "clamp(10px, 2.2vh, 14px)",
   },
-  // Igual ancho que los botones: 100% del contenedor
+  // el logo ahora ocupa todo el ancho de la card
   logoImg: {
     width: "100%",
     height: "auto",
-    maxHeight: "180px",
+    maxHeight: "220px",
     objectFit: "contain",
-    borderRadius: 12,
-    boxShadow: T.shadowSm,
+    display: "block",
+    borderRadius: 10,
   },
 
   card: {
@@ -143,10 +138,9 @@ const styles = {
   },
 
   menu: { textAlign: "center" },
-
   title: {
     margin: "0 0 clamp(6px, 1.2vh, 8px)",
-    fontSize: "clamp(18px, 2.4vw, 22px)",
+    fontSize: "clamp(19px, 2.4vw, 24px)",
     color: T.text,
     fontWeight: 800,
     lineHeight: 1.15,
@@ -157,24 +151,26 @@ const styles = {
     fontSize: "clamp(12px, 1.6vw, 14px)",
   },
 
-  // 1 columna fija para que botón y logo compartan el mismo ancho
-  btnRow: {
+  // columna única: botones y logo quedan exactamente del mismo ancho
+  btnCol: {
     display: "grid",
     gridTemplateColumns: "1fr",
     gap: "clamp(8px, 1.2vw, 12px)",
     marginTop: "clamp(12px, 2vh, 16px)",
   },
 
+  // botones más cómodos (48–52px) y menos “pesados”
   btn: {
     width: "100%",
     borderRadius: 12,
-    padding: "clamp(10px, 1.8vw, 14px) clamp(12px, 2.4vw, 16px)",
+    padding: "clamp(11px, 1.9vw, 13px) clamp(12px, 2.2vw, 16px)",
     fontSize: "clamp(13px, 1.9vw, 16px)",
     fontWeight: 800,
     borderWidth: 2,
     borderStyle: "solid",
     cursor: "pointer",
     lineHeight: 1.1,
+    letterSpacing: ".2px",
   },
   btnPrimary: {
     background: T.primary,
