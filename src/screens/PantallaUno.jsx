@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import "../app.css";
 import { getTheme } from "../theme.js";
 import FormularioPacienteBasico from "../FormularioPacienteBasico.jsx";
-import logoICA from "../assets/ica.jpg"; // ← LOGO
+import logoICA from "../assets/ica.jpg"; // LOGO
 
 const T = getTheme();
 const cssVars = {
@@ -18,7 +18,7 @@ const cssVars = {
 export default function PantallaUno({ onIrPantallaDos }) {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
 
-  // Lee lo que el propio formulario guardó en sessionStorage
+  // Avanza a PantallaDos leyendo lo que guardó el formulario en sessionStorage
   const continuar = () => {
     let datos = null;
     try {
@@ -31,13 +31,9 @@ export default function PantallaUno({ onIrPantallaDos }) {
   return (
     <div className="app" style={cssVars}>
       <div style={styles.wrap}>
-        {/* ===== LOGO ===== */}
+        {/* LOGO */}
         <div style={styles.logoBox}>
-          <img
-            src={logoICA}
-            alt="Instituto de Cirugía Articular"
-            style={styles.logoImg}
-          />
+          <img src={logoICA} alt="Instituto de Cirugía Articular" style={styles.logoImg} />
         </div>
 
         <div className="card" style={styles.card}>
@@ -82,21 +78,16 @@ export default function PantallaUno({ onIrPantallaDos }) {
                 </div>
               </div>
 
-              {/* El formulario maneja su propio estado y guarda en sessionStorage */}
+              {/* El formulario es autónomo; al enviar navega a PantallaDos */}
               <div style={{ marginTop: 12 }}>
-                <FormularioPacienteBasico />
+                <FormularioPacienteBasico
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    continuar();
+                  }}
+                />
               </div>
-
-              <div style={{ marginTop: 16, textAlign: "right" }}>
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ ...styles.smallBtn, ...styles.btnPrimary }}
-                  onClick={continuar}
-                >
-                  GUARDAR Y CONTINUAR
-                </button>
-              </div>
+              {/* (Sin botón extra aquí) */}
             </div>
           )}
         </div>
@@ -107,4 +98,29 @@ export default function PantallaUno({ onIrPantallaDos }) {
 
 /* ===== Styles ===== */
 const styles = {
-  wrap: {
+  wrap: { maxWidth: 980, margin: "0 auto", padding: "32px 16px" },
+  logoBox: { display: "grid", placeItems: "center", marginBottom: 18 },
+  logoImg: { height: 64, objectFit: "contain", borderRadius: 12, boxShadow: T.shadowSm },
+  card: { padding: 18 },
+  menu: { textAlign: "center" },
+  title: { margin: "4px 0 8px", fontSize: 20, color: T.text, fontWeight: 800 },
+  subtitle: { margin: 0, color: T.textMuted, fontSize: 14 },
+  btnRow: { display: "grid", gridTemplateColumns: "1fr", gap: 12, marginTop: 18 },
+  btn: {
+    width: "100%", borderRadius: 12, padding: "14px 16px", fontSize: 15,
+    fontWeight: 800, borderWidth: 2, borderStyle: "solid", cursor: "pointer", lineHeight: 1.1,
+  },
+  btnPrimary: {
+    background: T.primary, borderColor: T.primaryDark, color: T.onPrimary,
+    boxShadow: `0 0 0 3px ${T.accentAlpha}, ${T.shadowSm}`,
+  },
+  btnSecondary: { background: T.surface, borderColor: T.primary, color: T.primary },
+  btnGhost: { background: T.surface, borderColor: T.border, color: T.text },
+  formWrap: {},
+  formHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  formTitle: { margin: 0, fontSize: 16, fontWeight: 800, color: T.text },
+  smallBtn: {
+    borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 800,
+    borderWidth: 2, borderStyle: "solid", cursor: "pointer", lineHeight: 1.1,
+  },
+};
