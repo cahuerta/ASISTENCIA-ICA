@@ -3,6 +3,13 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
+
+/* NUEVO: esquema humano (anterior/posterior) */
+import EsquemaAnterior from "../EsquemaAnterior.jsx";
+import EsquemaPosterior from "../EsquemaPosterior.jsx";
+import EsquemaToggleTabs from "../EsquemaToggleTabs.jsx";
+
+/* Checklist RM */
 import FormularioResonancia from "../components/FormularioResonancia.jsx";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
@@ -32,26 +39,17 @@ function resumenInicialTrauma(datos = {}) {
   return `${sexo} ${edad}. ${zona}. Se solicita evaluación imagenológica según clínica.`;
 }
 
-/** Normaliza y detecta si un texto hace referencia a resonancia magnética */
+/** Detecta si un texto hace referencia a resonancia magnética */
 function isResonanciaTexto(t = "") {
   if (!t) return false;
-  const s = t
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase();
-
-  const includes = [
-    "resonancia magnetica",
-    "resonancia nuclear",
-    "magnetic resonance",
-  ];
+  const s = t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+  const includes = ["resonancia magnetica", "resonancia nuclear", "magnetic resonance"];
   if (includes.some((p) => s.includes(p))) return true;
-
   const regexes = [/\brm\b/i, /\brmn\b/i, /\brnm\b/i, /\bmri\b/i, /\birm\b/i];
   return regexes.some((re) => re.test(t));
 }
 
-/* === Lee y arma las secciones de puntos desde sessionStorage para cualquier zona === */
+/* === Lee secciones/puntos marcados guardados en sessionStorage === */
 function leerSecciones(zonaKey, ladoFallback = "") {
   try {
     const rawExtra = sessionStorage.getItem(`${zonaKey}_seccionesExtra`);
@@ -90,7 +88,6 @@ function leerSecciones(zonaKey, ladoFallback = "") {
   return [];
 }
 
-/* === Carga los "resumenes" por zona para enviar al backend ==================== */
 function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
   const lado = (ladoTexto || "").toLowerCase();
   const side =
@@ -107,12 +104,12 @@ function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
 /* ================= Componente ================= */
 export default function TraumaModulo({
   initialDatos,
-  onDetectarResonancia, // (datos)-> boolean | Promise<boolean>
-  resumenResoTexto,     // (data)-> string (opcional para personalizar resumen)
+  onDetectarResonancia,   // opcional; si no está, usamos detección interna
+  resumenResoTexto,       // opcional
 }) {
   const T = getTheme();
 
-  // 👉 variables CSS del tema para usar en app.css
+  // Variables CSS del tema (usadas por estilos inline)
   const rootVars = {
     "--t-surface": T.surface ?? "#fff",
     "--t-text": T.text ?? "#1b1b1b",
@@ -121,16 +118,23 @@ export default function TraumaModulo({
     "--t-on-primary": T.onPrimary ?? "#fff",
     "--t-border": T.border ?? "#e8e8e8",
     "--t-muted": T.muted ?? "#777",
-    "--t-on-muted": T.onMuted ?? "#fff",
-    "--t-code-bg": T.codeBg ?? "#f7f7f7",
+    "--t-text-muted": T.textMuted ?? "#666",
     "--t-chip-bg": T.chipBg ?? "#eef6ff",
     "--t-chip-border": T.chipBorder ?? "#cfe4ff",
     "--t-chip-text": T.chipText ?? (T.primary || "#0b63c5"),
     "--t-shadow-sm": T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)",
-    "--t-text-muted": T.textMuted ?? "#666",
   };
 
   const [datos, setDatos] = useState(initialDatos || {});
+  const [vista, setVista] = useState(() => {
+    try {
+      const ss = sessionStorage.getItem("vistaEsquema");
+      return ss === "posterior" ? "posterior" : "anterior";
+    } catch {
+      return "anterior";
+    }
+  });
+
   const [stepStarted, setStepStarted] = useState(false);
   const [loadingIA, setLoadingIA] = useState(false);
 
@@ -152,6 +156,7 @@ export default function TraumaModulo({
 
   const [showRM, setShowRM] = useState(false);
 
+  /* ====== boot ====== */
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
@@ -202,6 +207,35 @@ export default function TraumaModulo({
     };
   }, []);
 
+  /* ====== selección de zona en esquema (NO se renderiza mapper) ====== */
+  const onSeleccionZona = (zona) => {
+    let dolor = "";
+    let lado = "";
+    const z = String(zona || "");
+    const zl = z.toLowerCase();
+
+    if (zl.includes("columna cervical")) { dolor = "Columna cervical"; lado = ""; }
+    else if (zl.includes("columna dorsal")) { dolor = "Columna dorsal"; lado = ""; }
+    else if (zl.includes("columna lumbar") || zl.includes("columna")) { dolor = "Columna lumbar"; lado = ""; }
+    else if (zl.includes("cadera")) { dolor = "Cadera"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("rodilla")) { dolor = "Rodilla"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("hombro")) { dolor = "Hombro"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("codo")) { dolor = "Codo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("mano")) { dolor = "Mano"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("tobillo")) { dolor = "Tobillo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+
+    setDatos((prev) => {
+      const next = { ...prev, dolor, lado };
+      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    try { sessionStorage.setItem("vistaEsquema", vista); } catch {}
+  }, [vista]);
+
+  /* ====== secciones marcadores leídas (si existen) ====== */
   const seccionesMarcadores = useMemo(() => {
     const lado = datos?.lado || "";
     const zonas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
@@ -237,28 +271,14 @@ export default function TraumaModulo({
 
       const body = {
         idPago,
-        paciente: {
-          ...datos,
-          edad: edadNum,
-        },
+        paciente: { ...datos, edad: edadNum },
         rodillaMarcadores,
-        marcadores: {
-          rodilla: rodillaMarcadores,
-          mano: manoMarcadores,
-          hombro: hombroMarcadores,
-          codo: codoMarcadores,
-          tobillo: tobilloMarcadores,
-        },
-        manoMarcadores,
-        hombroMarcadores,
-        codoMarcadores,
-        tobilloMarcadores,
+        marcadores: { rodilla: rodillaMarcadores, mano: manoMarcadores, hombro: hombroMarcadores, codo: codoMarcadores, tobillo: tobilloMarcadores },
+        manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores,
       };
 
       const resp = await fetch(`${BACKEND_BASE}/ia-trauma`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
@@ -304,13 +324,11 @@ export default function TraumaModulo({
     setShowRM(true);
   };
 
-  const handleSaveRM = (form /*, { riesgos } */) => {
+  const handleSaveRM = (form /*, extra */) => {
     setBloqueaRM(false);
 
     const resumen =
-      typeof resumenResoTexto === "function"
-        ? resumenResoTexto(form)
-        : construirResumenRM(form);
+      typeof resumenResoTexto === "function" ? resumenResoTexto(form) : construirResumenRM(form);
 
     setResonanciaChecklist(form);
     setResonanciaResumenTexto(resumen);
@@ -354,25 +372,17 @@ export default function TraumaModulo({
     const obs = (f.observaciones || "").trim();
 
     const partes = [];
-    if (marcadas.length) {
-      partes.push(marcadas.join("\n"));
-    } else {
-      partes.push("• Sin alertas marcadas en checklist.");
-    }
+    if (marcadas.length) partes.push(marcadas.join("\n"));
+    else partes.push("• Sin alertas marcadas en checklist.");
     if (obs) partes.push(`Observaciones: ${obs}`);
-
     return partes.join("\n");
   };
 
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
   const handlePagar = async () => {
     const edadNum = Number(datos.edad);
-    if (
-      !datos.nombre?.trim() ||
-      !datos.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0 ||
-      !datos.dolor?.trim()
-    ) {
+    if (!datos.nombre?.trim() || !datos.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0 || !datos.dolor?.trim()) {
       alert("Complete nombre, RUT, edad (>0) y dolor antes de pagar.");
       return;
     }
@@ -428,7 +438,6 @@ export default function TraumaModulo({
     }
   };
 
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const handleDescargar = async () => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) {
@@ -538,10 +547,58 @@ export default function TraumaModulo({
 
   const usarIA = Array.isArray(examenesIA) && examenesIA.length > 0;
 
+  /* ======================== RENDER ======================== */
   return (
     <div className="trauma-card" style={rootVars}>
       <h3 className="trauma-title">Vista previa — Imagenología</h3>
 
+      {/* 1) ESQUEMA HUMANO + selector de vista (NO se abre mapper aquí) */}
+      <div style={{
+        background: "var(--t-surface)",
+        border: `1px solid var(--t-border)`,
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 12,
+        boxShadow: "var(--t-shadow-sm)",
+      }}>
+        <EsquemaToggleTabs vista={vista} onChange={setVista} />
+        <div style={{ display: "grid", placeItems: "center", marginTop: 8 }}>
+          {vista === "anterior" ? (
+            <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={380} />
+          ) : (
+            <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={380} />
+          )}
+        </div>
+
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 14,
+            color: "var(--t-text-muted)",
+            background: "var(--t-surface)",
+            padding: "6px 8px",
+            borderRadius: 8,
+            border: `1px solid var(--t-border)`,
+            minHeight: 30,
+          }}
+          aria-live="polite"
+          role="status"
+        >
+          {datos?.dolor ? (
+            <>
+              Zona seleccionada:{" "}
+              <strong>
+                {datos.dolor}
+                {datos.lado ? ` — ${datos.lado}` : ""}
+              </strong>
+            </>
+          ) : (
+            "Seleccione una zona en el esquema"
+          )}
+        </div>
+      </div>
+
+      {/* 2) Primer preview: SIEMPRE visible */}
       <div className="trauma-info">
         <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
         <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
@@ -551,10 +608,9 @@ export default function TraumaModulo({
         <div><strong>Lado:</strong> {datos?.lado || "—"}</div>
       </div>
 
-      {/* Primer preview: SIEMPRE visible */}
       <div className="trauma-mono mt-6">{resumenInicialTrauma(datos)}</div>
 
-      {/* Secciones de puntos */}
+      {/* Secciones de puntos leídas (si existen de un mapper previo) */}
       {seccionesMarcadores.map((sec, idx) => (
         <div className="trauma-block" key={`sec-${idx}`}>
           <strong>{sec.title}</strong>
@@ -572,6 +628,7 @@ export default function TraumaModulo({
         </button>
       )}
 
+      {/* 3) Segundo preview */}
       {stepStarted && (
         <>
           <div className="trauma-block">
@@ -601,8 +658,7 @@ export default function TraumaModulo({
 
           {requiereRM && !resonanciaChecklist && !bloqueaRM && (
             <div className="trauma-hint">
-              La IA sugiere Resonancia Magnética. Presiona “Continuar” para completar el checklist
-              de seguridad.
+              La IA sugiere Resonancia Magnética. Presiona “Continuar” para completar el checklist de seguridad.
             </div>
           )}
           {bloqueaRM && (
@@ -620,59 +676,9 @@ export default function TraumaModulo({
               )}
 
               {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
-                <>
-                  <button className="trauma-btn primary mt-12" onClick={handlePagar}>
-                    Pagar ahora (Trauma)
-                  </button>
-                  <button
-                    className="trauma-btn secondary mt-8"
-                    title="Simular retorno pagado (solo pruebas)"
-                    onClick={async () => {
-                      const idPago = `trauma_guest_${Date.now()}`;
-                      const datosGuest = {
-                        nombre: "Guest",
-                        rut: "99999999-9",
-                        edad: 35,
-                        genero: "MASCULINO",
-                        dolor: "Rodilla",
-                        lado: "Izquierda",
-                      };
-
-                      sessionStorage.setItem("idPago", idPago);
-                      sessionStorage.setItem("modulo", "trauma");
-                      sessionStorage.setItem(
-                        "datosPacienteJSON",
-                        JSON.stringify(datosGuest)
-                      );
-
-                      await fetch(`${BACKEND_BASE}/guardar-datos`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          idPago,
-                          datosPaciente: {
-                            ...datosGuest,
-                            examenesIA,
-                            diagnosticoIA,
-                            justificacionIA,
-                            rmForm: resonanciaChecklist,
-                            rmObservaciones: resonanciaChecklist?.observaciones || "",
-                          },
-                          resonanciaChecklist,
-                          resonanciaResumenTexto,
-                          ordenAlternativa,
-                        }),
-                      });
-
-                      const url = new URL(window.location.href);
-                      url.searchParams.set("pago", "ok");
-                      url.searchParams.set("idPago", idPago);
-                      window.location.href = url.toString();
-                    }}
-                  >
-                    Simular Pago (Guest)
-                  </button>
-                </>
+                <button className="trauma-btn primary mt-12" onClick={handlePagar}>
+                  Pagar ahora (Trauma)
+                </button>
               )}
             </>
           ) : (
@@ -688,6 +694,7 @@ export default function TraumaModulo({
         </>
       )}
 
+      {/* Checklist RM (modal). Mantener activo, no tocar. */}
       {showRM && (
         <div className="trauma-modal-backdrop" role="dialog" aria-modal="true">
           <div className="trauma-modal-card">
