@@ -3,47 +3,54 @@
 import React, { useState } from "react";
 import "./app.css";
 
-// Pantallas (en src/screens)
 import PantallaUno from "./screens/PantallaUno.jsx";
 import PantallaDos from "./screens/PantallaDos.jsx";
 import PantallaTres from "./screens/PantallaTres.jsx";
 
-/**
- * Orquestación mínima:
- * - PantallaUno: muestra logo + botones (Ingreso Persona / Guest). Al continuar → PantallaDos.
- * - PantallaDos: selección y ejecución de módulos (usa datos ya guardados, no repite formulario).
- * - PantallaTres: vista/preview final del módulo (lee lo necesario, no reimplementa lógica).
- *
- * No se alteran: sessionStorage, flujos internos, ni props de tus módulos.
- */
 export default function App() {
   const [pantalla, setPantalla] = useState("uno"); // "uno" | "dos" | "tres"
+  const [datosPaciente, setDatosPaciente] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("datosPacienteJSON");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  // Avanzar desde la pantalla 1 a la 2 (PantallaUno ya guarda datos si corresponde)
-  const irPantallaDos = () => setPantalla("dos");
+  // Avanza desde PantallaUno a PantallaDos (Guest o Ingreso Persona).
+  // Recibe 'datos' si el formulario básico devuelve un objeto; si no, lee desde sessionStorage.
+  const irPantallaDos = (datos) => {
+    let next = datos;
+    if (!next) {
+      try {
+        const raw = sessionStorage.getItem("datosPacienteJSON");
+        next = raw ? JSON.parse(raw) : null;
+      } catch {
+        next = null;
+      }
+    }
+    if (next) {
+      setDatosPaciente(next);
+      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
+    }
+    setPantalla("dos");
+  };
 
-  // Avanzar desde la 2 a la 3 (si PantallaDos decide previsualizar)
+  // Avanza a PantallaTres cuando tú lo indiques en el flujo (no asumimos desde dónde).
   const irPantallaTres = () => setPantalla("tres");
 
-  // Volver si hace falta
-  const volverPantallaUno = () => setPantalla("uno");
-  const volverPantallaDos = () => setPantalla("dos");
-
+  // Navegación mínima (sin cambiar tu lógica interna de módulos).
   if (pantalla === "uno") {
-    return (
-      <PantallaUno
-        onIrPantallaDos={irPantallaDos}
-      />
-    );
+    return <PantallaUno onIrPantallaDos={irPantallaDos} />;
   }
 
   if (pantalla === "dos") {
     return (
       <PantallaDos
-        // Prop opcional por si luego quieres navegar a la preview desde aquí
-        onIrPantallaTres={irPantallaTres}
-        // No paso más props para no modificar tu lógica:
-        // cada módulo dentro de PantallaDos lee/usa lo que ya tienes guardado.
+        initialDatos={datosPaciente}
+        // Cuando quieras mostrar la preview final, llama a irPantallaTres desde donde lo definas.
+        // No lo conecto aquí para no inventar pasos no pedidos.
       />
     );
   }
@@ -51,8 +58,7 @@ export default function App() {
   // pantalla === "tres"
   return (
     <PantallaTres
-      // onVolver es opcional; si lo usas, vuelve a módulos
-      onVolver={volverPantallaDos}
+      initialDatos={datosPaciente}
     />
   );
 }
