@@ -40,20 +40,41 @@ function validarRut(str = "") {
   return { valido, motivo: valido ? "" : `DV incorrecto, debería ser ${dvOk}` };
 }
 
-/* ================= Formulario básico (solo datos personales) ================= */
+/* ================= Formulario básico (autónomo si no recibe props) ================= */
 function FormularioPacienteBasico({
   datos,
   onCambiarDato,
   onSubmit,
   modoInvitado = false, // si es true, no valida RUT estrictamente ni exige campos
 }) {
+  // MODO AUTÓNOMO: si no me pasan datos/onCambiarDato, uso estado interno
+  const isManaged = typeof onCambiarDato === "function" && datos && typeof datos === "object";
+  const [localDatos, setLocalDatos] = useState(() => ({
+    nombre: "",
+    rut: "",
+    edad: "",
+    genero: "",
+  }));
+
+  // Acceso unificado a valores actuales
+  const curr = isManaged ? datos : localDatos;
+
+  // Setter unificado (actualiza padre si existe; si no, estado interno)
+  const setCampo = (campo, valor) => {
+    if (isManaged) {
+      onCambiarDato(campo, valor);
+    } else {
+      setLocalDatos((prev) => ({ ...prev, [campo]: valor }));
+    }
+  };
+
   const [rutMsg, setRutMsg] = useState("");
   const [rutValido, setRutValido] = useState(true);
 
   /* ======= RUT en vivo ======= */
   const handleRutChange = (e) => {
     if (modoInvitado) {
-      onCambiarDato("rut", e.target.value);
+      setCampo("rut", e.target.value);
       setRutValido(true);
       setRutMsg("");
       return;
@@ -81,13 +102,13 @@ function FormularioPacienteBasico({
       setRutValido(true);
       setRutMsg("");
     }
-    onCambiarDato("rut", s);
+    setCampo("rut", s);
   };
 
   const handleRutBlur = () => {
     if (modoInvitado) return;
 
-    const s = limpiarRut(datos?.rut || "");
+    const s = limpiarRut(curr?.rut || "");
     if (!s) {
       setRutValido(false);
       setRutMsg("Ingrese un RUT.");
@@ -101,30 +122,49 @@ function FormularioPacienteBasico({
     }
     const dvCalc = calcularDV(cuerpo);
     const rutFormateado = formatearRut(cuerpo, dvCalc);
-    onCambiarDato("rut", rutFormateado);
+    setCampo("rut", rutFormateado);
     setRutValido(true);
     setRutMsg("RUT formateado.");
   };
 
   /* ======= Submit ======= */
   const handleSubmit = (e) => {
+    // Validaciones cuando NO es invitado
     if (!modoInvitado) {
-      const v = validarRut(datos?.rut || "");
+      const v = validarRut(curr?.rut || "");
       if (!v.valido) {
         e.preventDefault();
         setRutValido(false);
         setRutMsg(v.motivo ? `RUT inválido: ${v.motivo}.` : "RUT inválido.");
         return;
       }
-      // Edad mínima 18
-      const edadNum = Number(datos?.edad);
+      const edadNum = Number(curr?.edad);
       if (!Number.isFinite(edadNum) || edadNum < 18 || edadNum > 110) {
         e.preventDefault();
         alert("Edad fuera de rango (debe ser entre 18 y 110).");
         return;
       }
     }
-    onSubmit(e);
+
+    // Siempre persistimos para el flujo global
+    try {
+      sessionStorage.setItem(
+        "datosPacienteJSON",
+        JSON.stringify({
+          nombre: String(curr?.nombre ?? "").trim(),
+          rut: String(curr?.rut ?? "").trim(),
+          edad: String(curr?.edad ?? "").trim(),
+          genero: String(curr?.genero ?? "").trim(),
+        })
+      );
+    } catch {}
+
+    // Si el padre pasó onSubmit, se respeta; si no, prevenimos el submit real (no recargar página)
+    if (typeof onSubmit === "function") {
+      onSubmit(e);
+    } else {
+      e.preventDefault();
+    }
   };
 
   // Helper para required (en invitado no exigimos)
@@ -137,8 +177,8 @@ function FormularioPacienteBasico({
       <label>Nombre completo:</label>
       <input
         type="text"
-        value={String(datos?.nombre ?? "")}
-        onChange={(e) => onCambiarDato("nombre", e.target.value)}
+        value={String(curr?.nombre ?? "")}
+        onChange={(e) => setCampo("nombre", e.target.value)}
         required={req(true)}
         autoComplete="name"
         autoCapitalize="words"
@@ -147,7 +187,7 @@ function FormularioPacienteBasico({
       <label>RUT:</label>
       <input
         type="text"
-        value={String(datos?.rut ?? "")}
+        value={String(curr?.rut ?? "")}
         onChange={handleRutChange}
         onBlur={handleRutBlur}
         placeholder="12.345.678-9"
@@ -175,16 +215,16 @@ function FormularioPacienteBasico({
         type="number"
         min={modoInvitado ? undefined : 18}
         max={modoInvitado ? undefined : 110}
-        value={String(datos?.edad ?? "")}
-        onChange={(e) => onCambiarDato("edad", e.target.value)}
+        value={String(curr?.edad ?? "")}
+        onChange={(e) => setCampo("edad", e.target.value)}
         required={req(true)}
         inputMode="numeric"
       />
 
       <label>Género:</label>
       <select
-        value={String(datos?.genero ?? "")}
-        onChange={(e) => onCambiarDato("genero", e.target.value)}
+        value={String(curr?.genero ?? "")}
+        onChange={(e) => setCampo("genero", e.target.value)}
         required={req(true)}
       >
         <option value="">{modoInvitado ? "Opcional…" : "Seleccione…"}</option>
