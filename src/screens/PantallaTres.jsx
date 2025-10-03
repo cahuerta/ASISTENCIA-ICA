@@ -1,165 +1,162 @@
 // src/screens/PantallaTres.jsx
 "use client";
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React from "react";
+import "../app.css";
+import { getTheme } from "../theme.js";
+
+/* Módulos (misma firma que usas hoy) */
+import TraumaModulo from "../modules/TraumaModulo.jsx";
+import PreopModulo from "../modules/PreopModulo.jsx";
+import GeneralesModulo from "../modules/GeneralesModulo.jsx";
+import IAModulo from "../modules/IAModulo.jsx";
+
+/* BACKEND (igual que en tu App.jsx) */
+const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
 /**
- * Pantalla 3 — Previsualización y Descargas
- * ✅ SIN inventar nombres: usa las MISMAS props/datos si vienen desde tus módulos/App antiguo.
- * ✅ Si alguna prop no llega, intenta leer lo mismo desde localStorage (compat: ICA_*).
- *
- * Props (todas opcionales, se usan si existen):
- * - datosPaciente           : object
- * - previewIA               : string (texto/HTML)
- * - previewOrden            : string | object (lo que ya genere tu módulo)
- * - onRegenerarIA           : () => void
- * - onRegenerarOrden        : () => void
- * - onDescargarFicha        : () => void
- * - onDescargarReceta       : () => void
- * - onDescargarOrden        : () => void
- * - onVolver                : () => void
+ * Props admitidas (todas opcionales para no romper nada):
+ * - initialDatos: objeto con datos del paciente (si no, se lee de sessionStorage).
+ * - moduloInicial: "trauma" | "preop" | "generales" | "ia" (si no, se lee de sessionStorage o "trauma").
+ * - rmPdfListo, rmIdPago: si no vienen, se leen de sessionStorage.
+ * - onPedirChecklistResonancia, onDetectarResonancia, resumenResoTexto: se pasan a Trauma/IAModulo cuando corresponda.
  */
-export default function PantallaTres(props) {
-  // ======== Compatibilidad: usa props si llegan; si no, carga lo guardado ========
-  const [paciente, setPaciente] = useState(() => {
-    if (props.datosPaciente) return props.datosPaciente;
+export default function PantallaTres({
+  initialDatos,
+  moduloInicial,
+  rmPdfListo: rmPdfListoProp,
+  rmIdPago: rmIdPagoProp,
+  onPedirChecklistResonancia,
+  onDetectarResonancia,
+  resumenResoTexto,
+}) {
+  const T = getTheme();
+
+  const cssVars = {
+    "--bg": T.bg, "--surface": T.surface, "--border": T.border,
+    "--text": T.text, "--text-muted": T.textMuted, "--muted": T.muted,
+    "--primary": T.primary, "--primary-dark": T.primaryDark, "--onPrimary": T.onPrimary,
+    "--accent-alpha": T.accentAlpha, "--shadow-sm": T.shadowSm, "--shadow-md": T.shadowMd,
+    "--overlay": T.overlay,
+  };
+
+  // === datos del paciente (no se repite formulario)
+  const datos = initialDatos || (() => {
     try {
-      const s = localStorage.getItem("ICA_PACIENTE_BASICO");
-      return s ? JSON.parse(s) : {};
-    } catch {
-      return {};
-    }
-  });
+      const raw = sessionStorage.getItem("datosPacienteJSON");
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  })();
 
-  const [ia, setIA] = useState(() => {
-    if (props.previewIA) return props.previewIA;
+  // === módulo seleccionado
+  const modulo = (() => {
+    if (moduloInicial) return moduloInicial;
     try {
-      const s = localStorage.getItem("ICA_PREVIEW_IA");
-      return s || "";
-    } catch {
-      return "";
-    }
-  });
+      const m = sessionStorage.getItem("modulo");
+      if (["trauma", "preop", "generales", "ia"].includes(m)) return m;
+    } catch {}
+    return "trauma";
+  })();
 
-  const [orden, setOrden] = useState(() => {
-    if (props.previewOrden) return props.previewOrden;
-    try {
-      const s = localStorage.getItem("ICA_PREVIEW_ORDEN");
-      return s ? JSON.parse(s) : "";
-    } catch {
-      return "";
-    }
-  });
+  // === estado de RM para mostrar link PDF (solo trauma/ia)
+  const rmPdfListo = (() => {
+    if (typeof rmPdfListoProp === "boolean") return rmPdfListoProp;
+    try { return sessionStorage.getItem("rm_pdf_disponible") === "1"; } catch { return false; }
+  })();
 
-  // Sync si cambian las props (no renombra nada)
-  useEffect(() => {
-    if (props.datosPaciente) setPaciente(props.datosPaciente);
-  }, [props.datosPaciente]);
+  const rmIdPago = (() => {
+    if (typeof rmIdPagoProp === "string") return rmIdPagoProp;
+    try { return sessionStorage.getItem("rm_idPago") || ""; } catch { return ""; }
+  })();
 
-  useEffect(() => {
-    if (typeof props.previewIA !== "undefined") setIA(props.previewIA || "");
-  }, [props.previewIA]);
-
-  useEffect(() => {
-    if (typeof props.previewOrden !== "undefined") setOrden(props.previewOrden || "");
-  }, [props.previewOrden]);
-
-  // Persistencia mínima (no rompe si no existe localStorage)
-  useEffect(() => {
-    try { localStorage.setItem("ICA_PACIENTE_BASICO", JSON.stringify(paciente)); } catch {}
-  }, [paciente]);
-  useEffect(() => {
-    try { localStorage.setItem("ICA_PREVIEW_IA", ia || ""); } catch {}
-  }, [ia]);
-  useEffect(() => {
-    try { localStorage.setItem("ICA_PREVIEW_ORDEN", JSON.stringify(orden ?? "")); } catch {}
-  }, [orden]);
-
-  // Helpers: muestran botón solo si existe handler
-  const Btn = useCallback(({ label, onClick, kind = "primary" }) => {
-    if (typeof onClick !== "function") {
-      return (
-        <button className={`btn ${kind === "secondary" ? "secondary" : ""} fullw`} disabled>
-          {label}
-        </button>
-      );
-    }
-    return (
-      <button className={`btn ${kind === "secondary" ? "secondary" : ""} fullw`} onClick={onClick}>
-        {label}
-      </button>
-    );
-  }, []);
-
-  // Render orden como texto legible si vino objeto
-  const ordenTexto = useMemo(() => {
-    if (!orden) return "";
-    if (typeof orden === "string") return orden;
-    // Si es objeto, concatenamos sin inventar claves nuevas
-    const parts = [];
-    if (orden.tipo) parts.push(`Tipo: ${orden.tipo}`);
-    if (orden.zona) parts.push(`Zona: ${orden.zona}`);
-    if (orden.lado) parts.push(`Lado: ${orden.lado}`);
-    if (orden.indicacion) parts.push(`Indicación: ${orden.indicacion}`);
-    if (orden.detalle) parts.push(String(orden.detalle));
-    return parts.join("\n");
-  }, [orden]);
+  const styles = {
+    wrap: { maxWidth: 1200, margin: "0 auto", padding: "16px" },
+    header: { marginBottom: 12, display: "flex", alignItems: "baseline", gap: 8 },
+    title: { margin: 0, fontSize: 18, fontWeight: 900, color: T.text },
+    subtitle: { margin: 0, fontSize: 13, color: T.textMuted },
+    card: { padding: 16 },
+    pdfLinkBox: { marginTop: 8 },
+    pdfLink: {
+      display: "inline-block",
+      fontWeight: 750,
+      fontSize: 13,
+      textDecoration: "none",
+      background: T.surface,
+      color: T.primaryDark || "#0d47a1",
+      border: `2px solid ${T.primaryDark || "#0d47a1"}`,
+      borderRadius: 10,
+      padding: "10px 12px",
+    },
+  };
 
   return (
-    <div className="app">
-      <div className="card">
-        <div className="section">
-          <h1 className="h1">Previsualización y descargas</h1>
-          {typeof props.onVolver === "function" && (
-            <button className="btn secondary nowrap" onClick={props.onVolver}>
-              Volver
-            </button>
+    <div className="app" style={cssVars}>
+      <div style={styles.wrap}>
+        <div style={styles.header}>
+          <h2 style={styles.title}>Vista previa</h2>
+          {datos?.nombre && (
+            <p style={styles.subtitle}>
+              Paciente: <strong>{datos.nombre}</strong>
+              {datos.rut ? ` — RUT: ${datos.rut}` : ""}
+            </p>
           )}
         </div>
 
-        <div className="divider" />
+        <div className="card" style={styles.card}>
+          {/* Render del módulo correspondiente (solo vista/resultado) */}
+          {modulo === "trauma" && (
+            <>
+              <TraumaModulo
+                initialDatos={datos}
+                onPedirChecklistResonancia={onPedirChecklistResonancia}
+                onDetectarResonancia={onDetectarResonancia}
+                resumenResoTexto={resumenResoTexto}
+              />
+              {rmPdfListo && !!rmIdPago && (
+                <div style={styles.pdfLinkBox}>
+                  <a
+                    href={`${BACKEND_BASE}/pdf-rm/${rmIdPago}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={styles.pdfLink}
+                    className="btn"
+                  >
+                    Formulario RM (PDF)
+                  </a>
+                </div>
+              )}
+            </>
+          )}
 
-        {/* Resumen mínimo del paciente (si existe) */}
-        {(paciente?.nombre || paciente?.rut) && (
-          <div className="chips mt-8">
-            {paciente?.nombre ? <span className="chip">Nombre: {paciente.nombre}</span> : null}
-            {paciente?.rut ? <span className="chip">RUT: {paciente.rut}</span> : null}
-            {paciente?.edad ? <span className="chip">Edad: {paciente.edad}</span> : null}
-            {paciente?.genero ? <span className="chip">Género: {paciente.genero}</span> : null}
-          </div>
-        )}
+          {modulo === "preop" && (
+            <PreopModulo initialDatos={datos} />
+          )}
 
-        {/* Grid de previews */}
-        <div className="grid-autofit mt-16">
-          {/* ======= PREVIEW IA ======= */}
-          <div className="card">
-            <h3 className="h1" style={{ fontSize: "1.05rem" }}>Preview IA</h3>
-            <div className="trauma-mono mt-8" style={{ minHeight: 160 }}>
-              {ia ? ia : "— Sin contenido IA —"}
-            </div>
+          {modulo === "generales" && (
+            <GeneralesModulo initialDatos={datos} />
+          )}
 
-            <div className="toolbar mt-12">
-              <Btn label="Regenerar IA" onClick={props.onRegenerarIA} />
-              <Btn label="Descargar ficha" onClick={props.onDescargarFicha} kind="secondary" />
-              <Btn label="Descargar receta" onClick={props.onDescargarReceta} kind="secondary" />
-            </div>
-          </div>
-
-          {/* ======= PREVIEW ORDEN ======= */}
-          <div className="card">
-            <h3 className="h1" style={{ fontSize: "1.05rem" }}>Preview Orden</h3>
-            <div className="trauma-mono mt-8" style={{ minHeight: 160, whiteSpace: "pre-wrap" }}>
-              {ordenTexto ? ordenTexto : "— Sin contenido de orden —"}
-            </div>
-
-            <div className="toolbar mt-12">
-              <Btn label="Regenerar orden" onClick={props.onRegenerarOrden} />
-              <Btn label="Descargar orden" onClick={props.onDescargarOrden} kind="secondary" />
-            </div>
-          </div>
+          {modulo === "ia" && (
+            <>
+              <IAModulo
+                initialDatos={datos}
+                pedirChecklistResonancia={onPedirChecklistResonancia}
+              />
+              {rmPdfListo && !!rmIdPago && (
+                <div style={styles.pdfLinkBox}>
+                  <a
+                    href={`${BACKEND_BASE}/pdf-rm/${rmIdPago}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={styles.pdfLink}
+                    className="btn"
+                  >
+                    Formulario RM (PDF)
+                  </a>
+                </div>
+              )}
+            </>
+          )}
         </div>
-
-        {/* Nota mínima */}
-        <p className="muted mt-16">Si un botón aparece deshabilitado, ese handler no fue pasado por props.</p>
       </div>
     </div>
   );
