@@ -1,109 +1,91 @@
 // src/PantallaDos.jsx
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
 
-/* Módulos existentes (NO se tocan) */
+/* Módulos existentes (no se modifican) */
 import IAModulo from "./modules/IAModulo.jsx";
 import TraumaModulo from "./modules/TraumaModulo.jsx";
 import GeneralesModulo from "./modules/GeneralesModulo.jsx";
 import PreopModulo from "./modules/PreopModulo.jsx";
 
-/**
- * PantallaDos
- * - Menú simple: muestra SOLO botones para elegir módulo.
- * - Al elegir, renderiza SOLO el módulo seleccionado (sin superponer el menú).
- * - Pasa initialDatos leyendo exactamente lo que usa la app: sessionStorage.datosPacienteJSON
- * - No duplica flujos ni previews; no inventa variables.
- */
-export default function PantallaDos({ onVolver }) {
+/* Lee datos guardados por PantallaUno / formulario */
+function leerInitialDatos() {
+  try {
+    const raw = sessionStorage.getItem("datosPacienteJSON");
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  // Fallback “guest” compatible con tu backend
+  return {
+    nombre: "INVITADO",
+    rut: "11.111.111-1",
+    edad: "",
+    genero: "",
+    dolor: "",
+    lado: "",
+  };
+}
+
+export default function PantallaDos() {
   const [moduloActivo, setModuloActivo] = useState(null);
-  const [initialDatos, setInitialDatos] = useState({});
 
-  // Cargar datos básicos exactamente desde la misma clave usada por la app
-  const cargarDatosPaciente = () => {
+  // Capturamos una sola vez los datos iniciales para todos los módulos
+  const initialDatos = useMemo(() => leerInitialDatos(), []);
+
+  // Tabla de módulos → componente (para montar sin condimentos extra)
+  const Modulo = useMemo(() => {
+    if (moduloActivo === "ia") return IAModulo;
+    if (moduloActivo === "trauma") return TraumaModulo;
+    if (moduloActivo === "generales") return GeneralesModulo;
+    if (moduloActivo === "preop") return PreopModulo;
+    return null;
+  }, [moduloActivo]);
+
+  // Cuando hay módulo activo: renderiza SOLO el módulo (nada más alrededor)
+  if (Modulo) {
     try {
-      const raw = sessionStorage.getItem("datosPacienteJSON");
-      setInitialDatos(raw ? JSON.parse(raw) : {});
-    } catch {
-      setInitialDatos({});
-    }
-  };
-
-  useEffect(() => {
-    cargarDatosPaciente();
-  }, [moduloActivo]); // cuando abres un módulo, refresca initialDatos
-
-  const abrir = (key) => {
-    try { sessionStorage.setItem("modulo", key); } catch {}
-    setModuloActivo(key);
-  };
-
-  const cerrarModulo = () => {
-    setModuloActivo(null); // vuelve al menú sin dejar nada montado
-  };
-
-  /* ======================= RENDER EXCLUSIVO DEL MÓDULO ======================= */
-  if (moduloActivo === "ia") {
-    return (
-      <div className="card" style={{ padding: 0, border: "none", background: "transparent" }}>
-        <div className="toolbar mb-12">
-          <button className="btn ghost" onClick={cerrarModulo}>← Volver</button>
-          {onVolver && <button className="btn secondary" onClick={onVolver}>Salir</button>}
-        </div>
-        <IAModulo initialDatos={initialDatos} />
-      </div>
-    );
+      // Deja rastro mínimo como hacía App.jsx
+      sessionStorage.setItem("modulo", String(moduloActivo));
+    } catch {}
+    return <Modulo key={`mod-${moduloActivo}`} initialDatos={initialDatos} />;
   }
 
-  if (moduloActivo === "trauma") {
-    return (
-      <div className="card" style={{ padding: 0, border: "none", background: "transparent" }}>
-        <div className="toolbar mb-12">
-          <button className="btn ghost" onClick={cerrarModulo}>← Volver</button>
-          {onVolver && <button className="btn secondary" onClick={onVolver}>Salir</button>}
-        </div>
-        <TraumaModulo initialDatos={initialDatos} />
-      </div>
-    );
-  }
-
-  if (moduloActivo === "generales") {
-    return (
-      <div className="card" style={{ padding: 0, border: "none", background: "transparent" }}>
-        <div className="toolbar mb-12">
-          <button className="btn ghost" onClick={cerrarModulo}>← Volver</button>
-          {onVolver && <button className="btn secondary" onClick={onVolver}>Salir</button>}
-        </div>
-        <GeneralesModulo initialDatos={initialDatos} />
-      </div>
-    );
-  }
-
-  if (moduloActivo === "preop") {
-    return (
-      <div className="card" style={{ padding: 0, border: "none", background: "transparent" }}>
-        <div className="toolbar mb-12">
-          <button className="btn ghost" onClick={cerrarModulo}>← Volver</button>
-          {onVolver && <button className="btn secondary" onClick={onVolver}>Salir</button>}
-        </div>
-        <PreopModulo initialDatos={initialDatos} />
-      </div>
-    );
-  }
-
-  /* ======================= MENÚ (SOLO BOTONES) ======================= */
+  // Pantalla de selección: solo botones que abren el módulo
   return (
-    <div className="card" data-screen="pantalla-dos" style={{ maxWidth: 720, margin: "0 auto" }}>
-      <div className="section">
-        <h2 className="h1" style={{ margin: 0 }}>Selecciona un módulo</h2>
-        {onVolver && <button className="btn ghost" onClick={onVolver}>Salir</button>}
-      </div>
-      <div className="divider" />
-      <div style={{ display: "grid", gap: 12 }}>
-        <button className="btn fullw" onClick={() => abrir("ia")}>Abrir IA</button>
-        <button className="btn fullw" onClick={() => abrir("trauma")}>Abrir Trauma</button>
-        <button className="btn fullw" onClick={() => abrir("generales")}>Abrir Generales</button>
-        <button className="btn fullw" onClick={() => abrir("preop")}>Abrir Preoperatorio</button>
+    <div className="card" style={{ maxWidth: 680, margin: "0 auto" }}>
+      <h2 className="h1" style={{ marginTop: 0 }}>Selecciona un módulo</h2>
+
+      <div style={{ display: "grid", gap: 12, marginTop: 8 }}>
+        <button
+          className="btn fullw"
+          onClick={() => setModuloActivo("ia")}
+          aria-label="Abrir IA"
+        >
+          Abrir IA
+        </button>
+
+        <button
+          className="btn fullw"
+          onClick={() => setModuloActivo("trauma")}
+          aria-label="Abrir Trauma"
+        >
+          Abrir Trauma
+        </button>
+
+        <button
+          className="btn fullw"
+          onClick={() => setModuloActivo("generales")}
+          aria-label="Abrir Generales"
+        >
+          Abrir Generales
+        </button>
+
+        <button
+          className="btn fullw"
+          onClick={() => setModuloActivo("preop")}
+          aria-label="Abrir Preoperatorio"
+        >
+          Abrir Preoperatorio
+        </button>
       </div>
     </div>
   );
