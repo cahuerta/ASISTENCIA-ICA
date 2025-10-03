@@ -11,13 +11,8 @@ import GeneralesModulo from "../modules/GeneralesModulo.jsx";
 import IAModulo from "../modules/IAModulo.jsx";
 
 /**
- * Props esperadas:
- * - initialDatos: objeto con los datos del paciente (venidos de PantallaUno o sessionStorage).
- * - onPedirChecklistResonancia?: fn (se pasa a Trauma/IAModulo si decides usarla)
- * - onDetectarResonancia?: fn (se pasa a Trauma/IAModulo si decides usarla)
- * - resumenResoTexto?: fn (se pasa a Trauma/IAModulo si decides usarla)
- *
- * Nota: No se vuelve a pedir formulario. Solo se selecciona el módulo y se le pasa initialDatos.
+ * Solo botones para elegir módulo. Sin valor por defecto.
+ * Al hacer clic, se renderiza SOLO el módulo elegido.
  */
 export default function PantallaDos({
   initialDatos,
@@ -35,7 +30,8 @@ export default function PantallaDos({
     "--overlay": T.overlay,
   };
 
-  const [modulo, setModulo] = useState("trauma");
+  // SIN valor por defecto
+  const [modulo, setModulo] = useState(null); // "trauma" | "preop" | "generales" | "ia" | null
 
   const styles = {
     wrap: { maxWidth: 1200, margin: "0 auto", padding: "16px" },
@@ -79,7 +75,7 @@ export default function PantallaDos({
   return (
     <div className="app" style={cssVars}>
       <div style={styles.wrap}>
-        {/* Selector de módulos */}
+        {/* Botones de módulos (sin default) */}
         <div style={styles.topBar}>
           {[
             { key: "trauma", label: "ASISTENTE TRAUMATOLÓGICO" },
@@ -104,14 +100,12 @@ export default function PantallaDos({
 
         <div className="card" style={styles.card}>
           <div style={styles.info}>
-            {datos?.nombre ? (
-              <>Paciente: <strong>{datos.nombre}</strong>{datos.rut ? ` — RUT: ${datos.rut}` : ""}</>
-            ) : (
-              <>Usando datos recibidos. (No se repite formulario.)</>
-            )}
+            {datos?.nombre
+              ? <>Paciente: <strong>{datos.nombre}</strong>{datos.rut ? ` — RUT: ${datos.rut}` : ""}</>
+              : <>Seleccione un módulo para continuar. (No se repite formulario.)</>}
           </div>
 
-          {/* Render del módulo seleccionado, siempre pasando initialDatos */}
+          {/* Render SOLO del módulo elegido */}
           {modulo === "trauma" && (
             <TraumaModulo
               initialDatos={datos || {}}
@@ -121,13 +115,9 @@ export default function PantallaDos({
             />
           )}
 
-          {modulo === "preop" && (
-            <PreopModulo initialDatos={datos || {}} />
-          )}
+          {modulo === "preop" && <PreopModulo initialDatos={datos || {}} />}
 
-          {modulo === "generales" && (
-            <GeneralesModulo initialDatos={datos || {}} />
-          )}
+          {modulo === "generales" && <GeneralesModulo initialDatos={datos || {}} />}
 
           {modulo === "ia" && (
             <IAModulo
