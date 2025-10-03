@@ -4,6 +4,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 
+/* NUEVO: avisos y comorbilidades */
+import AvisoLegal from "../components/AvisoLegal.jsx";
+import FormularioComorbilidades from "../components/FormularioComorbilidades.jsx";
+
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
 /* Etiquetas amigables para el preview de comorbilidades */
@@ -100,12 +104,18 @@ export default function GeneralesModulo({ initialDatos }) {
   // Texto libre (SOLO en segundo preview)
   const [examenLibre, setExamenLibre] = useState("");
 
+  /* ===== NUEVO: gating por Aviso Legal y Comorbilidades ===== */
+  const [mostrarAviso, setMostrarAviso] = useState(false);
+  const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
+
   useEffect(() => {
+    // Datos base
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
     } catch {}
 
+    // IA previa
     try {
       const ex = JSON.parse(sessionStorage.getItem("generales_ia_examenes") || "[]");
       const inf = sessionStorage.getItem("generales_ia_resumen") || "";
@@ -113,17 +123,33 @@ export default function GeneralesModulo({ initialDatos }) {
       setInformeIA(inf);
     } catch {}
 
+    // Comorbilidades (para mostrar en resumen si ya existen)
     try {
       const c = JSON.parse(sessionStorage.getItem("generales_comorbilidades_data") || "{}");
       setComorbilidades(c || {});
     } catch {}
 
-    // Si el usuario ya había pasado al segundo preview antes, lo mantenemos
+    // Mantener segundo preview si ya estaba
     try {
-      if (sessionStorage.getItem("generales_step") === "2") {
-        setStepStarted(true);
-      }
+      if (sessionStorage.getItem("generales_step") === "2") setStepStarted(true);
     } catch {}
+
+    // NUEVO: verificación de Aviso Legal -> si no, pedirlo
+    const avisoOk = (() => {
+      try { return sessionStorage.getItem("generales_aviso_ok") === "1"; } catch { return false; }
+    })();
+    if (!avisoOk) {
+      setMostrarAviso(true);
+      return; // no seguimos mostrando nada hasta aceptar
+    }
+
+    // Si aviso OK, chequear comorbilidades: si no hay confirmación, abrir formulario
+    const comorbOk = (() => {
+      try { return sessionStorage.getItem("generales_comorbilidades_ok") === "1"; } catch { return false; }
+    })();
+    if (!comorbOk) {
+      setMostrarComorbilidades(true);
+    }
 
     // retorno de pago
     const params = new URLSearchParams(window.location.search);
@@ -131,7 +157,6 @@ export default function GeneralesModulo({ initialDatos }) {
     const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
-      // Aseguramos mantener el segundo preview al volver del pago
       setStepStarted(true);
       try { sessionStorage.setItem("generales_step", "2"); } catch {}
 
@@ -139,9 +164,7 @@ export default function GeneralesModulo({ initialDatos }) {
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
-        try {
-          await fetch(`${BACKEND_BASE}/obtener-datos-generales/${idPago}`);
-        } catch {}
+        try { await fetch(`${BACKEND_BASE}/obtener-datos-generales/${idPago}`); } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
           pollerRef.current = null;
@@ -159,15 +182,35 @@ export default function GeneralesModulo({ initialDatos }) {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  /* ===== NUEVO: handlers Aviso & Comorbilidades ===== */
+  const continuarTrasAviso = () => {
+    setMostrarAviso(false);
+    try { sessionStorage.setItem("generales_aviso_ok", "1"); } catch {}
+    // Si faltan comorbilidades, abrirlas inmediatamente
+    try {
+      const ok = sessionStorage.getItem("generales_comorbilidades_ok") === "1";
+      if (!ok) setMostrarComorbilidades(true);
+    } catch { setMostrarComorbilidades(true); }
+  };
+  const rechazarAviso = () => {
+    setMostrarAviso(false);
+    // Bloquea el módulo si no acepta (no se muestra contenido)
+    alert("Debes aceptar el aviso legal para continuar.");
+  };
+
+  const handleSaveComorbilidades = (payload) => {
+    setComorbilidades(payload || {});
+    setMostrarComorbilidades(false);
+    try {
+      sessionStorage.setItem("generales_comorbilidades_ok", "1");
+      sessionStorage.setItem("generales_comorbilidades_data", JSON.stringify(payload || {}));
+    } catch {}
+  };
+
   /* ------------------------------ Pago ------------------------------ */
   const handlePagarGenerales = async () => {
     const edadNum = Number(datos.edad);
-    if (
-      !datos.nombre?.trim() ||
-      !datos.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0
-    ) {
+    if (!datos.nombre?.trim() || !datos.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
       alert("Complete nombre, RUT y edad (>0) antes de pagar.");
       return;
     }
@@ -181,7 +224,6 @@ export default function GeneralesModulo({ initialDatos }) {
       sessionStorage.setItem("modulo", "generales");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
 
-      // incluir examen libre si el paciente ingresó algo
       const examenPaciente = (examenLibre || "").trim();
       const examenesFinales = [
         ...(Array.isArray(examenesIA) ? examenesIA : []),
@@ -307,7 +349,7 @@ export default function GeneralesModulo({ initialDatos }) {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
 
-      // comorbilidades actuales
+      // comorbilidades actuales (por si viniera de formulario)
       let c = {};
       try { c = JSON.parse(sessionStorage.getItem("generales_comorbilidades_data") || "{}"); } catch {}
       setComorbilidades(c || {});
@@ -319,31 +361,24 @@ export default function GeneralesModulo({ initialDatos }) {
 
       const body = {
         idPago,
-        paciente: {
-          ...datos,
-          edad: Number(datos.edad) || datos.edad,
-        },
+        paciente: { ...datos, edad: Number(datos.edad) || datos.edad },
         comorbilidades: c || {},
       };
 
-      // 1) Nueva ruta específica
+      // 1) Ruta específica
       let resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
-      // 2) Fallback a rutas legacy
+      // 2) Fallbacks legacy
       if (!resp.ok) {
         resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...body, tipoCirugia: "" }),
         });
       }
       if (!resp.ok) {
         resp = await fetch(`${BACKEND_BASE}/ia-preop`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...body, tipoCirugia: "" }),
         });
       }
@@ -353,7 +388,7 @@ export default function GeneralesModulo({ initialDatos }) {
       const ex = Array.isArray(j?.examenes) ? j.examenes : [];
       const inf = typeof j?.informeIA === "string" ? j.informeIA : "";
 
-      // persistimos para PDF y para mantener estado
+      // persistimos para PDF y estado
       try {
         sessionStorage.setItem("generales_ia_examenes", JSON.stringify(ex));
         sessionStorage.setItem("generales_ia_resumen", inf || "");
@@ -370,8 +405,25 @@ export default function GeneralesModulo({ initialDatos }) {
     }
   };
 
+  /* ============================== RENDER ============================== */
   return (
     <div className="card" style={styles.card}>
+      {/* AVISO LEGAL (bloquea hasta aceptar) */}
+      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
+
+      {/* FORMULARIO COMORBILIDADES (antes del preview) */}
+      {mostrarComorbilidades && (
+        <div style={styles.modalOverlay}>
+          <div className="card" style={{ width: "min(900px, 96vw)" }}>
+            <FormularioComorbilidades
+              initial={comorbilidades || {}}
+              onSave={handleSaveComorbilidades}
+              onCancel={() => setMostrarComorbilidades(false)}
+            />
+          </div>
+        </div>
+      )}
+
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
         Vista previa — Exámenes Generales
       </h3>
@@ -383,8 +435,8 @@ export default function GeneralesModulo({ initialDatos }) {
         <div><strong>Género:</strong> {datos?.genero || "—"}</div>
       </div>
 
-      {/* Primer preview: SOLO resumen */}
-      {!stepStarted && (
+      {/* Primer preview: SOLO resumen (se muestra solo si NO está abierto el formulario de comorbilidades) */}
+      {!stepStarted && !mostrarComorbilidades && (
         <>
           <div style={{ ...styles.mono, marginTop: 6 }}>
             {resumenInicialGenerales(datos, comorbilidades)}
@@ -402,14 +454,14 @@ export default function GeneralesModulo({ initialDatos }) {
         </>
       )}
 
-      {/* Segundo preview: IA + texto libre + pago */}
+      {/* Segundo preview: IA + texto libre + pago (igual que antes) */}
       {stepStarted && (
         <>
-          {comorbBullets.length > 0 && (
+          {prettyComorb(comorbilidades).length > 0 && (
             <div style={styles.block}>
               <strong>Comorbilidades:</strong>
               <div style={{ marginTop: 6 }}>
-                {comorbBullets.map((t, i) => (
+                {prettyComorb(comorbilidades).map((t, i) => (
                   <span key={i} style={styles.tag}>{t}</span>
                 ))}
               </div>
@@ -418,11 +470,9 @@ export default function GeneralesModulo({ initialDatos }) {
 
           <div style={styles.block}>
             <strong>Exámenes solicitados (IA):</strong>
-            {usarIA ? (
+            {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
               <ul style={{ marginTop: 6, paddingLeft: 18 }}>
-                {examenesIA.map((e, idx) => (
-                  <li key={`${e}-${idx}`}>{e}</li>
-                ))}
+                {examenesIA.map((e, idx) => <li key={`${e}-${idx}`}>{e}</li>)}
               </ul>
             ) : (
               <div style={styles.hint}>
@@ -432,7 +482,6 @@ export default function GeneralesModulo({ initialDatos }) {
             )}
           </div>
 
-          {/* Texto libre SOLO aquí */}
           <div style={styles.block}>
             <label><strong>Agregar examen opcional:</strong></label>
             <input
@@ -466,12 +515,7 @@ export default function GeneralesModulo({ initialDatos }) {
                 style={{ ...styles.btnSecondary, marginTop: 8 }}
                 onClick={async () => {
                   const idPago = `generales_guest_${Date.now()}`;
-                  const datosGuest = {
-                    nombre: "Guest",
-                    rut: "99999999-9",
-                    edad: 60,
-                    genero: "MASCULINO",
-                  };
+                  const datosGuest = { nombre: "Guest", rut: "99999999-9", edad: 60, genero: "MASCULINO" };
 
                   sessionStorage.setItem("idPago", idPago);
                   sessionStorage.setItem("modulo", "generales");
@@ -535,6 +579,8 @@ function makeStyles(T) {
       boxShadow: "var(--shadow-sm, 0 2px 10px rgba(0,0,0,0.08))",
       border: "1px solid var(--border, #e8e8e8)",
       color: "var(--text, #1b1b1b)",
+      position: "relative",
+      zIndex: 0,
     },
     btnPrimary: {
       backgroundColor: "var(--primary, #0072CE)",
@@ -592,6 +638,17 @@ function makeStyles(T) {
       background: "var(--bg, #fff)",
       color: "var(--text, #1b1b1b)",
       marginTop: 6,
+    },
+    /* Overlay simple para formularios modales */
+    modalOverlay: {
+      position: "fixed",
+      inset: 0,
+      background: T.overlay || "rgba(0,0,0,.35)",
+      display: "grid",
+      placeItems: "center",
+      zIndex: 2147483000,
+      padding: 12,
+      pointerEvents: "auto",
     },
   };
 }
