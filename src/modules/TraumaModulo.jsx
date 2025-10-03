@@ -3,14 +3,14 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
+import FormularioResonancia from "../components/FormularioResonancia.jsx";
 
-/* NUEVO: esquema humano (anterior/posterior) */
+/* NUEVO: esquema y mapper */
 import EsquemaAnterior from "../EsquemaAnterior.jsx";
 import EsquemaPosterior from "../EsquemaPosterior.jsx";
 import EsquemaToggleTabs from "../EsquemaToggleTabs.jsx";
-
-/* Checklist RM */
-import FormularioResonancia from "../components/FormularioResonancia.jsx";
+import GenericMapper from "../mappers/GenericMapper.jsx";
+import { hasMapper, resolveZonaKey } from "../mappers/mapperRegistry.js";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
@@ -39,7 +39,7 @@ function resumenInicialTrauma(datos = {}) {
   return `${sexo} ${edad}. ${zona}. Se solicita evaluación imagenológica según clínica.`;
 }
 
-/** Detecta si un texto hace referencia a resonancia magnética */
+/** Normaliza y detecta si un texto hace referencia a resonancia magnética */
 function isResonanciaTexto(t = "") {
   if (!t) return false;
   const s = t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
@@ -49,7 +49,7 @@ function isResonanciaTexto(t = "") {
   return regexes.some((re) => re.test(t));
 }
 
-/* === Lee secciones/puntos marcados guardados en sessionStorage === */
+/* === Lee secciones de puntos desde sessionStorage para cualquier zona === */
 function leerSecciones(zonaKey, ladoFallback = "") {
   try {
     const rawExtra = sessionStorage.getItem(`${zonaKey}_seccionesExtra`);
@@ -88,6 +88,7 @@ function leerSecciones(zonaKey, ladoFallback = "") {
   return [];
 }
 
+/* === Carga los "resúmenes" por zona para enviar al backend =============== */
 function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
   const lado = (ladoTexto || "").toLowerCase();
   const side =
@@ -104,12 +105,12 @@ function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
 /* ================= Componente ================= */
 export default function TraumaModulo({
   initialDatos,
-  onDetectarResonancia,   // opcional; si no está, usamos detección interna
-  resumenResoTexto,       // opcional
+  onDetectarResonancia, // (datos)-> boolean | Promise<boolean>
+  resumenResoTexto,     // (data)-> string (opcional para personalizar resumen)
 }) {
   const T = getTheme();
 
-  // Variables CSS del tema (usadas por estilos inline)
+  // 👉 variables CSS del tema para usar en app.css
   const rootVars = {
     "--t-surface": T.surface ?? "#fff",
     "--t-text": T.text ?? "#1b1b1b",
@@ -118,23 +119,16 @@ export default function TraumaModulo({
     "--t-on-primary": T.onPrimary ?? "#fff",
     "--t-border": T.border ?? "#e8e8e8",
     "--t-muted": T.muted ?? "#777",
-    "--t-text-muted": T.textMuted ?? "#666",
+    "--t-on-muted": T.onMuted ?? "#fff",
+    "--t-code-bg": T.codeBg ?? "#f7f7f7",
     "--t-chip-bg": T.chipBg ?? "#eef6ff",
     "--t-chip-border": T.chipBorder ?? "#cfe4ff",
     "--t-chip-text": T.chipText ?? (T.primary || "#0b63c5"),
     "--t-shadow-sm": T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)",
+    "--t-text-muted": T.textMuted ?? "#666",
   };
 
   const [datos, setDatos] = useState(initialDatos || {});
-  const [vista, setVista] = useState(() => {
-    try {
-      const ss = sessionStorage.getItem("vistaEsquema");
-      return ss === "posterior" ? "posterior" : "anterior";
-    } catch {
-      return "anterior";
-    }
-  });
-
   const [stepStarted, setStepStarted] = useState(false);
   const [loadingIA, setLoadingIA] = useState(false);
 
@@ -156,7 +150,36 @@ export default function TraumaModulo({
 
   const [showRM, setShowRM] = useState(false);
 
-  /* ====== boot ====== */
+  /* NUEVO: esquema + mapper */
+  const [vista, setVista] = useState("anterior");
+  const [mostrarMapper, setMostrarMapper] = useState(false);
+  const [mapperId, setMapperId] = useState(null);
+
+  const onSeleccionZona = (zona) => {
+    let dolor = "", lado = "";
+    const z = String(zona || "");
+    const zl = z.toLowerCase();
+
+    if (zl.includes("columna cervical")) { dolor = "Columna cervical"; lado = ""; }
+    else if (zl.includes("columna dorsal")) { dolor = "Columna dorsal"; lado = ""; }
+    else if (zl.includes("columna lumbar") || zl.includes("columna")) { dolor = "Columna lumbar"; lado = ""; }
+    else if (zl.includes("cadera")) { dolor = "Cadera"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("rodilla")) { dolor = "Rodilla"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("hombro")) { dolor = "Hombro"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("codo")) { dolor = "Codo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("mano")) { dolor = "Mano"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    else if (zl.includes("tobillo")) { dolor = "Tobillo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+
+    setDatos((prev) => {
+      const next = { ...prev, dolor, lado };
+      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
+      return next;
+    });
+
+    const key = resolveZonaKey(dolor);
+    if (key && hasMapper(key)) setMapperId(key);
+  };
+
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
@@ -189,9 +212,7 @@ export default function TraumaModulo({
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
-        try {
-          await fetch(`${BACKEND_BASE}/obtener-datos/${idPago}`);
-        } catch {}
+        try { await fetch(`${BACKEND_BASE}/obtener-datos/${idPago}`); } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
           pollerRef.current = null;
@@ -207,35 +228,6 @@ export default function TraumaModulo({
     };
   }, []);
 
-  /* ====== selección de zona en esquema (NO se renderiza mapper) ====== */
-  const onSeleccionZona = (zona) => {
-    let dolor = "";
-    let lado = "";
-    const z = String(zona || "");
-    const zl = z.toLowerCase();
-
-    if (zl.includes("columna cervical")) { dolor = "Columna cervical"; lado = ""; }
-    else if (zl.includes("columna dorsal")) { dolor = "Columna dorsal"; lado = ""; }
-    else if (zl.includes("columna lumbar") || zl.includes("columna")) { dolor = "Columna lumbar"; lado = ""; }
-    else if (zl.includes("cadera")) { dolor = "Cadera"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("rodilla")) { dolor = "Rodilla"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("hombro")) { dolor = "Hombro"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("codo")) { dolor = "Codo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("mano")) { dolor = "Mano"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("tobillo")) { dolor = "Tobillo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-
-    setDatos((prev) => {
-      const next = { ...prev, dolor, lado };
-      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
-      return next;
-    });
-  };
-
-  useEffect(() => {
-    try { sessionStorage.setItem("vistaEsquema", vista); } catch {}
-  }, [vista]);
-
-  /* ====== secciones marcadores leídas (si existen) ====== */
   const seccionesMarcadores = useMemo(() => {
     const lado = datos?.lado || "";
     const zonas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
@@ -273,12 +265,23 @@ export default function TraumaModulo({
         idPago,
         paciente: { ...datos, edad: edadNum },
         rodillaMarcadores,
-        marcadores: { rodilla: rodillaMarcadores, mano: manoMarcadores, hombro: hombroMarcadores, codo: codoMarcadores, tobillo: tobilloMarcadores },
-        manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores,
+        marcadores: {
+          rodilla: rodillaMarcadores,
+          mano: manoMarcadores,
+          hombro: hombroMarcadores,
+          codo: codoMarcadores,
+          tobillo: tobilloMarcadores,
+        },
+        manoMarcadores,
+        hombroMarcadores,
+        codoMarcadores,
+        tobilloMarcadores,
       };
 
       const resp = await fetch(`${BACKEND_BASE}/ia-trauma`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
@@ -299,20 +302,19 @@ export default function TraumaModulo({
 
       const textoEx = ex.join("\n");
       let solicitaRM = false;
-
       if (typeof onDetectarResonancia === "function") {
         solicitaRM = await onDetectarResonancia({ ...datos, edad: edadNum, examen: textoEx });
       } else {
         solicitaRM = isResonanciaTexto(textoEx);
       }
-
       setRequiereRM(!!solicitaRM);
       setBloqueaRM(false);
       setResonanciaChecklist(null);
       setResonanciaResumenTexto("");
 
       setStepStarted(true);
-    } catch (e) {
+      window.scrollTo({ top: 0, behavior: "smooth" }); // preview limpio
+    } catch {
       alert("No fue posible obtener la información de IA (Trauma). Intenta nuevamente.");
     } finally {
       setLoadingIA(false);
@@ -324,20 +326,16 @@ export default function TraumaModulo({
     setShowRM(true);
   };
 
-  const handleSaveRM = (form /*, extra */) => {
+  const handleSaveRM = (form) => {
     setBloqueaRM(false);
-
     const resumen =
       typeof resumenResoTexto === "function" ? resumenResoTexto(form) : construirResumenRM(form);
-
     setResonanciaChecklist(form);
     setResonanciaResumenTexto(resumen);
-
     try {
       sessionStorage.setItem("resonanciaChecklist", JSON.stringify(form));
       sessionStorage.setItem("resonanciaResumenTexto", resumen);
     } catch {}
-
     setShowRM(false);
   };
 
@@ -377,8 +375,6 @@ export default function TraumaModulo({
     if (obs) partes.push(`Observaciones: ${obs}`);
     return partes.join("\n");
   };
-
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const handlePagar = async () => {
     const edadNum = Number(datos.edad);
@@ -438,6 +434,7 @@ export default function TraumaModulo({
     }
   };
 
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const handleDescargar = async () => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) {
@@ -547,58 +544,44 @@ export default function TraumaModulo({
 
   const usarIA = Array.isArray(examenesIA) && examenesIA.length > 0;
 
-  /* ======================== RENDER ======================== */
   return (
     <div className="trauma-card" style={rootVars}>
-      <h3 className="trauma-title">Vista previa — Imagenología</h3>
+      {/* TÍTULO ACTUALIZADO */}
+      <h3 className="trauma-title">Identifica tu punto de dolor</h3>
 
-      {/* 1) ESQUEMA HUMANO + selector de vista (NO se abre mapper aquí) */}
-      <div style={{
-        background: "var(--t-surface)",
-        border: `1px solid var(--t-border)`,
-        borderRadius: 12,
-        padding: 12,
-        marginBottom: 12,
-        boxShadow: "var(--t-shadow-sm)",
-      }}>
-        <EsquemaToggleTabs vista={vista} onChange={setVista} />
-        <div style={{ display: "grid", placeItems: "center", marginTop: 8 }}>
+      {/* BLOQUE SELECCIÓN (esquema + botón mapper). Se oculta al entrar al preview */}
+      {!stepStarted && (
+        <>
+          <EsquemaToggleTabs vista={vista} onChange={setVista} />
           {vista === "anterior" ? (
-            <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={380} />
+            <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={420} />
           ) : (
-            <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={380} />
+            <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={420} />
           )}
-        </div>
 
-        <div
-          style={{
-            marginTop: 8,
-            fontSize: 14,
-            color: "var(--t-text-muted)",
-            background: "var(--t-surface)",
-            padding: "6px 8px",
-            borderRadius: 8,
-            border: `1px solid var(--t-border)`,
-            minHeight: 30,
-          }}
-          aria-live="polite"
-          role="status"
-        >
-          {datos?.dolor ? (
-            <>
-              Zona seleccionada:{" "}
-              <strong>
-                {datos.dolor}
-                {datos.lado ? ` — ${datos.lado}` : ""}
-              </strong>
-            </>
-          ) : (
-            "Seleccione una zona en el esquema"
-          )}
-        </div>
-      </div>
+          <div className="trauma-hint mt-6">
+            {datos?.dolor ? (
+              <>
+                Zona seleccionada: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong>
+                {mapperId && (
+                  <button
+                    type="button"
+                    className="trauma-btn ghost"
+                    style={{ marginLeft: 8 }}
+                    onClick={() => setMostrarMapper(true)}
+                  >
+                    Marcar puntos
+                  </button>
+                )}
+              </>
+            ) : (
+              "Toca una zona en el esquema para continuar."
+            )}
+          </div>
+        </>
+      )}
 
-      {/* 2) Primer preview: SIEMPRE visible */}
+      {/* Datos básicos del paciente */}
       <div className="trauma-info">
         <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
         <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
@@ -608,27 +591,33 @@ export default function TraumaModulo({
         <div><strong>Lado:</strong> {datos?.lado || "—"}</div>
       </div>
 
+      {/* Resumen inicial (texto) */}
       <div className="trauma-mono mt-6">{resumenInicialTrauma(datos)}</div>
 
-      {/* Secciones de puntos leídas (si existen de un mapper previo) */}
+      {/* Secciones de puntos marcados */}
       {seccionesMarcadores.map((sec, idx) => (
         <div className="trauma-block" key={`sec-${idx}`}>
           <strong>{sec.title}</strong>
           <ul className="mt-6">
-            {sec.lines.map((l, i) => (
-              <li key={i}>{l}</li>
-            ))}
+            {sec.lines.map((l, i) => <li key={i}>{l}</li>)}
           </ul>
         </div>
       ))}
 
+      {/* CTA para pasar a IA */}
       {!stepStarted && (
-        <button className="trauma-btn primary" onClick={handleContinuar} disabled={loadingIA}>
+        <button
+          className="trauma-btn primary"
+          onClick={handleContinuar}
+          disabled={loadingIA || !datos?.dolor}
+          aria-busy={loadingIA}
+          title={!datos?.dolor ? "Selecciona una zona primero" : ""}
+        >
           {loadingIA ? "Analizando con IA…" : "Continuar"}
         </button>
       )}
 
-      {/* 3) Segundo preview */}
+      {/* PREVIEW LIMPIO (solo después de continuar) */}
       {stepStarted && (
         <>
           <div className="trauma-block">
@@ -640,9 +629,7 @@ export default function TraumaModulo({
             <strong>Exámenes sugeridos (IA):</strong>
             {usarIA ? (
               <ul className="mt-6">
-                {examenesIA.map((e, i) => (
-                  <li key={`${e}-${i}`}>{e}</li>
-                ))}
+                {examenesIA.map((e, i) => <li key={`${e}-${i}`}>{e}</li>)}
               </ul>
             ) : (
               <div className="trauma-hint">Aún no hay lista generada por IA.</div>
@@ -694,7 +681,22 @@ export default function TraumaModulo({
         </>
       )}
 
-      {/* Checklist RM (modal). Mantener activo, no tocar. */}
+      {/* Overlay Mapper */}
+      {mostrarMapper && mapperId && (
+        <div className="trauma-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="trauma-modal-card">
+            <GenericMapper
+              mapperId={mapperId}
+              ladoInicial={(datos?.lado || "").toLowerCase().includes("izq") ? "izquierda" : "derecha"}
+              vistaInicial={mapperId === "mano" ? (vista === "anterior" ? "palmar" : "dorsal") : vista}
+              onSave={() => setMostrarMapper(false)}
+              onClose={() => setMostrarMapper(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Modal RM */}
       {showRM && (
         <div className="trauma-modal-backdrop" role="dialog" aria-modal="true">
           <div className="trauma-modal-card">
