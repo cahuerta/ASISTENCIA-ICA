@@ -31,7 +31,7 @@ export default function PantallaUno({ onIrPantallaDos }) {
   return (
     <div className="app" style={cssVars}>
       <div style={styles.wrap}>
-        {/* LOGO */}
+        {/* LOGO (más grande) */}
         <div style={styles.logoBox}>
           <img src={logoICA} alt="Instituto de Cirugía Articular" style={styles.logoImg} />
         </div>
@@ -87,7 +87,7 @@ export default function PantallaUno({ onIrPantallaDos }) {
                   }}
                 />
               </div>
-              {/* (Sin botón extra aquí) */}
+              {/* Sin botón extra */}
             </div>
           )}
         </div>
@@ -96,31 +96,55 @@ export default function PantallaUno({ onIrPantallaDos }) {
   );
 }
 
-/* ===== Styles ===== */
+/* ===== Styles (ajuste de UX: logo más grande, botones más compactos) ===== */
 const styles = {
-  wrap: { maxWidth: 980, margin: "0 auto", padding: "32px 16px" },
-  logoBox: { display: "grid", placeItems: "center", marginBottom: 18 },
-  logoImg: { height: 64, objectFit: "contain", borderRadius: 12, boxShadow: T.shadowSm },
-  card: { padding: 18 },
+  wrap: { maxWidth: 980, margin: "0 auto", padding: "28px 16px" },
+
+  logoBox: { display: "grid", placeItems: "center", marginBottom: 14 },
+  // ↑ de 64px a 120px para mejorar presencia del logo
+  logoImg: { height: 120, objectFit: "contain", borderRadius: 12, boxShadow: T.shadowSm },
+
+  card: { padding: 16 },
   menu: { textAlign: "center" },
-  title: { margin: "4px 0 8px", fontSize: 20, color: T.text, fontWeight: 800 },
-  subtitle: { margin: 0, color: T.textMuted, fontSize: 14 },
-  btnRow: { display: "grid", gridTemplateColumns: "1fr", gap: 12, marginTop: 18 },
+
+  title: { margin: "4px 0 6px", fontSize: 20, color: T.text, fontWeight: 800 },
+  subtitle: { margin: 0, color: T.textMuted, fontSize: 13 },
+
+  btnRow: { display: "grid", gridTemplateColumns: "1fr", gap: 10, marginTop: 14 },
+
+  // Botones más compactos (antes 14px 16px y fontSize 15)
   btn: {
-    width: "100%", borderRadius: 12, padding: "14px 16px", fontSize: 15,
-    fontWeight: 800, borderWidth: 2, borderStyle: "solid", cursor: "pointer", lineHeight: 1.1,
+    width: "100%",
+    borderRadius: 10,
+    padding: "10px 12px",
+    fontSize: 13,
+    fontWeight: 800,
+    borderWidth: 2,
+    borderStyle: "solid",
+    cursor: "pointer",
+    lineHeight: 1.05,
   },
   btnPrimary: {
-    background: T.primary, borderColor: T.primaryDark, color: T.onPrimary,
-    boxShadow: `0 0 0 3px ${T.accentAlpha}, ${T.shadowSm}`,
+    background: T.primary,
+    borderColor: T.primaryDark,
+    color: T.onPrimary,
+    boxShadow: `0 0 0 2px ${T.accentAlpha}, ${T.shadowSm}`,
   },
   btnSecondary: { background: T.surface, borderColor: T.primary, color: T.primary },
   btnGhost: { background: T.surface, borderColor: T.border, color: T.text },
+
   formWrap: {},
-  formHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  formTitle: { margin: 0, fontSize: 16, fontWeight: 800, color: T.text },
+  formHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  formTitle: { margin: 0, fontSize: 15, fontWeight: 800, color: T.text },
+
   smallBtn: {
-    borderRadius: 10, padding: "10px 12px", fontSize: 13, fontWeight: 800,
-    borderWidth: 2, borderStyle: "solid", cursor: "pointer", lineHeight: 1.1,
+    borderRadius: 10,
+    padding: "8px 10px",
+    fontSize: 12,
+    fontWeight: 800,
+    borderWidth: 2,
+    borderStyle: "solid",
+    cursor: "pointer",
+    lineHeight: 1.05,
   },
 };
