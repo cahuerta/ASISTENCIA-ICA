@@ -29,100 +29,141 @@ export default function PantallaUno({ onIrPantallaDos }) {
   };
 
   return (
-    <div className="app" style={cssVars}>
-      <div style={styles.wrap}>
-        {/* LOGO (más grande) */}
-        <div style={styles.logoBox}>
-          <img src={logoICA} alt="Instituto de Cirugía Articular" style={styles.logoImg} />
-        </div>
+    <div className="app" style={{ ...cssVars }}>
+      <div style={styles.viewport}>
+        <div style={styles.wrap}>
+          {/* LOGO responsivo */}
+          <div style={styles.logoBox}>
+            <img src={logoICA} alt="Instituto de Cirugía Articular" style={styles.logoImg} />
+          </div>
 
-        <div className="card" style={styles.card}>
-          {!mostrarFormulario ? (
-            <div style={styles.menu}>
-              <h2 style={styles.title}>Bienvenido(a)</h2>
-              <p style={styles.subtitle}>Elige cómo deseas continuar.</p>
+          <div className="card" style={styles.card}>
+            {!mostrarFormulario ? (
+              <div style={styles.menu}>
+                <h2 style={styles.title}>Bienvenido(a)</h2>
+                <p style={styles.subtitle}>Elige cómo deseas continuar.</p>
 
-              <div style={styles.btnRow}>
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ ...styles.btn, ...styles.btnPrimary }}
-                  onClick={() => setMostrarFormulario(true)}
-                >
-                  INGRESO PERSONA
-                </button>
+                <div style={styles.btnRow}>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ ...styles.btn, ...styles.btnPrimary }}
+                    onClick={() => setMostrarFormulario(true)}
+                  >
+                    INGRESO PERSONA
+                  </button>
 
-                <button
-                  type="button"
-                  className="btn secondary"
-                  style={{ ...styles.btn, ...styles.btnSecondary }}
-                  onClick={() => onIrPantallaDos && onIrPantallaDos(null)}
-                >
-                  INVITADO (GUEST)
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={styles.formWrap}>
-              <div style={styles.formHeader}>
-                <h3 style={styles.formTitle}>Datos básicos del paciente</h3>
-                <div>
                   <button
                     type="button"
                     className="btn secondary"
-                    style={{ ...styles.smallBtn, ...styles.btnGhost }}
-                    onClick={() => setMostrarFormulario(false)}
+                    style={{ ...styles.btn, ...styles.btnSecondary }}
+                    onClick={() => onIrPantallaDos && onIrPantallaDos(null)}
                   >
-                    VOLVER
+                    INVITADO (GUEST)
                   </button>
                 </div>
               </div>
+            ) : (
+              <div style={styles.formWrap}>
+                <div style={styles.formHeader}>
+                  <h3 style={styles.formTitle}>Datos básicos del paciente</h3>
+                  <div>
+                    <button
+                      type="button"
+                      className="btn secondary"
+                      style={{ ...styles.smallBtn, ...styles.btnGhost }}
+                      onClick={() => setMostrarFormulario(false)}
+                    >
+                      VOLVER
+                    </button>
+                  </div>
+                </div>
 
-              {/* El formulario es autónomo; al enviar navega a PantallaDos */}
-              <div style={{ marginTop: 12 }}>
-                <FormularioPacienteBasico
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    continuar();
-                  }}
-                />
+                {/* El formulario es autónomo; al enviar navega a PantallaDos */}
+                <div style={{ marginTop: 12 }}>
+                  <FormularioPacienteBasico
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      continuar();
+                    }}
+                  />
+                </div>
+                {/* Sin botón extra */}
               </div>
-              {/* Sin botón extra */}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-/* ===== Styles (ajuste de UX: logo más grande, botones más compactos) ===== */
+/* ===== Styles responsivos (web y móvil) ===== */
 const styles = {
-  wrap: { maxWidth: 980, margin: "0 auto", padding: "28px 16px" },
+  // Centrado vertical en pantallas altas, con padding seguro en móviles
+  viewport: {
+    minHeight: "100svh",
+    display: "grid",
+    placeItems: "start center",
+    padding: "clamp(12px, 3vh, 32px) 12px",
+  },
 
-  logoBox: { display: "grid", placeItems: "center", marginBottom: 14 },
-  // ↑ de 64px a 120px para mejorar presencia del logo
-  logoImg: { height: 120, objectFit: "contain", borderRadius: 12, boxShadow: T.shadowSm },
+  // Contenedor fluido: se adapta entre móvil y desktop
+  wrap: {
+    width: "min(92vw, 520px)",
+  },
 
-  card: { padding: 16 },
+  logoBox: {
+    display: "grid",
+    placeItems: "center",
+    marginBottom: "clamp(8px, 2.5vh, 18px)",
+  },
+  // Escala con el ancho de pantalla
+  logoImg: {
+    height: "clamp(84px, 18vw, 140px)",
+    objectFit: "contain",
+    borderRadius: 12,
+    boxShadow: T.shadowSm,
+  },
+
+  card: {
+    padding: "clamp(12px, 2.2vw, 18px)",
+  },
+
   menu: { textAlign: "center" },
 
-  title: { margin: "4px 0 6px", fontSize: 20, color: T.text, fontWeight: 800 },
-  subtitle: { margin: 0, color: T.textMuted, fontSize: 13 },
+  title: {
+    margin: "0 0 clamp(6px, 1.2vh, 8px)",
+    fontSize: "clamp(18px, 2.4vw, 22px)",
+    color: T.text,
+    fontWeight: 800,
+    lineHeight: 1.15,
+  },
+  subtitle: {
+    margin: 0,
+    color: T.textMuted,
+    fontSize: "clamp(12px, 1.6vw, 14px)",
+  },
 
-  btnRow: { display: "grid", gridTemplateColumns: "1fr", gap: 10, marginTop: 14 },
+  // Pasa de 1 columna (móvil) a 2 cuando hay espacio
+  btnRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: "clamp(8px, 1.2vw, 12px)",
+    marginTop: "clamp(12px, 2vh, 16px)",
+  },
 
-  // Botones más compactos (antes 14px 16px y fontSize 15)
+  // Botones compactos y fluidos
   btn: {
     width: "100%",
-    borderRadius: 10,
-    padding: "10px 12px",
-    fontSize: 13,
+    borderRadius: 12,
+    padding: "clamp(10px, 1.8vw, 14px) clamp(12px, 2.4vw, 16px)",
+    fontSize: "clamp(13px, 1.9vw, 16px)",
     fontWeight: 800,
     borderWidth: 2,
     borderStyle: "solid",
     cursor: "pointer",
-    lineHeight: 1.05,
+    lineHeight: 1.1,
   },
   btnPrimary: {
     background: T.primary,
@@ -130,17 +171,31 @@ const styles = {
     color: T.onPrimary,
     boxShadow: `0 0 0 2px ${T.accentAlpha}, ${T.shadowSm}`,
   },
-  btnSecondary: { background: T.surface, borderColor: T.primary, color: T.primary },
+  btnSecondary: {
+    background: T.surface,
+    borderColor: T.primary,
+    color: T.primary,
+  },
   btnGhost: { background: T.surface, borderColor: T.border, color: T.text },
 
   formWrap: {},
-  formHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  formTitle: { margin: 0, fontSize: 15, fontWeight: 800, color: T.text },
 
+  formHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  formTitle: {
+    margin: 0,
+    fontSize: "clamp(14px, 1.9vw, 16px)",
+    fontWeight: 800,
+    color: T.text,
+  },
   smallBtn: {
     borderRadius: 10,
     padding: "8px 10px",
-    fontSize: 12,
+    fontSize: "clamp(12px, 1.7vw, 13px)",
     fontWeight: 800,
     borderWidth: 2,
     borderStyle: "solid",
