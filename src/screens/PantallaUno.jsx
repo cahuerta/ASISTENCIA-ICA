@@ -28,11 +28,25 @@ export default function PantallaUno({ onIrPantallaDos }) {
     if (typeof onIrPantallaDos === "function") onIrPantallaDos(datos);
   };
 
+  // Invitado: persiste datos de prueba compatibles y navega
+  const entrarComoInvitado = () => {
+    const guest = {
+      nombre: "guest",
+      rut: "11.111.111-1",
+      edad: 50,
+      genero: "FEMENINO",
+    };
+    try {
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(guest));
+    } catch {}
+    if (typeof onIrPantallaDos === "function") onIrPantallaDos(guest);
+  };
+
   return (
     <div className="app" style={{ ...cssVars }}>
       <div style={styles.viewport}>
         <div style={styles.wrap}>
-          {/* LOGO responsivo */}
+          {/* LOGO: mismo ancho que los botones (full-width) */}
           <div style={styles.logoBox}>
             <img src={logoICA} alt="Instituto de Cirugía Articular" style={styles.logoImg} />
           </div>
@@ -57,7 +71,7 @@ export default function PantallaUno({ onIrPantallaDos }) {
                     type="button"
                     className="btn secondary"
                     style={{ ...styles.btn, ...styles.btnSecondary }}
-                    onClick={() => onIrPantallaDos && onIrPantallaDos(null)}
+                    onClick={entrarComoInvitado}
                   >
                     INVITADO (GUEST)
                   </button>
@@ -88,7 +102,6 @@ export default function PantallaUno({ onIrPantallaDos }) {
                     }}
                   />
                 </div>
-                {/* Sin botón extra */}
               </div>
             )}
           </div>
@@ -100,15 +113,12 @@ export default function PantallaUno({ onIrPantallaDos }) {
 
 /* ===== Styles responsivos (web y móvil) ===== */
 const styles = {
-  // Centrado vertical en pantallas altas, con padding seguro en móviles
   viewport: {
     minHeight: "100svh",
     display: "grid",
     placeItems: "start center",
     padding: "clamp(12px, 3vh, 32px) 12px",
   },
-
-  // Contenedor fluido: se adapta entre móvil y desktop
   wrap: {
     width: "min(92vw, 520px)",
   },
@@ -118,9 +128,11 @@ const styles = {
     placeItems: "center",
     marginBottom: "clamp(8px, 2.5vh, 18px)",
   },
-  // Escala con el ancho de pantalla
+  // Igual ancho que los botones: 100% del contenedor
   logoImg: {
-    height: "clamp(84px, 18vw, 140px)",
+    width: "100%",
+    height: "auto",
+    maxHeight: "180px",
     objectFit: "contain",
     borderRadius: 12,
     boxShadow: T.shadowSm,
@@ -145,15 +157,14 @@ const styles = {
     fontSize: "clamp(12px, 1.6vw, 14px)",
   },
 
-  // Pasa de 1 columna (móvil) a 2 cuando hay espacio
+  // 1 columna fija para que botón y logo compartan el mismo ancho
   btnRow: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gridTemplateColumns: "1fr",
     gap: "clamp(8px, 1.2vw, 12px)",
     marginTop: "clamp(12px, 2vh, 16px)",
   },
 
-  // Botones compactos y fluidos
   btn: {
     width: "100%",
     borderRadius: 12,
@@ -179,7 +190,6 @@ const styles = {
   btnGhost: { background: T.surface, borderColor: T.border, color: T.text },
 
   formWrap: {},
-
   formHeader: {
     display: "flex",
     alignItems: "center",
