@@ -1,6 +1,6 @@
 // src/modules/TraumaModulo.jsx
 "use client";
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 import FormularioResonancia from "../components/FormularioResonancia.jsx";
@@ -30,16 +30,6 @@ function sexoPalabra(genero = "") {
   return s === "FEMENINO" ? "mujer" : "hombre";
 }
 
-function resumenInicialTrauma(datos = {}) {
-  const sexo = sexoPalabra(datos.genero);
-  const edad = datos.edad ? `${datos.edad} años` : "";
-  const zona = datos?.dolor
-    ? `Dolor de ${datos.dolor}${datos?.lado ? " " + datos.lado : ""}`
-    : "Motivo no especificado";
-  return `${sexo} ${edad}. ${zona}. Se solicita evaluación imagenológica según clínica.`;
-}
-
-/** Detecta si texto menciona resonancia magnética */
 function isResonanciaTexto(t = "") {
   if (!t) return false;
   const s = t.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
@@ -47,45 +37,6 @@ function isResonanciaTexto(t = "") {
   if (includes.some((p) => s.includes(p))) return true;
   const regexes = [/\brm\b/i, /\brmn\b/i, /\brnm\b/i, /\bmri\b/i, /\birm\b/i];
   return regexes.some((re) => re.test(t));
-}
-
-/* === Lee secciones de puntos desde sessionStorage para cualquier zona === */
-function leerSecciones(zonaKey, ladoFallback = "") {
-  try {
-    const rawExtra = sessionStorage.getItem(`${zonaKey}_seccionesExtra`);
-    if (rawExtra) {
-      const arr = JSON.parse(rawExtra);
-      if (Array.isArray(arr) && arr.length) {
-        return arr
-          .filter((sec) => Array.isArray(sec?.lines) && sec.lines.length)
-          .map((sec) => ({
-            title:
-              sec.title ||
-              `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${ladoFallback} — puntos marcados`,
-            lines: sec.lines,
-          }));
-      }
-    }
-  } catch {}
-
-  try {
-    const rawData = sessionStorage.getItem(`${zonaKey}_data`);
-    if (rawData) {
-      const d = JSON.parse(rawData);
-      const lines = Array.isArray(d?.puntosSeleccionados) ? d.puntosSeleccionados : [];
-      if (lines.length) {
-        const lado = d?.lado || ladoFallback || "";
-        return [
-          {
-            title: `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${lado} — puntos marcados`,
-            lines,
-          },
-        ];
-      }
-    }
-  } catch {}
-
-  return [];
 }
 
 /* === Carga resúmenes por zona para enviar al backend =============== */
@@ -102,6 +53,28 @@ function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
   }
 }
 
+/* Construye/actualiza `${zona}_seccionesExtra` para que el preview liste puntos por zona/lado */
+function syncSeccionesExtra(ladoFallback = "") {
+  const zonas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
+  for (const z of zonas) {
+    try {
+      const raw = sessionStorage.getItem(`${z}_data`);
+      const d = raw ? JSON.parse(raw) : null;
+      const lines = Array.isArray(d?.puntosSeleccionados) ? d.puntosSeleccionados : [];
+      const lado = (d?.lado || ladoFallback || "").trim();
+      if (lines.length) {
+        const titulo =
+          `${z[0].toUpperCase()}${z.slice(1)} ${lado ? ` ${lado}` : ""} — puntos marcados`.trim();
+        const arr = [{ title: titulo, lines }];
+        sessionStorage.setItem(`${z}_seccionesExtra`, JSON.stringify(arr));
+      } else {
+        // Si no hay puntos, limpia el auxiliar para evitar “fantasmas”
+        sessionStorage.removeItem(`${z}_seccionesExtra`);
+      }
+    } catch {}
+  }
+}
+
 /* ================= Componente ================= */
 export default function TraumaModulo({
   initialDatos,
@@ -110,7 +83,6 @@ export default function TraumaModulo({
 }) {
   const T = getTheme();
 
-  // 👉 variables CSS del tema para usar en app.css
   const rootVars = {
     "--t-surface": T.surface ?? "#fff",
     "--t-text": T.text ?? "#1b1b1b",
@@ -129,7 +101,6 @@ export default function TraumaModulo({
   };
 
   const [datos, setDatos] = useState(initialDatos || {});
-  const [stepStarted, setStepStarted] = useState(false);
   const [loadingIA, setLoadingIA] = useState(false);
 
   const [examenesIA, setExamenesIA] = useState([]);
@@ -179,7 +150,7 @@ export default function TraumaModulo({
     const key = resolveZonaKey(dolor);
     if (key && hasMapper(key)) {
       setMapperId(key);
-      setMostrarMapper(true); // ← abrir overlay automáticamente al elegir zona
+      setMostrarMapper(true); // overlay automático al elegir zona
     }
   };
 
@@ -195,7 +166,6 @@ export default function TraumaModulo({
       setExamenesIA(Array.isArray(ex) ? ex : []);
       setDiagnosticoIA(sessionStorage.getItem("trauma_ia_diagnostico") || "");
       setJustificacionIA(sessionStorage.getItem("trauma_ia_justificacion") || "");
-      if (ex && ex.length) setStepStarted(true);
     } catch {}
 
     try {
@@ -248,18 +218,7 @@ export default function TraumaModulo({
     };
   }, []);
 
-  const seccionesMarcadores = useMemo(() => {
-    const lado = datos?.lado || "";
-    const zonas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
-    const out = [];
-    for (const z of zonas) {
-      const secs = leerSecciones(z, lado);
-      if (secs.length) out.push(...secs);
-    }
-    return out;
-  }, [datos?.lado]);
-
-  /* -------- IA -------- */
+  /* -------- “Continuar” → guarda todo lo necesario y abre preview en ventana nueva -------- */
   const handleContinuar = async () => {
     try {
       setLoadingIA(true);
@@ -274,6 +233,10 @@ export default function TraumaModulo({
 
       const edadNum = Number(datos.edad) || datos.edad;
 
+      // Asegurar que el preview tenga las secciones por zona/lado
+      syncSeccionesExtra(datos?.lado);
+
+      // (Opcional) mandar marcadores al backend si aplica
       const lado = datos?.lado || "";
       const rodillaMarcadores = loadMarcadoresPorZona("rodilla", lado);
       const manoMarcadores = loadMarcadoresPorZona("mano", lado);
@@ -298,44 +261,38 @@ export default function TraumaModulo({
         tobilloMarcadores,
       };
 
+      // Si no necesitas IA ahora, puedes comentar este bloque de fetch
       const resp = await fetch(`${BACKEND_BASE}/ia-trauma`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      }).catch(() => null);
 
-      const j = await resp.json();
-      const ex = Array.isArray(j?.examenes) ? j.examenes.slice(0, 4) : [];
-      const dx = typeof j?.diagnostico === "string" ? j.diagnostico : "";
-      const just = typeof j?.justificacion === "string" ? j.justificacion : j?.resumen || "";
-
-      try {
-        sessionStorage.setItem("trauma_ia_examenes", JSON.stringify(ex));
-        sessionStorage.setItem("trauma_ia_diagnostico", dx || "");
-        sessionStorage.setItem("trauma_ia_justificacion", just || "");
-      } catch {}
-
-      setExamenesIA(ex);
-      setDiagnosticoIA(dx);
-      setJustificacionIA(just);
-
-      const textoEx = ex.join("\n");
-      let solicitaRM = false;
-      if (typeof onDetectarResonancia === "function") {
-        solicitaRM = await onDetectarResonancia({ ...datos, edad: edadNum, examen: textoEx });
-      } else {
-        solicitaRM = isResonanciaTexto(textoEx);
+      if (resp && resp.ok) {
+        const j = await resp.json();
+        const ex = Array.isArray(j?.examenes) ? j.examenes.slice(0, 4) : [];
+        const dx = typeof j?.diagnostico === "string" ? j.diagnostico : "";
+        const just = typeof j?.justificacion === "string" ? j.justificacion : j?.resumen || "";
+        try {
+          sessionStorage.setItem("trauma_ia_examenes", JSON.stringify(ex));
+          sessionStorage.setItem("trauma_ia_diagnostico", dx || "");
+          sessionStorage.setItem("trauma_ia_justificacion", just || "");
+        } catch {}
+        const textoEx = ex.join("\n");
+        const solicitaRM =
+          typeof onDetectarResonancia === "function"
+            ? await onDetectarResonancia({ ...datos, edad: edadNum, examen: textoEx })
+            : isResonanciaTexto(textoEx);
+        setRequiereRM(!!solicitaRM);
+        setBloqueaRM(false);
+        setResonanciaChecklist(null);
+        setResonanciaResumenTexto("");
       }
-      setRequiereRM(!!solicitaRM);
-      setBloqueaRM(false);
-      setResonanciaChecklist(null);
-      setResonanciaResumenTexto("");
 
-      // ✅ abrir preview en ventana/pestaña nueva
+      // 👉 Preview solo en ventana nueva
       window.open("/preview-orden?scope=trauma", "_blank", "noopener,noreferrer");
     } catch {
-      alert("No fue posible obtener la información de IA (Trauma). Intenta nuevamente.");
+      alert("No fue posible continuar. Intenta nuevamente.");
     } finally {
       setLoadingIA(false);
     }
@@ -415,6 +372,9 @@ export default function TraumaModulo({
         sessionStorage.setItem("modulo", "trauma");
         sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
       } catch {}
+
+      // Asegurar que el preview tenga las secciones listas
+      syncSeccionesExtra(datos?.lado);
 
       const lado = datos?.lado || "";
       const rodillaMarcadores = loadMarcadoresPorZona("rodilla", lado);
@@ -570,11 +530,9 @@ export default function TraumaModulo({
     }
   };
 
-  const usarIA = Array.isArray(examenesIA) && examenesIA.length > 0;
-
   return (
     <div className="trauma-card" style={rootVars}>
-      {/* TÍTULO ACTUALIZADO */}
+      {/* TÍTULO */}
       <h3 className="trauma-title">Identifica tu punto de dolor</h3>
 
       {/* BLOQUE SELECCIÓN (esquema + botón mapper) */}
@@ -611,35 +569,7 @@ export default function TraumaModulo({
         </div>
       </>
 
-      {/* Datos del paciente (mostrar todo) */}
-      <div className="trauma-info">
-        <div>
-          <strong>Paciente:</strong> {datos?.nombre || "—"}
-        </div>
-        <div>
-          <strong>RUT:</strong> {datos?.rut || "—"}
-        </div>
-        <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
-        <div><strong>Género:</strong> {datos?.genero || "—"}</div>
-        <div><strong>Dolor:</strong> {datos?.dolor || "—"}</div>
-        <div><strong>Lado:</strong> {datos?.lado || "—"}</div>
-      </div>
-
-      {/* Resumen inicial y secciones de puntos */}
-      <>
-        <div className="trauma-mono mt-6">{resumenInicialTrauma(datos)}</div>
-
-        {seccionesMarcadores.map((sec, idx) => (
-          <div className="trauma-block" key={`sec-${idx}`}>
-            <strong>{sec.title}</strong>
-            <ul className="mt-6">
-              {sec.lines.map((l, i) => <li key={i}>{l}</li>)}
-            </ul>
-          </div>
-        ))}
-      </>
-
-      {/* CTA → IA (abre ventana nueva con preview) */}
+      {/* SIN PREVIEW AQUÍ — solo botón que abre la preview en ventana nueva */}
       <button
         className="trauma-btn primary"
         onClick={handleContinuar}
@@ -647,7 +577,7 @@ export default function TraumaModulo({
         aria-busy={loadingIA}
         title={!datos?.dolor ? "Selecciona una zona primero" : ""}
       >
-        {loadingIA ? "Analizando con IA…" : "Continuar"}
+        {loadingIA ? "Procesando…" : "Continuar"}
       </button>
 
       {/* Overlay Mapper */}
@@ -658,14 +588,18 @@ export default function TraumaModulo({
               mapperId={mapperId}
               ladoInicial={(datos?.lado || "").toLowerCase().includes("izq") ? "izquierda" : "derecha"}
               vistaInicial={mapperId === "mano" ? (vista === "anterior" ? "palmar" : "dorsal") : vista}
-              onSave={() => setMostrarMapper(false)}
+              onSave={() => {
+                // El mapper ya guarda su estado en sessionStorage; aquí consolidamos para el preview
+                syncSeccionesExtra(datos?.lado);
+                setMostrarMapper(false);
+              }}
               onClose={() => setMostrarMapper(false)}
             />
           </div>
         </div>
       )}
 
-      {/* Modal RM */}
+      {/* Modal RM (no es preview de orden) */}
       {showRM && (
         <div className="trauma-modal-backdrop" role="dialog" aria-modal="true">
           <div className="trauma-modal-card">
