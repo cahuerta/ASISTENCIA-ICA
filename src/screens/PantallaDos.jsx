@@ -1,6 +1,6 @@
 // src/screens/PantallaDos.jsx
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "../app.css";
 import { getTheme } from "../theme.js";
 
@@ -13,11 +13,16 @@ import IAModulo from "../modules/IAModulo.jsx";
 /**
  * PantallaDos
  * - Muestra solo los botones de módulos.
- * - Sin módulo por defecto.
- * - Al elegir un módulo, PantallaDos deja de renderizar su UI y devuelve el módulo directamente.
- * - Los módulos son autónomos; solo se pasa initialDatos (si hay).
+ * - Sin módulo por defecto, excepto cuando volvemos del pago (?pago=ok) y ya sabemos
+ *   qué módulo estaba activo: en ese caso abrimos automáticamente ese módulo para
+ *   que se monte y habilite la descarga.
  */
-export default function PantallaDos({ initialDatos }) {
+export default function PantallaDos({
+  initialDatos,
+  pagoOk = false,
+  idPago = "",
+  moduloActual = null,
+}) {
   const T = getTheme();
 
   const cssVars = {
@@ -28,9 +33,6 @@ export default function PantallaDos({ initialDatos }) {
     "--overlay": T.overlay,
   };
 
-  // Sin valor por defecto
-  const [modulo, setModulo] = useState(null); // "trauma" | "preop" | "generales" | "ia" | null
-
   // Datos persistidos (o vienen por props)
   const datos = initialDatos || (() => {
     try {
@@ -39,11 +41,38 @@ export default function PantallaDos({ initialDatos }) {
     } catch { return null; }
   })();
 
+  // ✅ Auto-abrir el módulo correcto SOLO cuando venimos del pago (pagoOk o idPago presente)
+  const [modulo, setModulo] = useState(() => {
+    try {
+      const url = new URLSearchParams(window.location.search);
+      const returnedOk = url.get("pago") === "ok";
+      const returning = returnedOk || !!pagoOk || !!idPago;
+      const remembered = moduloActual || sessionStorage.getItem("modulo");
+      return returning && remembered ? remembered : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    // Si aún no hay módulo montado y detectamos retorno de pago ahora, abrir el recordado
+    if (!modulo) {
+      try {
+        const url = new URLSearchParams(window.location.search);
+        const returnedOk = url.get("pago") === "ok";
+        const returning = returnedOk || !!pagoOk || !!idPago;
+        const remembered = moduloActual || sessionStorage.getItem("modulo");
+        if (returning && remembered) setModulo(remembered);
+      } catch {}
+    }
+  }, [modulo, pagoOk, idPago, moduloActual]);
+
   // 🔀 En cuanto hay selección, devolver SOLO ese módulo (PantallaDos “desaparece”).
-  if (modulo === "trauma")    return <TraumaModulo    initialDatos={datos || {}} />;
-  if (modulo === "preop")     return <PreopModulo     initialDatos={datos || {}} />;
-  if (modulo === "generales") return <GeneralesModulo initialDatos={datos || {}} />;
-  if (modulo === "ia")        return <IAModulo        initialDatos={datos || {}} />;
+  const mountProps = { initialDatos: datos || {} };
+  if (modulo === "trauma")    return <TraumaModulo    {...mountProps} />;
+  if (modulo === "preop")     return <PreopModulo     {...mountProps} />;
+  if (modulo === "generales") return <GeneralesModulo {...mountProps} />;
+  if (modulo === "ia")        return <IAModulo        {...mountProps} />;
 
   // UI de selección (sin módulo activo)
   return (
@@ -61,7 +90,10 @@ export default function PantallaDos({ initialDatos }) {
               type="button"
               className="btn"
               style={styles(T).btn}
-              onClick={() => setModulo(b.key)}
+              onClick={() => {
+                try { sessionStorage.setItem("modulo", b.key); } catch {}
+                setModulo(b.key);
+              }}
               aria-label={`Abrir ${b.label}`}
             >
               {b.label}
