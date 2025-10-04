@@ -223,6 +223,8 @@ export default function GeneralesModulo({ initialDatos }) {
       const idPago = ensureGeneralesIdPago();
       sessionStorage.setItem("modulo", "generales");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
+      // (opcional) asegurar retorno a PantallaTres
+      sessionStorage.setItem("pantalla", "tres");
 
       const examenPaciente = (examenLibre || "").trim();
       const examenesFinales = [
@@ -435,7 +437,7 @@ export default function GeneralesModulo({ initialDatos }) {
         <div><strong>Género:</strong> {datos?.genero || "—"}</div>
       </div>
 
-      {/* Primer preview: SOLO resumen (se muestra solo si NO está abierto el formulario de comorbilidades) */}
+      {/* Primer preview: SOLO resumen (si NO está abierto el formulario de comorbilidades) */}
       {!stepStarted && !mostrarComorbilidades && (
         <>
           <div style={{ ...styles.mono, marginTop: 6 }}>
@@ -454,7 +456,7 @@ export default function GeneralesModulo({ initialDatos }) {
         </>
       )}
 
-      {/* Segundo preview: IA + texto libre + pago (igual que antes) */}
+      {/* Segundo preview: IA + texto libre + pago */}
       {stepStarted && (
         <>
           {prettyComorb(comorbilidades).length > 0 && (
@@ -502,55 +504,13 @@ export default function GeneralesModulo({ initialDatos }) {
           )}
 
           {!pagoRealizado ? (
-            <>
-              <button
-                className="btn"
-                style={{ ...styles.btnPrimary, marginTop: 12 }}
-                onClick={handlePagarGenerales}
-              >
-                Pagar ahora (Generales)
-              </button>
-              <button
-                className="btn"
-                style={{ ...styles.btnSecondary, marginTop: 8 }}
-                onClick={async () => {
-                  const idPago = `generales_guest_${Date.now()}`;
-                  const datosGuest = { nombre: "Guest", rut: "99999999-9", edad: 60, genero: "MASCULINO" };
-
-                  sessionStorage.setItem("idPago", idPago);
-                  sessionStorage.setItem("modulo", "generales");
-                  sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
-                  sessionStorage.setItem("generales_step", "2"); // mantener segundo preview
-
-                  const examenPaciente = (examenLibre || "").trim();
-                  const examenesFinales = [
-                    ...(Array.isArray(examenesIA) ? examenesIA : []),
-                    ...(examenPaciente ? [examenPaciente] : []),
-                  ];
-
-                  await fetch(`${BACKEND_BASE}/guardar-datos-generales`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      idPago,
-                      datosPaciente: datosGuest,
-                      comorbilidades,
-                      examenesIA: examenesFinales,
-                      informeIA,
-                      examenLibre: examenPaciente,
-                    }),
-                  });
-
-                  const url = new URL(window.location.href);
-                  url.searchParams.set("pago", "ok");
-                  url.searchParams.set("idPago", idPago);
-                  window.location.href = url.toString();
-                }}
-                title="Simular retorno pagado (solo pruebas)"
-              >
-                Simular Pago (Guest)
-              </button>
-            </>
+            <button
+              className="btn"
+              style={{ ...styles.btnPrimary, marginTop: 12 }}
+              onClick={handlePagarGenerales}
+            >
+              Pagar ahora (Generales)
+            </button>
           ) : (
             <button
               className="btn"
