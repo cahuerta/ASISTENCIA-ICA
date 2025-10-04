@@ -63,7 +63,9 @@ function leerSecciones(zonaKey, ladoFallback = "") {
         return arr
           .filter((sec) => Array.isArray(sec?.lines) && sec.lines.length)
           .map((sec) => ({
-            title: sec.title || `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${ladoFallback} — puntos marcados`,
+            title:
+              sec.title ||
+              `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${ladoFallback} — puntos marcados`,
             lines: sec.lines,
           }));
       }
@@ -110,7 +112,7 @@ function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
 export default function TraumaModulo({
   initialDatos,
   onDetectarResonancia, // (datos)-> boolean | Promise<boolean>
-  resumenResoTexto,     // (data)-> string (opcional para personalizar resumen)
+  resumenResoTexto, // (data)-> string (opcional para personalizar resumen)
 }) {
   const T = getTheme();
   const S = makeStyles(T);
@@ -147,41 +149,48 @@ export default function TraumaModulo({
   useEffect(() => {
     // Aviso legal: si no está aceptado, mostrar overlay
     const avisoOk = (() => {
-      try { return sessionStorage.getItem("trauma_aviso_ok") === "1"; } catch { return false; }
+      try {
+        return sessionStorage.getItem("trauma_aviso_ok") === "1";
+      } catch {
+        return false;
+      }
     })();
-    if (!avisoOk) {
-      setMostrarAviso(true);
-    }
+    if (!avisoOk) setMostrarAviso(true);
 
+    // Datos básicos
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
     } catch {}
 
+    // IA memorizada (NO autoactivar step, salvo retorno de pago OK + idPago)
+    let ex = [];
+    let dx = "";
+    let just = "";
     try {
-      const ex = JSON.parse(sessionStorage.getItem("trauma_ia_examenes") || "[]");
+      ex = JSON.parse(sessionStorage.getItem("trauma_ia_examenes") || "[]");
+      dx = sessionStorage.getItem("trauma_ia_diagnostico") || "";
+      just = sessionStorage.getItem("trauma_ia_justificacion") || "";
       setExamenesIA(Array.isArray(ex) ? ex : []);
-      setDiagnosticoIA(sessionStorage.getItem("trauma_ia_diagnostico") || "");
-      setJustificacionIA(sessionStorage.getItem("trauma_ia_justificacion") || "");
-      if (ex && ex.length) setStepStarted(true);
+      setDiagnosticoIA(dx);
+      setJustificacionIA(just);
     } catch {}
 
-    // restaurar checklist/alternativa si existían
-    try {
-      const ck = sessionStorage.getItem("resonanciaChecklist");
-      const rs = sessionStorage.getItem("resonanciaResumenTexto");
-      const alt = sessionStorage.getItem("ordenAlternativa");
-      if (ck) setResonanciaChecklist(JSON.parse(ck));
-      if (rs) setResonanciaResumenTexto(rs);
-      if (alt) setOrdenAlternativa(alt);
-    } catch {}
-
-    // retorno de pago
+    // Retorno de pago
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
-    const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
+    const idPago =
+      params.get("idPago") || (() => { try { return sessionStorage.getItem("idPago"); } catch { return ""; } })();
+
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
+
+      // Solo pasar directo a preview IA si hay IA en memoria (examenes)
+      if (Array.isArray(ex) && ex.length > 0) {
+        setStepStarted(true);
+      }
+
+      // Polling de compatibilidad
       if (pollerRef.current) clearInterval(pollerRef.current);
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
@@ -208,7 +217,9 @@ export default function TraumaModulo({
   // Handlers Aviso Legal
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
-    try { sessionStorage.setItem("trauma_aviso_ok", "1"); } catch {}
+    try {
+      sessionStorage.setItem("trauma_aviso_ok", "1");
+    } catch {}
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
@@ -267,7 +278,7 @@ export default function TraumaModulo({
           codo: codoMarcadores,
           tobillo: tobilloMarcadores,
         },
-        // Campos sueltos opcionales (por si quieres leerlos explícitos en backend):
+        // Campos sueltos opcionales:
         manoMarcadores,
         hombroMarcadores,
         codoMarcadores,
@@ -331,9 +342,7 @@ export default function TraumaModulo({
     setBloqueaRM(false);
 
     const resumen =
-      typeof resumenResoTexto === "function"
-        ? resumenResoTexto(form)
-        : construirResumenRM(form);
+      typeof resumenResoTexto === "function" ? resumenResoTexto(form) : construirResumenRM(form);
 
     setResonanciaChecklist(form);
     setResonanciaResumenTexto(resumen);
@@ -626,7 +635,7 @@ export default function TraumaModulo({
         </button>
       )}
 
-      {/* Segundo preview: IA + confirmación/pago */}
+      {/* Segundo preview: IA + confirmación/pago/descarga */}
       {stepStarted && (
         <>
           <div style={S.block}>
@@ -696,10 +705,7 @@ export default function TraumaModulo({
 
                       sessionStorage.setItem("idPago", idPago);
                       sessionStorage.setItem("modulo", "trauma");
-                      sessionStorage.setItem(
-                        "datosPacienteJSON",
-                        JSON.stringify(datosGuest)
-                      );
+                      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
 
                       await fetch(`${BACKEND_BASE}/guardar-datos`, {
                         method: "POST",
