@@ -130,7 +130,6 @@ export default function TraumaModulo({
 
   const [datos, setDatos] = useState(initialDatos || {});
   const [stepStarted, setStepStarted] = useState(false);
-  const [isPreview, setIsPreview] = useState(false); // ← preview en “otra pantalla”
   const [loadingIA, setLoadingIA] = useState(false);
 
   const [examenesIA, setExamenesIA] = useState([]);
@@ -184,7 +183,7 @@ export default function TraumaModulo({
     }
   };
 
-  /* Montaje: restaurar datos, detectar preview, manejar retorno de pago */
+  /* Montaje: restaurar datos y manejar retorno de pago */
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
@@ -206,12 +205,6 @@ export default function TraumaModulo({
       if (ck) setResonanciaChecklist(JSON.parse(ck));
       if (rs) setResonanciaResumenTexto(rs);
       if (alt) setOrdenAlternativa(alt);
-    } catch {}
-
-    // Detectar modo preview por query param
-    try {
-      const q = new URLSearchParams(window.location.search);
-      if (q.get("preview") === "1") setIsPreview(true);
     } catch {}
 
     // Retorno de pago
@@ -584,43 +577,41 @@ export default function TraumaModulo({
       {/* TÍTULO ACTUALIZADO */}
       <h3 className="trauma-title">Identifica tu punto de dolor</h3>
 
-      {/* BLOQUE SELECCIÓN (esquema + botón mapper). Oculto en preview */}
-      {!isPreview && (
-        <>
-          <EsquemaToggleTabs vista={vista} onChange={setVista} />
-          {vista === "anterior" ? (
-            <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={420} />
+      {/* BLOQUE SELECCIÓN (esquema + botón mapper) */}
+      <>
+        <EsquemaToggleTabs vista={vista} onChange={setVista} />
+        {vista === "anterior" ? (
+          <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={420} />
+        ) : (
+          <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={420} />
+        )}
+
+        <div className="trauma-hint mt-6">
+          {datos?.dolor ? (
+            <>
+              Zona seleccionada:{" "}
+              <strong>
+                {datos.dolor}
+                {datos.lado ? ` — ${datos.lado}` : ""}
+              </strong>
+              {mapperId && (
+                <button
+                  type="button"
+                  className="trauma-btn ghost"
+                  style={{ marginLeft: 8 }}
+                  onClick={() => setMostrarMapper(true)}
+                >
+                  Marcar puntos
+                </button>
+              )}
+            </>
           ) : (
-            <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={420} />
+            "Toca una zona en el esquema para continuar."
           )}
+        </div>
+      </>
 
-          <div className="trauma-hint mt-6">
-            {datos?.dolor ? (
-              <>
-                Zona seleccionada:{" "}
-                <strong>
-                  {datos.dolor}
-                  {datos.lado ? ` — ${datos.lado}` : ""}
-                </strong>
-                {mapperId && (
-                  <button
-                    type="button"
-                    className="trauma-btn ghost"
-                    style={{ marginLeft: 8 }}
-                    onClick={() => setMostrarMapper(true)}
-                  >
-                    Marcar puntos
-                  </button>
-                )}
-              </>
-            ) : (
-              "Toca una zona en el esquema para continuar."
-            )}
-          </div>
-        </>
-      )}
-
-      {/* Datos del paciente (siempre Paciente/RUT; extras solo fuera de preview) */}
+      {/* Datos del paciente (mostrar todo) */}
       <div className="trauma-info">
         <div>
           <strong>Paciente:</strong> {datos?.nombre || "—"}
@@ -628,109 +619,36 @@ export default function TraumaModulo({
         <div>
           <strong>RUT:</strong> {datos?.rut || "—"}
         </div>
-
-        {!isPreview && (
-          <>
-            <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
-            <div><strong>Género:</strong> {datos?.genero || "—"}</div>
-            <div><strong>Dolor:</strong> {datos?.dolor || "—"}</div>
-            <div><strong>Lado:</strong> {datos?.lado || "—"}</div>
-          </>
-        )}
+        <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
+        <div><strong>Género:</strong> {datos?.genero || "—"}</div>
+        <div><strong>Dolor:</strong> {datos?.dolor || "—"}</div>
+        <div><strong>Lado:</strong> {datos?.lado || "—"}</div>
       </div>
 
-      {/* Resumen inicial y secciones de puntos: no en preview */}
-      {!isPreview && (
-        <>
-          <div className="trauma-mono mt-6">{resumenInicialTrauma(datos)}</div>
+      {/* Resumen inicial y secciones de puntos */}
+      <>
+        <div className="trauma-mono mt-6">{resumenInicialTrauma(datos)}</div>
 
-          {seccionesMarcadores.map((sec, idx) => (
-            <div className="trauma-block" key={`sec-${idx}`}>
-              <strong>{sec.title}</strong>
-              <ul className="mt-6">
-                {sec.lines.map((l, i) => <li key={i}>{l}</li>)}
-              </ul>
-            </div>
-          ))}
-        </>
-      )}
-
-      {/* CTA para pasar a IA (solo antes del preview) */}
-      {!isPreview && (
-        <button
-          className="trauma-btn primary"
-          onClick={handleContinuar}
-          disabled={loadingIA || !datos?.dolor}
-          aria-busy={loadingIA}
-          title={!datos?.dolor ? "Selecciona una zona primero" : ""}
-        >
-          {loadingIA ? "Analizando con IA…" : "Continuar"}
-        </button>
-      )}
-
-      {/* PREVIEW LIMPIO */}
-      {isPreview && (
-        <>
-          <div className="trauma-block">
-            <strong>Diagnóstico presuntivo:</strong>
-            <div className="trauma-mono mt-6">{diagnosticoIA || "—"}</div>
+        {seccionesMarcadores.map((sec, idx) => (
+          <div className="trauma-block" key={`sec-${idx}`}>
+            <strong>{sec.title}</strong>
+            <ul className="mt-6">
+              {sec.lines.map((l, i) => <li key={i}>{l}</li>)}
+            </ul>
           </div>
+        ))}
+      </>
 
-          <div className="trauma-block">
-            <strong>Exámenes sugeridos (IA):</strong>
-            {usarIA ? (
-              <ul className="mt-6">
-                {examenesIA.map((e, i) => <li key={`${e}-${i}`}>{e}</li>)}
-              </ul>
-            ) : (
-              <div className="trauma-hint">Aún no hay lista generada por IA.</div>
-            )}
-          </div>
-
-          {justificacionIA && (
-            <div className="trauma-block">
-              <strong>Justificación (≈100 palabras):</strong>
-              <div className="trauma-mono mt-6">{justificacionIA}</div>
-            </div>
-          )}
-
-          {requiereRM && !resonanciaChecklist && !bloqueaRM && (
-            <div className="trauma-hint">
-              La IA sugiere Resonancia Magnética. Presiona “Continuar” para completar el checklist de seguridad.
-            </div>
-          )}
-          {bloqueaRM && (
-            <div className="trauma-hint">
-              RM contraindicada por checklist. {ordenAlternativa || "Se sugiere alternativa."}
-            </div>
-          )}
-
-          {!pagoRealizado ? (
-            <>
-              {requiereRM && !resonanciaChecklist && !bloqueaRM && (
-                <button className="trauma-btn primary mt-12" onClick={lanzarChecklistRM}>
-                  Continuar
-                </button>
-              )}
-
-              {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
-                <button className="trauma-btn primary mt-12" onClick={handlePagar}>
-                  Pagar ahora (Trauma)
-                </button>
-              )}
-            </>
-          ) : (
-            <button
-              className="trauma-btn primary mt-12"
-              onClick={handleDescargar}
-              disabled={descargando}
-              title={mensajeDescarga || "Verificar y descargar"}
-            >
-              {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
-            </button>
-          )}
-        </>
-      )}
+      {/* CTA → IA (abre ventana nueva con preview) */}
+      <button
+        className="trauma-btn primary"
+        onClick={handleContinuar}
+        disabled={loadingIA || !datos?.dolor}
+        aria-busy={loadingIA}
+        title={!datos?.dolor ? "Selecciona una zona primero" : ""}
+      >
+        {loadingIA ? "Analizando con IA…" : "Continuar"}
+      </button>
 
       {/* Overlay Mapper */}
       {mostrarMapper && mapperId && (
