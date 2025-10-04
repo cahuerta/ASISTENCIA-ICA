@@ -83,7 +83,7 @@ export async function crearPagoKhipu({ idPago, datosPaciente, modulo = "trauma",
   return data.url;
 }
 
-/* ==================== GUEST integrado ==================== */
+/* ============ Detección de “guest” (SOLO para marcar modoGuest en backend) ============ */
 const GUEST_PERFIL = {
   nombre: "guest",
   rut: "11.111.111-1",
@@ -103,28 +103,6 @@ function esGuest(datos) {
   );
 }
 
-async function simularPagoGuest(datosPaciente, modulo) {
-  const idPago = generarIdPago(`${modulo}_guest`);
-
-  if (typeof window !== "undefined") {
-    sessionStorage.setItem("idPago", idPago);
-    sessionStorage.setItem("modulo", modulo);
-    sessionStorage.setItem(
-      "datosPacienteJSON",
-      JSON.stringify({ ...datosPaciente, edad: Number(datosPaciente?.edad) })
-    );
-  }
-
-  // Guardamos datos para permitir PDF/consulta posterior
-  await guardarDatos(idPago, { ...datosPaciente, edad: Number(datosPaciente?.edad) }, modulo);
-
-  // Redirige como si el pago hubiese sido OK (igual a tus simuladores por módulo)
-  const url = new URL(window.location.href);
-  url.searchParams.set("pago", "ok");
-  url.searchParams.set("idPago", idPago);
-  window.location.href = url.toString();
-}
-
 /* ==================== Flujo principal ==================== */
 export async function irAPagoKhipu(datosPaciente, opts = {}) {
   const modulo = (
@@ -132,12 +110,6 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
     (typeof window !== "undefined" && sessionStorage.getItem("modulo")) ||
     "trauma"
   ).toLowerCase();
-
-  // GUEST: si coincide EXACTAMENTE con el perfil guest → simular pago y salir
-  if (esGuest(datosPaciente)) {
-    await simularPagoGuest(datosPaciente, modulo);
-    return;
-  }
 
   const edadNum = Number(datosPaciente?.edad);
 
@@ -157,7 +129,11 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
 
   const idPago =
     opts?.idPago ||
-    generarIdPago(modulo === "preop" ? "preop" : modulo === "generales" ? "generales" : "pago");
+    generarIdPago(
+      modulo === "preop" ? "preop" :
+      modulo === "generales" ? "generales" :
+      "pago"
+    );
 
   if (typeof window !== "undefined") {
     sessionStorage.setItem("idPago", idPago);
@@ -166,15 +142,21 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
       "datosPacienteJSON",
       JSON.stringify({ ...datosPaciente, edad: edadNum })
     );
+    // Ayuda a que la app vuelva a la preview tras el retorno
+    sessionStorage.setItem("pantalla", "tres");
   }
 
+  // Guardar datos antes de ir a Khipu
   await guardarDatos(idPago, { ...datosPaciente, edad: edadNum }, modulo);
+
+  // Si es “guest”, NO simulamos: pedimos al backend modoGuest=true
+  const modoGuest = esGuest(datosPaciente);
 
   const urlPago = await crearPagoKhipu({
     idPago,
     datosPaciente: { ...datosPaciente, edad: edadNum },
     modulo,
-    modoGuest: false,
+    modoGuest,
   });
 
   window.location.href = urlPago;
