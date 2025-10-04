@@ -1,26 +1,18 @@
 // src/modules/TraumaModulo.jsx
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 import FormularioResonancia from "../components/FormularioResonancia.jsx";
-
-/* ESQUEMA + MAPPER DINÁMICO */
-import EsquemaAnterior from "../EsquemaAnterior.jsx";
-import EsquemaPosterior from "../EsquemaPosterior.jsx";
-import EsquemaToggleTabs from "../EsquemaToggleTabs.jsx";
-import GenericMapper from "../mappers/GenericMapper.jsx";
-import { hasMapper, resolveZonaKey } from "../mappers/mapperRegistry.js";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
 /* ================= Helpers ================= */
 function ensureTraumaIdPago() {
-  let id = null;
-  try { id = sessionStorage.getItem("idPago"); } catch {}
+  let id = sessionStorage.getItem("idPago");
   if (!id || !/^pago_|^trauma_/.test(id)) {
     id = `trauma_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-    try { sessionStorage.setItem("idPago", id); } catch {}
+    sessionStorage.setItem("idPago", id);
   }
   return id;
 }
@@ -30,163 +22,139 @@ function sexoPalabra(genero = "") {
   return s === "FEMENINO" ? "mujer" : "hombre";
 }
 
-function normalizeSide(lado = "") {
-  const l = String(lado).toLowerCase();
-  if (l.includes("izq")) return "izquierda";
-  if (l.includes("der")) return "derecha";
-  if (l.includes("iz")) return "izquierda";
-  if (l.includes("de")) return "derecha";
-  if (l.includes("izquierda")) return "izquierda";
-  if (l.includes("derecha")) return "derecha";
-  return "";
+function resumenInicialTrauma(datos = {}) {
+  const sexo = sexoPalabra(datos.genero);
+  const edad = datos.edad ? `${datos.edad} años` : "";
+  const zona =
+    datos?.dolor
+      ? `Dolor de ${datos.dolor}${datos?.lado ? " " + datos.lado : ""}`
+      : "Motivo no especificado";
+  return `${sexo} ${edad}. ${zona}. Se solicita evaluación imagenológica según clínica.`;
 }
 
-/* === Carga resúmenes por zona para enviar al backend (si se requiere) === */
+/** Normaliza y detecta si un texto hace referencia a resonancia magnética */
+function isResonanciaTexto(t = "") {
+  if (!t) return false;
+  const s = t
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+
+  const includes = [
+    "resonancia magnetica",
+    "resonancia nuclear",
+    "magnetic resonance",
+  ];
+  if (includes.some((p) => s.includes(p))) return true;
+
+  const regexes = [/\brm\b/i, /\brmn\b/i, /\brnm\b/i, /\bmri\b/i, /\birm\b/i];
+  return regexes.some((re) => re.test(t));
+}
+
+/* === Lee y arma las secciones de puntos desde sessionStorage para cualquier zona === */
+function leerSecciones(zonaKey, ladoFallback = "") {
+  // 1) Preferir *_seccionesExtra (tal como guardan Mano/Hombro/Rodilla nuevos)
+  try {
+    const rawExtra = sessionStorage.getItem(`${zonaKey}_seccionesExtra`);
+    if (rawExtra) {
+      const arr = JSON.parse(rawExtra);
+      if (Array.isArray(arr) && arr.length) {
+        return arr
+          .filter((sec) => Array.isArray(sec?.lines) && sec.lines.length)
+          .map((sec) => ({
+            title: sec.title || `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${ladoFallback} — puntos marcados`,
+            lines: sec.lines,
+          }));
+      }
+    }
+  } catch {}
+
+  // 2) Fallback a *_data → puntosSeleccionados
+  try {
+    const rawData = sessionStorage.getItem(`${zonaKey}_data`);
+    if (rawData) {
+      const d = JSON.parse(rawData);
+      const lines = Array.isArray(d?.puntosSeleccionados) ? d.puntosSeleccionados : [];
+      if (lines.length) {
+        const lado = d?.lado || ladoFallback || "";
+        return [
+          {
+            title: `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${lado} — puntos marcados`,
+            lines,
+          },
+        ];
+      }
+    }
+  } catch {}
+
+  // 3) Nada
+  return [];
+}
+
+/* === Carga los "resumenes" por zona para enviar al backend ==================== */
 function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
-  const side = normalizeSide(ladoTexto);
+  const lado = (ladoTexto || "").toLowerCase();
+  const side =
+    lado.includes("izquierda") ? "izquierda" : lado.includes("derecha") ? "derecha" : "";
   if (!side) return null;
   try {
     const raw = sessionStorage.getItem(`${zonaKey}_resumen_${side}`);
-    return raw ? JSON.parse(raw) : null;
+    return raw ? JSON.parse(raw) : null; // {palmar:[], dorsal:[]} o {frontal:[], posterior:[]} etc.
   } catch {
     return null;
-  }
-}
-
-/* Construye/actualiza `${zona}_seccionesExtra` para que el preview liste puntos por zona/lado */
-function syncSeccionesExtra(ladoFallback = "") {
-  const zonas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
-  for (const z of zonas) {
-    try {
-      const raw = sessionStorage.getItem(`${z}_data`);
-      const d = raw ? JSON.parse(raw) : null;
-      const lines = Array.isArray(d?.puntosSeleccionados) ? d.puntosSeleccionados : [];
-      const lado = (d?.lado || ladoFallback || "").trim();
-      if (lines.length) {
-        const titulo =
-          `${z[0].toUpperCase()}${z.slice(1)}${lado ? ` ${lado}` : ""} — puntos marcados`.trim();
-        const arr = [{ title: titulo, lines }];
-        sessionStorage.setItem(`${z}_seccionesExtra`, JSON.stringify(arr));
-      } else {
-        sessionStorage.removeItem(`${z}_seccionesExtra`);
-      }
-    } catch {}
-  }
-}
-
-/* NUEVO: persistir la salida del mapper en las claves estándar que usan PantallaTres y el backend */
-function persistMapperToStorage({ zonaKey, lado, puntos, resumen }) {
-  if (!zonaKey) return;
-  const side = normalizeSide(lado);
-  // Deducir líneas
-  let lines = [];
-  if (Array.isArray(puntos)) lines = puntos;
-  else if (Array.isArray(resumen?.lines)) lines = resumen.lines;
-  else if (Array.isArray(resumen)) lines = resumen;
-
-  // Guardar `${zona}_data` (usado por PantallaTres -> secciones)
-  const data = { lado: lado || "", puntosSeleccionados: lines };
-  try {
-    sessionStorage.setItem(`${zonaKey}_data`, JSON.stringify(data));
-  } catch {}
-
-  // Guardar `${zona}_seccionesExtra` (preview inmediato)
-  try {
-    const title =
-      `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)}${lado ? ` ${lado}` : ""} — puntos marcados`;
-    const secciones = [{ title, lines }];
-    sessionStorage.setItem(`${zonaKey}_seccionesExtra`, JSON.stringify(secciones));
-  } catch {}
-
-  // Guardar `${zona}_resumen_{izquierda|derecha}` (usado al enviar al backend)
-  if (side) {
-    try {
-      const resumenObj = Array.isArray(lines) ? { lines } : { lines: [] };
-      sessionStorage.setItem(`${zonaKey}_resumen_${side}`, JSON.stringify(resumenObj));
-    } catch {}
   }
 }
 
 /* ================= Componente ================= */
 export default function TraumaModulo({
   initialDatos,
-  resumenResoTexto,     // (data)-> string (opcional para personalizar resumen de RM)
-  onIrPantallaTres,     // callback para navegar al preview (PantallaTres)
+  onDetectarResonancia, // (datos)-> boolean | Promise<boolean>
+  resumenResoTexto,     // (data)-> string (opcional para personalizar resumen)
 }) {
   const T = getTheme();
-
-  // variables CSS del tema para usar en app.css
-  const rootVars = {
-    "--t-surface": T.surface ?? "#fff",
-    "--t-text": T.text ?? "#1b1b1b",
-    "--t-primary": T.primary ?? "#0072CE",
-    "--t-primary-dark": T.primaryDark ?? T.primary ?? "#0072CE",
-    "--t-on-primary": T.onPrimary ?? "#fff",
-    "--t-border": T.border ?? "#e8e8e8",
-    "--t-muted": T.muted ?? "#777",
-    "--t-on-muted": T.onMuted ?? "#fff",
-    "--t-code-bg": T.codeBg ?? "#f7f7f7",
-    "--t-chip-bg": T.chipBg ?? "#eef6ff",
-    "--t-chip-border": T.chipBorder ?? "#cfe4ff",
-    "--t-chip-text": T.chipText ?? (T.primary || "#0b63c5"),
-    "--t-shadow-sm": T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)",
-    "--t-text-muted": T.textMuted ?? "#666",
-  };
+  const S = makeStyles(T);
 
   const [datos, setDatos] = useState(initialDatos || {});
-  const [loading, setLoading] = useState(false);
+  const [stepStarted, setStepStarted] = useState(false);
+  const [loadingIA, setLoadingIA] = useState(false);
 
+  const [examenesIA, setExamenesIA] = useState([]);
+  const [diagnosticoIA, setDiagnosticoIA] = useState("");
+  const [justificacionIA, setJustificacionIA] = useState("");
+
+  // Checklist RM (persistido por el PADRE)
   const [resonanciaChecklist, setResonanciaChecklist] = useState(null);
   const [resonanciaResumenTexto, setResonanciaResumenTexto] = useState("");
   const [ordenAlternativa, setOrdenAlternativa] = useState("");
+
+  // NUEVOS flags de control de flujo RM
+  const [requiereRM, setRequiereRM] = useState(false);
+  const [bloqueaRM, setBloqueaRM] = useState(false);
 
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
+  // Modal local del FormularioResonancia
   const [showRM, setShowRM] = useState(false);
 
-  /* ESQUEMA + MAPPER */
-  const [vista, setVista] = useState("anterior");
-  const [mostrarMapper, setMostrarMapper] = useState(false);
-  const [mapperId, setMapperId] = useState(null);
-
-  const onSeleccionZona = (zona) => {
-    let dolor = "", lado = "";
-    const z = String(zona || "");
-    const zl = z.toLowerCase();
-
-    if (zl.includes("columna cervical")) { dolor = "Columna cervical"; lado = ""; }
-    else if (zl.includes("columna dorsal")) { dolor = "Columna dorsal"; lado = ""; }
-    else if (zl.includes("columna lumbar") || zl.includes("columna")) { dolor = "Columna lumbar"; lado = ""; }
-    else if (zl.includes("cadera")) { dolor = "Cadera"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("rodilla")) { dolor = "Rodilla"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("hombro")) { dolor = "Hombro"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("codo")) { dolor = "Codo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("mano")) { dolor = "Mano"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("tobillo")) { dolor = "Tobillo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-
-    setDatos((prev) => {
-      const next = { ...prev, dolor, lado };
-      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
-      return next;
-    });
-
-    const key = resolveZonaKey(dolor);
-    if (key && hasMapper(key)) {
-      setMapperId(key);
-      setMostrarMapper(true); // abrir overlay automáticamente al elegir zona
-    }
-  };
-
-  /* Montaje: restaurar datos y manejar retorno de pago */
+  // Restaurar estado
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
     } catch {}
 
+    try {
+      const ex = JSON.parse(sessionStorage.getItem("trauma_ia_examenes") || "[]");
+      setExamenesIA(Array.isArray(ex) ? ex : []);
+      setDiagnosticoIA(sessionStorage.getItem("trauma_ia_diagnostico") || "");
+      setJustificacionIA(sessionStorage.getItem("trauma_ia_justificacion") || "");
+      if (ex && ex.length) setStepStarted(true);
+    } catch {}
+
+    // restaurar checklist/alternativa si existían
     try {
       const ck = sessionStorage.getItem("resonanciaChecklist");
       const rs = sessionStorage.getItem("resonanciaResumenTexto");
@@ -196,26 +164,27 @@ export default function TraumaModulo({
       if (alt) setOrdenAlternativa(alt);
     } catch {}
 
-    // Retorno de pago (si aplica)
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const pago = params.get("pago");
-      const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
-      if (pago === "ok" && idPago) {
-        setPagoRealizado(true);
-        if (pollerRef.current) clearInterval(pollerRef.current);
-        let intentos = 0;
-        pollerRef.current = setInterval(async () => {
-          intentos++;
-          try { await fetch(`${BACKEND_BASE}/obtener-datos/${idPago}`); } catch {}
-          if (intentos >= 30) {
-            clearInterval(pollerRef.current);
-            pollerRef.current = null;
-          }
-        }, 2000);
-      }
-    } catch {}
+    // retorno de pago
+    const params = new URLSearchParams(window.location.search);
+    const pago = params.get("pago");
+    const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
+    if (pago === "ok" && idPago) {
+      setPagoRealizado(true);
+      if (pollerRef.current) clearInterval(pollerRef.current);
+      let intentos = 0;
+      pollerRef.current = setInterval(async () => {
+        intentos++;
+        try {
+          await fetch(`${BACKEND_BASE}/obtener-datos/${idPago}`);
+        } catch {}
+        if (intentos >= 30) {
+          clearInterval(pollerRef.current);
+          pollerRef.current = null;
+        }
+      }, 2000);
+    }
 
+    // cleanup
     return () => {
       if (pollerRef.current) {
         clearInterval(pollerRef.current);
@@ -224,73 +193,134 @@ export default function TraumaModulo({
     };
   }, []);
 
-  /* Compat: cerrar overlay si mappers antiguos emiten eventos genéricos */
-  useEffect(() => {
-    const close = () => setMostrarMapper(false);
-    window.addEventListener("rodilla:volver", close);
-    window.addEventListener("mapper:close", close);
-    window.addEventListener("genericmapper:close", close);
-    return () => {
-      window.removeEventListener("rodilla:volver", close);
-      window.removeEventListener("mapper:close", close);
-      window.removeEventListener("genericmapper:close", close);
-    };
-  }, []);
+  /* -------- Secciones de puntos (todas las zonas soportadas) -------- */
+  const seccionesMarcadores = useMemo(() => {
+    const lado = datos?.lado || "";
+    const zonas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
+    const out = [];
+    for (const z of zonas) {
+      const secs = leerSecciones(z, lado);
+      if (secs.length) out.push(...secs);
+    }
+    return out;
+  }, [datos?.lado]);
 
-  /* NUEVO: compat para mappers que disparan un evento con el payload */
-  useEffect(() => {
-    const onSaved = (ev) => {
-      try {
-        const d = ev?.detail || {};
-        // Soportar distintas formas de payload
-        const zonaKey = d.zonaKey || d.mapperId || mapperId || resolveZonaKey(datos?.dolor);
-        const lado = d.lado || datos?.lado || "";
-        const puntos = d.puntos || d.puntosSeleccionados || d.lines || [];
-        const resumen = d.resumen || d.resumenMapper || { lines: puntos };
-        persistMapperToStorage({ zonaKey, lado, puntos, resumen });
-        syncSeccionesExtra(lado);
-      } catch {}
-      setMostrarMapper(false);
-    };
-    window.addEventListener("genericmapper:saved", onSaved);
-    // Por si algún mapper usa un nombre distinto
-    window.addEventListener("mapper:saved", onSaved);
-    return () => {
-      window.removeEventListener("genericmapper:saved", onSaved);
-      window.removeEventListener("mapper:saved", onSaved);
-    };
-  }, [mapperId, datos?.dolor, datos?.lado]);
-
-  /* -------- “Continuar” → guarda lo necesario y navega a PantallaTres -------- */
+  /* -------- IA -------- */
   const handleContinuar = async () => {
-    if (!datos?.dolor) return;
-    setLoading(true);
     try {
-      // Persistir paciente actualizado
-      try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos)); } catch {}
-      // Asegurar idPago (si luego se requiere)
-      ensureTraumaIdPago();
-      // Asegurar que el preview tenga las secciones por zona/lado
-      syncSeccionesExtra(datos?.lado);
+      setLoadingIA(true);
 
-      // Navegar al preview (PantallaTres) usando el callback del padre
-      onIrPantallaTres?.();
-    } catch {
-      alert("No fue posible continuar. Intenta nuevamente.");
+      // refresco defensivo
+      try {
+        const saved = sessionStorage.getItem("datosPacienteJSON");
+        if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      } catch {}
+
+      const idPago = ensureTraumaIdPago();
+      sessionStorage.setItem("modulo", "trauma");
+
+      const edadNum = Number(datos.edad) || datos.edad;
+
+      // Marcadores por zona (se envían a la IA como objeto + compat individual)
+      const lado = datos?.lado || "";
+      const rodillaMarcadores = loadMarcadoresPorZona("rodilla", lado);
+      const manoMarcadores = loadMarcadoresPorZona("mano", lado);
+      const hombroMarcadores = loadMarcadoresPorZona("hombro", lado);
+      const codoMarcadores = loadMarcadoresPorZona("codo", lado);
+      const tobilloMarcadores = loadMarcadoresPorZona("tobillo", lado);
+
+      const body = {
+        idPago,
+        paciente: {
+          ...datos,
+          edad: edadNum,
+        },
+        // Compatibilidad previa:
+        rodillaMarcadores,
+        // Nuevo agregado genérico:
+        marcadores: {
+          rodilla: rodillaMarcadores,
+          mano: manoMarcadores,
+          hombro: hombroMarcadores,
+          codo: codoMarcadores,
+          tobillo: tobilloMarcadores,
+        },
+        // Campos sueltos opcionales (por si quieres leerlos explícitos en backend):
+        manoMarcadores,
+        hombroMarcadores,
+        codoMarcadores,
+        tobilloMarcadores,
+      };
+
+      const resp = await fetch(`${BACKEND_BASE}/ia-trauma`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      const j = await resp.json();
+      const ex = Array.isArray(j?.examenes) ? j.examenes.slice(0, 4) : [];
+      const dx = typeof j?.diagnostico === "string" ? j.diagnostico : "";
+      const just = typeof j?.justificacion === "string" ? j.justificacion : j?.resumen || "";
+
+      // Persistimos IA para retorno/PDF
+      try {
+        sessionStorage.setItem("trauma_ia_examenes", JSON.stringify(ex));
+        sessionStorage.setItem("trauma_ia_diagnostico", dx || "");
+        sessionStorage.setItem("trauma_ia_justificacion", just || "");
+      } catch {}
+
+      setExamenesIA(ex);
+      setDiagnosticoIA(dx);
+      setJustificacionIA(just);
+
+      // ===== Detección de RM en la lista sugerida por IA =====
+      const textoEx = ex.join("\n");
+      let solicitaRM = false;
+
+      if (typeof onDetectarResonancia === "function") {
+        solicitaRM = await onDetectarResonancia({ ...datos, edad: edadNum, examen: textoEx });
+      } else {
+        solicitaRM = isResonanciaTexto(textoEx);
+      }
+
+      setRequiereRM(!!solicitaRM);
+      setBloqueaRM(false); // reset
+      setResonanciaChecklist(null);
+      setResonanciaResumenTexto("");
+
+      setStepStarted(true);
+    } catch (e) {
+      alert("No fue posible obtener la información de IA (Trauma). Intenta nuevamente.");
     } finally {
-      setLoading(false);
+      setLoadingIA(false);
     }
   };
 
-  const handleSaveRM = (form) => {
+  // Lanzar checklist RM (modal)
+  const lanzarChecklistRM = async () => {
+    if (!requiereRM) return;
+    setShowRM(true);
+  };
+
+  // Guardado desde el modal del FormularioResonancia
+  const handleSaveRM = (form /*, { riesgos } */) => {
+    setBloqueaRM(false);
+
     const resumen =
-      typeof resumenResoTexto === "function" ? resumenResoTexto(form) : construirResumenRM(form);
+      typeof resumenResoTexto === "function"
+        ? resumenResoTexto(form)
+        : construirResumenRM(form);
+
     setResonanciaChecklist(form);
     setResonanciaResumenTexto(resumen);
+
     try {
       sessionStorage.setItem("resonanciaChecklist", JSON.stringify(form));
       sessionStorage.setItem("resonanciaResumenTexto", resumen);
     } catch {}
+
     setShowRM(false);
   };
 
@@ -325,14 +355,17 @@ export default function TraumaModulo({
     const obs = (f.observaciones || "").trim();
 
     const partes = [];
-    if (marcadas.length) partes.push(marcadas.join("\n"));
-    else partes.push("• Sin alertas marcadas en checklist.");
+    if (marcadas.length) {
+      partes.push(marcadas.join("\n"));
+    } else {
+      partes.push("• Sin alertas marcadas en checklist.");
+    }
     if (obs) partes.push(`Observaciones: ${obs}`);
+
     return partes.join("\n");
   };
 
-  // (Handlers de pago/descarga se mantienen por compat, aunque lo normal es ir a PantallaTres)
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  /* -------- Pago -------- */
   const handlePagar = async () => {
     const edadNum = Number(datos.edad);
     if (
@@ -348,14 +381,10 @@ export default function TraumaModulo({
 
     try {
       const idPago = ensureTraumaIdPago();
-      try {
-        sessionStorage.setItem("modulo", "trauma");
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
-      } catch {}
+      sessionStorage.setItem("modulo", "trauma");
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
 
-      // Asegurar que el preview tenga las secciones listas
-      syncSeccionesExtra(datos?.lado);
-
+      // Marcadores por zona para persistir en backend (no IA)
       const lado = datos?.lado || "";
       const rodillaMarcadores = loadMarcadoresPorZona("rodilla", lado);
       const manoMarcadores = loadMarcadoresPorZona("mano", lado);
@@ -363,6 +392,7 @@ export default function TraumaModulo({
       const codoMarcadores = loadMarcadoresPorZona("codo", lado);
       const tobilloMarcadores = loadMarcadoresPorZona("tobillo", lado);
 
+      // Guardar datos + IA + checklist para que el PDF quede consistente
       await fetch(`${BACKEND_BASE}/guardar-datos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -371,9 +401,14 @@ export default function TraumaModulo({
           datosPaciente: {
             ...datos,
             edad: edadNum,
+            examenesIA,
+            diagnosticoIA,
+            justificacionIA,
             rmForm: resonanciaChecklist,
             rmObservaciones: resonanciaChecklist?.observaciones || "",
+            // Compatibilidad:
             rodillaMarcadores,
+            // Nuevo agregado genérico:
             marcadores: {
               rodilla: rodillaMarcadores,
               mano: manoMarcadores,
@@ -381,6 +416,7 @@ export default function TraumaModulo({
               codo: codoMarcadores,
               tobillo: tobilloMarcadores,
             },
+            // Campos sueltos opcionales:
             manoMarcadores,
             hombroMarcadores,
             codoMarcadores,
@@ -399,6 +435,8 @@ export default function TraumaModulo({
     }
   };
 
+  /* -------- Descargar PDF -------- */
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const handleDescargar = async () => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) {
@@ -461,6 +499,9 @@ export default function TraumaModulo({
                 idPago,
                 datosPaciente: {
                   ...datosReinyectar,
+                  examenesIA,
+                  diagnosticoIA,
+                  justificacionIA,
                   rmForm: resonanciaChecklist,
                   rmObservaciones: resonanciaChecklist?.observaciones || "",
                   rodillaMarcadores,
@@ -503,100 +544,180 @@ export default function TraumaModulo({
     }
   };
 
-  const resumenInicialTrauma = (d = {}) => {
-    const sexo = sexoPalabra(d.genero);
-    const edad = d.edad ? `${d.edad} años` : "";
-    const zona = d?.dolor
-      ? `Dolor de ${d.dolor}${d?.lado ? " " + d.lado : ""}`
-      : "Motivo no especificado";
-    return `${sexo} ${edad}. ${zona}. Se solicita evaluación imagenológica según clínica.`;
-  };
+  /* -------- UI -------- */
+  const usarIA = Array.isArray(examenesIA) && examenesIA.length > 0;
 
   return (
-    <div className="trauma-card" style={rootVars}>
-      {/* TÍTULO */}
-      <h3 className="trauma-title">Identifica tu punto de dolor</h3>
+    <div style={S.card}>
+      <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
+        Vista previa — Imagenología
+      </h3>
 
-      {/* BLOQUE SELECCIÓN (esquema + botón mapper) */}
-      <>
-        <EsquemaToggleTabs vista={vista} onChange={setVista} />
-        {vista === "anterior" ? (
-          <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={420} />
-        ) : (
-          <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={420} />
-        )}
+      <div style={{ marginBottom: 10 }}>
+        <div>
+          <strong>Paciente:</strong> {datos?.nombre || "—"}
+        </div>
+        <div>
+          <strong>RUT:</strong> {datos?.rut || "—"}
+        </div>
+        <div>
+          <strong>Edad:</strong> {datos?.edad || "—"}
+        </div>
+        <div>
+          <strong>Género:</strong> {datos?.genero || "—"}
+        </div>
+        <div>
+          <strong>Dolor:</strong> {datos?.dolor || "—"}
+        </div>
+        <div>
+          <strong>Lado:</strong> {datos?.lado || "—"}
+        </div>
+      </div>
 
-        <div className="trauma-hint mt-6">
-          {datos?.dolor ? (
+      {/* Primer preview: SIEMPRE visible */}
+      <div style={{ ...S.mono, marginTop: 6 }}>{resumenInicialTrauma(datos)}</div>
+
+      {/* Secciones de puntos de cualquier zona disponible */}
+      {seccionesMarcadores.map((sec, idx) => (
+        <div style={S.block} key={`sec-${idx}`}>
+          <strong>{sec.title}</strong>
+          <ul style={{ marginTop: 6 }}>
+            {sec.lines.map((l, i) => (
+              <li key={i}>{l}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      {/* Botón Continuar SOLO antes de iniciar IA */}
+      {!stepStarted && (
+        <button style={S.btnPrimary} onClick={handleContinuar} disabled={loadingIA}>
+          {loadingIA ? "Analizando con IA…" : "Continuar"}
+        </button>
+      )}
+
+      {/* Segundo preview: IA + confirmación/pago */}
+      {stepStarted && (
+        <>
+          <div style={S.block}>
+            <strong>Diagnóstico presuntivo:</strong>
+            <div style={{ ...S.mono, marginTop: 6 }}>{diagnosticoIA || "—"}</div>
+          </div>
+
+          <div style={S.block}>
+            <strong>Exámenes sugeridos (IA):</strong>
+            {usarIA ? (
+              <ul style={{ marginTop: 6 }}>
+                {examenesIA.map((e, i) => (
+                  <li key={`${e}-${i}`}>{e}</li>
+                ))}
+              </ul>
+            ) : (
+              <div style={S.hint}>Aún no hay lista generada por IA.</div>
+            )}
+          </div>
+
+          {justificacionIA && (
+            <div style={S.block}>
+              <strong>Justificación (≈100 palabras):</strong>
+              <div style={{ ...S.mono, marginTop: 6 }}>{justificacionIA}</div>
+            </div>
+          )}
+
+          {/* Mensajes de estado RM */}
+          {requiereRM && !resonanciaChecklist && !bloqueaRM && (
+            <div style={S.hint}>
+              La IA sugiere Resonancia Magnética. Presiona “Continuar” para completar el checklist
+              de seguridad.
+            </div>
+          )}
+          {bloqueaRM && (
+            <div style={S.hint}>
+              RM contraindicada por checklist. {ordenAlternativa || "Se sugiere alternativa."}
+            </div>
+          )}
+
+          {!pagoRealizado ? (
             <>
-              Zona seleccionada:{" "}
-              <strong>
-                {datos.dolor}
-                {datos.lado ? ` — ${datos.lado}` : ""}
-              </strong>
-              {mapperId && (
-                <button
-                  type="button"
-                  className="trauma-btn ghost"
-                  style={{ marginLeft: 8 }}
-                  onClick={() => setMostrarMapper(true)}
-                >
-                  Marcar puntos
+              {requiereRM && !resonanciaChecklist && !bloqueaRM && (
+                <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={lanzarChecklistRM}>
+                  Continuar
                 </button>
+              )}
+
+              {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
+                <>
+                  <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={handlePagar}>
+                    Pagar ahora (Trauma)
+                  </button>
+                  <button
+                    style={{ ...S.btnSecondary, marginTop: 8 }}
+                    title="Simular retorno pagado (solo pruebas)"
+                    onClick={async () => {
+                      const idPago = `trauma_guest_${Date.now()}`;
+                      const datosGuest = {
+                        nombre: "Guest",
+                        rut: "99999999-9",
+                        edad: 35,
+                        genero: "MASCULINO",
+                        dolor: "Rodilla",
+                        lado: "Izquierda",
+                      };
+
+                      sessionStorage.setItem("idPago", idPago);
+                      sessionStorage.setItem("modulo", "trauma");
+                      sessionStorage.setItem(
+                        "datosPacienteJSON",
+                        JSON.stringify(datosGuest)
+                      );
+
+                      await fetch(`${BACKEND_BASE}/guardar-datos`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          idPago,
+                          datosPaciente: {
+                            ...datosGuest,
+                            examenesIA,
+                            diagnosticoIA,
+                            justificacionIA,
+                            rmForm: resonanciaChecklist,
+                            rmObservaciones: resonanciaChecklist?.observaciones || "",
+                          },
+                          resonanciaChecklist,
+                          resonanciaResumenTexto,
+                          ordenAlternativa,
+                        }),
+                      });
+
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("pago", "ok");
+                      url.searchParams.set("idPago", idPago);
+                      window.location.href = url.toString();
+                    }}
+                  >
+                    Simular Pago (Guest)
+                  </button>
+                </>
               )}
             </>
           ) : (
-            "Toca una zona en el esquema para continuar."
+            <button
+              style={{ ...S.btnPrimary, marginTop: 12 }}
+              onClick={handleDescargar}
+              disabled={descargando}
+              title={mensajeDescarga || "Verificar y descargar"}
+            >
+              {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
+            </button>
           )}
-        </div>
-      </>
-
-      {/* SIN PREVIEW NI INFO ABAJO — solo botón que navega a PantallaTres */}
-      <button
-        className="trauma-btn primary"
-        onClick={handleContinuar}
-        disabled={loading || !datos?.dolor}
-        aria-busy={loading}
-        title={!datos?.dolor ? "Selecciona una zona primero" : ""}
-      >
-        {loading ? "Procesando…" : "Continuar"}
-      </button>
-
-      {/* Overlay Mapper */}
-      {mostrarMapper && mapperId && (
-        <div className="trauma-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="trauma-modal-card">
-            <GenericMapper
-              mapperId={mapperId}
-              ladoInicial={normalizeSide(datos?.lado) || undefined}
-              vistaInicial={mapperId === "mano" ? (vista === "anterior" ? "palmar" : "dorsal") : vista}
-              onSave={(payload) => {
-                // NUEVO: persistimos salida del mapper
-                try {
-                  const zonaKey = payload?.zonaKey || mapperId || resolveZonaKey(datos?.dolor);
-                  const lado = payload?.lado || datos?.lado || "";
-                  const puntos =
-                    payload?.puntos ||
-                    payload?.puntosSeleccionados ||
-                    payload?.lines ||
-                    [];
-                  const resumen = payload?.resumen || { lines: puntos };
-                  persistMapperToStorage({ zonaKey, lado, puntos, resumen });
-                } catch {}
-                // Consolidar secciones para el preview
-                syncSeccionesExtra(datos?.lado);
-                setMostrarMapper(false);
-              }}
-              onClose={() => setMostrarMapper(false)}
-            />
-          </div>
-        </div>
+        </>
       )}
 
-      {/* Modal RM (no es preview de orden) */}
+      {/* ===== Modal local del Formulario de Resonancia ===== */}
       {showRM && (
-        <div className="trauma-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="trauma-modal-card">
+        <div style={S.modalBackdrop} role="dialog" aria-modal="true">
+          <div style={S.modalCard}>
             <FormularioResonancia
               initial={resonanciaChecklist || {}}
               onSave={handleSaveRM}
@@ -607,4 +728,75 @@ export default function TraumaModulo({
       )}
     </div>
   );
+}
+
+/* =============== Estilos (desde theme.json) =============== */
+function makeStyles(T) {
+  return {
+    card: {
+      background: T.surface ?? "#fff",
+      borderRadius: 12,
+      padding: 16,
+      boxShadow: T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)",
+      border: `1px solid ${T.border ?? "#e8e8e8"}`,
+      color: T.text ?? "#1b1b1b",
+    },
+    btnPrimary: {
+      backgroundColor: T.primary ?? "#0072CE",
+      color: T.onPrimary ?? "#fff",
+      border: "none",
+      padding: "12px",
+      borderRadius: 8,
+      fontSize: 16,
+      cursor: "pointer",
+      width: "100%",
+      boxShadow: T.shadowSm ?? "0 1px 4px rgba(0,0,0,0.08)",
+    },
+    btnSecondary: {
+      backgroundColor: T.muted ?? "#777",
+      color: T.onMuted ?? "#fff",
+      border: "none",
+      padding: "12px",
+      borderRadius: 8,
+      fontSize: 16,
+      cursor: "pointer",
+      width: "100%",
+      boxShadow: T.shadowSm ?? "0 1px 4px rgba(0,0,0,0.08)",
+    },
+    block: { marginTop: 12 },
+    mono: {
+      whiteSpace: "pre-wrap",
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+      background: T.codeBg ?? "#f7f7f7",
+      borderRadius: 8,
+      padding: 10,
+      fontSize: 13,
+      lineHeight: 1.45,
+      border: `1px solid ${T.border ?? "#eee"}`,
+      color: T.text ?? "#1b1b1b",
+    },
+    hint: { marginTop: 6, fontStyle: "italic", color: T.textMuted ?? "#666" },
+
+    // Modal simple
+    modalBackdrop: {
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.35)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 16,
+      zIndex: 50,
+    },
+    modalCard: {
+      width: "min(920px, 100%)",
+      maxHeight: "90vh",
+      overflow: "auto",
+      background: T.surface ?? "#fff",
+      borderRadius: 12,
+      boxShadow: "0 12px 40px rgba(0,0,0,0.18)",
+      border: `1px solid ${T.border ?? "#e8e8e8"}`,
+      padding: 12,
+    },
+  };
 }
