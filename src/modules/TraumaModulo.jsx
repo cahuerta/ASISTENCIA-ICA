@@ -69,11 +69,11 @@ function syncSeccionesExtra(ladoFallback = "") {
 export default function TraumaModulo({
   initialDatos,
   resumenResoTexto,     // (data)-> string (opcional para personalizar resumen de RM)
-  onIrPantallaTres,     // <<< callback para navegar al preview (PantallaTres)
+  onIrPantallaTres,     // callback para navegar al preview (PantallaTres)
 }) {
   const T = getTheme();
 
-  // 👉 variables CSS del tema para usar en app.css
+  // variables CSS del tema para usar en app.css
   const rootVars = {
     "--t-surface": T.surface ?? "#fff",
     "--t-text": T.text ?? "#1b1b1b",
@@ -134,7 +134,7 @@ export default function TraumaModulo({
     const key = resolveZonaKey(dolor);
     if (key && hasMapper(key)) {
       setMapperId(key);
-      setMostrarMapper(true); // ← abrir overlay automáticamente al elegir zona
+      setMostrarMapper(true); // abrir overlay automáticamente al elegir zona
     }
   };
 
@@ -207,7 +207,7 @@ export default function TraumaModulo({
       // Asegurar que el preview tenga las secciones por zona/lado
       syncSeccionesExtra(datos?.lado);
 
-      // 👉 Navegar al preview (PantallaTres) usando el callback del padre
+      // Navegar al preview (PantallaTres) usando el callback del padre
       onIrPantallaTres?.();
     } catch {
       alert("No fue posible continuar. Intenta nuevamente.");
@@ -484,21 +484,7 @@ export default function TraumaModulo({
         </div>
       </>
 
-      {/* Info breve del paciente (sin preview de orden aquí) */}
-      <div className="trauma-info">
-        <div>
-          <strong>Paciente:</strong> {datos?.nombre || "—"}
-        </div>
-        <div>
-          <strong>RUT:</strong> {datos?.rut || "—"}
-        </div>
-        <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
-        <div><strong>Género:</strong> {datos?.genero || "—"}</div>
-        <div><strong>Dolor:</strong> {datos?.dolor || "—"}</div>
-        <div><strong>Lado:</strong> {datos?.lado || "—"}</div>
-      </div>
-
-      {/* SIN PREVIEW AQUÍ — solo botón que navega a PantallaTres */}
+      {/* SIN PREVIEW NI INFO ABAJO — solo botón que navega a PantallaTres */}
       <button
         className="trauma-btn primary"
         onClick={handleContinuar}
@@ -508,8 +494,6 @@ export default function TraumaModulo({
       >
         {loading ? "Procesando…" : "Continuar"}
       </button>
-
-      {/* (Opcional en tu flujo) Botones de pago/descarga podrían vivir en PantallaTres */}
 
       {/* Overlay Mapper */}
       {mostrarMapper && mapperId && (
