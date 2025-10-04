@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 import FormularioResonancia from "../components/FormularioResonancia.jsx";
+import AvisoLegal from "../components/AvisoLegal.jsx";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
@@ -139,8 +140,19 @@ export default function TraumaModulo({
   // Modal local del FormularioResonancia
   const [showRM, setShowRM] = useState(false);
 
+  // Aviso legal (gating)
+  const [mostrarAviso, setMostrarAviso] = useState(false);
+
   // Restaurar estado
   useEffect(() => {
+    // Aviso legal: si no está aceptado, mostrar overlay
+    const avisoOk = (() => {
+      try { return sessionStorage.getItem("trauma_aviso_ok") === "1"; } catch { return false; }
+    })();
+    if (!avisoOk) {
+      setMostrarAviso(true);
+    }
+
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
@@ -192,6 +204,16 @@ export default function TraumaModulo({
       }
     };
   }, []);
+
+  // Handlers Aviso Legal
+  const continuarTrasAviso = () => {
+    setMostrarAviso(false);
+    try { sessionStorage.setItem("trauma_aviso_ok", "1"); } catch {}
+  };
+  const rechazarAviso = () => {
+    setMostrarAviso(false);
+    alert("Debes aceptar el aviso legal para continuar.");
+  };
 
   /* -------- Secciones de puntos (todas las zonas soportadas) -------- */
   const seccionesMarcadores = useMemo(() => {
@@ -549,6 +571,14 @@ export default function TraumaModulo({
 
   return (
     <div style={S.card}>
+      {/* AVISO LEGAL (bloquea hasta aceptar) */}
+      <AvisoLegal
+        visible={mostrarAviso}
+        persist={false}
+        onAccept={continuarTrasAviso}
+        onReject={rechazarAviso}
+      />
+
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
         Vista previa — Imagenología
       </h3>
