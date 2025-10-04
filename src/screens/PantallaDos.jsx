@@ -12,16 +12,16 @@ import IAModulo from "../modules/IAModulo.jsx";
 
 /**
  * PantallaDos
- * - Muestra solo los botones de módulos.
- * - Sin módulo por defecto, excepto cuando volvemos del pago (?pago=ok) y ya sabemos
- *   qué módulo estaba activo: en ese caso abrimos automáticamente ese módulo para
- *   que se monte y habilite la descarga.
+ * - Muestra los botones de módulos.
+ * - Si venimos del pago (?pago=ok) o ya hay idPago, abre automáticamente el módulo
+ *   que corresponde (por URL, por sessionStorage, o inferido del estado).
+ * - Al seleccionar un módulo, lo monta directamente (PantallaDos “desaparece”).
  */
 export default function PantallaDos({
   initialDatos,
   pagoOk = false,
   idPago = "",
-  moduloActual = null,
+  moduloActual = null, // opcional, puede venir desde App
 }) {
   const T = getTheme();
 
@@ -33,7 +33,43 @@ export default function PantallaDos({
     "--overlay": T.overlay,
   };
 
-  // Datos persistidos (o vienen por props)
+  // === Helpers ===
+  const getQuery = () => {
+    try { return new URLSearchParams(window.location.search); }
+    catch { return new URLSearchParams(""); }
+  };
+
+  const inferModuloFromState = () => {
+    try {
+      // Si ya hay uno guardado, usarlo
+      const saved = sessionStorage.getItem("modulo");
+      if (saved && ["trauma", "preop", "generales", "ia"].includes(saved)) return saved;
+
+      // Heurísticas por estado persistido:
+      // 1) Trauma (IA de trauma, puntos por zonas o dolor seleccionado)
+      const traumaHasIA = !!sessionStorage.getItem("trauma_ia_examenes");
+      const datosRaw = sessionStorage.getItem("datosPacienteJSON");
+      const datos = datosRaw ? JSON.parse(datosRaw) : null;
+      const hayDolor = !!datos?.dolor;
+      const hayMarcadores =
+        sessionStorage.getItem("rodilla_data") ||
+        sessionStorage.getItem("mano_data") ||
+        sessionStorage.getItem("hombro_data") ||
+        sessionStorage.getItem("codo_data") ||
+        sessionStorage.getItem("tobillo_data");
+      if (traumaHasIA || hayDolor || hayMarcadores) return "trauma";
+
+      // 2) Preop / Generales (resúmenes IA)
+      if (sessionStorage.getItem("preop_ia_resumen")) return "preop";
+      if (sessionStorage.getItem("generales_ia_resumen")) return "generales";
+
+      // 3) IA texto libre
+      if (sessionStorage.getItem("previewIA")) return "ia";
+    } catch {}
+    return null;
+  };
+
+  // Datos paciente (prop > sessionStorage)
   const datos = initialDatos || (() => {
     try {
       const raw = sessionStorage.getItem("datosPacienteJSON");
@@ -41,33 +77,59 @@ export default function PantallaDos({
     } catch { return null; }
   })();
 
-  // ✅ Auto-abrir el módulo correcto SOLO cuando venimos del pago (pagoOk o idPago presente)
+  // ¿Debemos autoabrir?
   const [modulo, setModulo] = useState(() => {
     try {
-      const url = new URLSearchParams(window.location.search);
-      const returnedOk = url.get("pago") === "ok";
-      const returning = returnedOk || !!pagoOk || !!idPago;
-      const remembered = moduloActual || sessionStorage.getItem("modulo");
-      return returning && remembered ? remembered : null;
+      const q = getQuery();
+      const returnedOk = q.get("pago") === "ok";
+      const moduloFromURL = q.get("modulo");
+      const storedId = sessionStorage.getItem("idPago") || "";
+      const returning = returnedOk || !!pagoOk || !!idPago || !!storedId;
+
+      // Prioridad: prop -> URL -> sessionStorage -> inferencia -> fallback
+      const remembered =
+        moduloActual ||
+        (moduloFromURL && ["trauma", "preop", "generales", "ia"].includes(moduloFromURL) ? moduloFromURL : null) ||
+        sessionStorage.getItem("modulo") ||
+        inferModuloFromState();
+
+      if (returning) {
+        const toOpen = remembered || "trauma";
+        // persistir para siguientes montajes
+        try { sessionStorage.setItem("modulo", toOpen); } catch {}
+        return toOpen;
+      }
+      return null;
     } catch {
       return null;
     }
   });
 
+  // Si detectamos retorno de pago después del primer render, abrir en caliente
   useEffect(() => {
-    // Si aún no hay módulo montado y detectamos retorno de pago ahora, abrir el recordado
-    if (!modulo) {
-      try {
-        const url = new URLSearchParams(window.location.search);
-        const returnedOk = url.get("pago") === "ok";
-        const returning = returnedOk || !!pagoOk || !!idPago;
-        const remembered = moduloActual || sessionStorage.getItem("modulo");
-        if (returning && remembered) setModulo(remembered);
-      } catch {}
-    }
+    if (modulo) return;
+
+    try {
+      const q = getQuery();
+      const returnedOk = q.get("pago") === "ok";
+      const moduloFromURL = q.get("modulo");
+      const storedId = sessionStorage.getItem("idPago") || "";
+      const returning = returnedOk || !!pagoOk || !!idPago || !!storedId;
+
+      if (returning) {
+        const remembered =
+          moduloActual ||
+          (moduloFromURL && ["trauma", "preop", "generales", "ia"].includes(moduloFromURL) ? moduloFromURL : null) ||
+          sessionStorage.getItem("modulo") ||
+          inferModuloFromState() ||
+          "trauma";
+        try { sessionStorage.setItem("modulo", remembered); } catch {}
+        setModulo(remembered);
+      }
+    } catch {}
   }, [modulo, pagoOk, idPago, moduloActual]);
 
-  // 🔀 En cuanto hay selección, devolver SOLO ese módulo (PantallaDos “desaparece”).
+  // En cuanto hay selección, renderizamos SOLO el módulo
   const mountProps = { initialDatos: datos || {} };
   if (modulo === "trauma")    return <TraumaModulo    {...mountProps} />;
   if (modulo === "preop")     return <PreopModulo     {...mountProps} />;
