@@ -11,7 +11,7 @@ import EsquemaAnterior from "../EsquemaAnterior.jsx";
 import EsquemaPosterior from "../EsquemaPosterior.jsx";
 import EsquemaToggleTabs from "../EsquemaToggleTabs.jsx";
 
-/* === NUEVO: mappers dinámicos === */
+/* === Mappers dinámicos === */
 import GenericMapper from "../mappers/GenericMapper.jsx";
 import { resolveZonaKey } from "../mappers/mapperRegistry.js";
 
@@ -126,7 +126,7 @@ export default function TraumaModulo({
   const T = getTheme();
   const S = makeStyles(T);
 
-  /* === NUEVO: flujo por fases ===
+  /* === Flujo por fases ===
      1) "esquema" → seleccionar zona/lado
      2) "preview" → vista previa de orden (sin IA)
      3) "previewIA" → vista con IA (dx, exámenes, justificación) + pago/descarga
@@ -162,7 +162,7 @@ export default function TraumaModulo({
   // Aviso legal (gating)
   const [mostrarAviso, setMostrarAviso] = useState(false);
 
-  /* === NUEVO: estado para mappers === */
+  /* Estado para mappers */
   const [mostrarMapper, setMostrarMapper] = useState(false);
   const [mapperId, setMapperId] = useState(null);
 
@@ -303,18 +303,13 @@ export default function TraumaModulo({
     try {
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
     } catch {}
-  };
 
-  /* === NUEVO: abrir mappers dinámicos === */
-  const abrirMapper = () => {
-    // (Aviso ya está gateado: si no ha aceptado, el componente retorna sólo el modal)
-    const id = resolveZonaKey(datos?.dolor || "");
-    if (!id) {
-      alert("No hay un esquema interactivo para la zona seleccionada.");
-      return;
+    // Abrir mapper inmediatamente al seleccionar en el SVG
+    const id = resolveZonaKey(dolor);
+    if (id) {
+      setMapperId(id);
+      setMostrarMapper(true);
     }
-    setMapperId(id);
-    setMostrarMapper(true);
   };
 
   /* -------- IA -------- */
@@ -704,16 +699,6 @@ export default function TraumaModulo({
           >
             Continuar → Vista previa
           </button>
-
-          {/* Botón para abrir mappers también desde aquí */}
-          <button
-            style={{ ...S.btnSecondary, marginTop: 8 }}
-            onClick={abrirMapper}
-            disabled={!datos?.dolor}
-            title="Abrir esquema interactivo para marcar puntos"
-          >
-            Abrir esquema de puntos
-          </button>
         </div>
       )}
 
@@ -754,16 +739,6 @@ export default function TraumaModulo({
               </ul>
             </div>
           ))}
-
-          {/* Botón para abrir mappers desde el preview */}
-          <button
-            style={{ ...S.btnSecondary, marginTop: 12 }}
-            onClick={abrirMapper}
-            disabled={!datos?.dolor}
-            title="Abrir esquema interactivo para marcar puntos"
-          >
-            Abrir esquema de puntos
-          </button>
 
           <button
             style={{ ...S.btnPrimary, marginTop: 12 }}
@@ -830,51 +805,6 @@ export default function TraumaModulo({
                   <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={handlePagar}>
                     Pagar ahora (Trauma)
                   </button>
-                  <button
-                    style={{ ...S.btnSecondary, marginTop: 8 }}
-                    title="Simular retorno pagado (solo pruebas)"
-                    onClick={async () => {
-                      const idPago = `trauma_guest_${Date.now()}`;
-                      const datosGuest = {
-                        nombre: "Guest",
-                        rut: "99999999-9",
-                        edad: 35,
-                        genero: "MASCULINO",
-                        dolor: "Rodilla",
-                        lado: "Izquierda",
-                      };
-
-                      sessionStorage.setItem("idPago", idPago);
-                      sessionStorage.setItem("modulo", "trauma");
-                      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datosGuest));
-
-                      await fetch(`${BACKEND_BASE}/guardar-datos`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          idPago,
-                          datosPaciente: {
-                            ...datosGuest,
-                            examenesIA,
-                            diagnosticoIA,
-                            justificacionIA,
-                            rmForm: resonanciaChecklist,
-                            rmObservaciones: resonanciaChecklist?.observaciones || "",
-                          },
-                          resonanciaChecklist,
-                          resonanciaResumenTexto,
-                          ordenAlternativa,
-                        }),
-                      });
-
-                      const url = new URL(window.location.href);
-                      url.searchParams.set("pago", "ok");
-                      url.searchParams.set("idPago", idPago);
-                      window.location.href = url.toString();
-                    }}
-                  >
-                    Simular Pago (Guest)
-                  </button>
                 </>
               )}
             </>
@@ -904,7 +834,7 @@ export default function TraumaModulo({
         </>
       )}
 
-      {/* ===== NUEVO: Modal con GenericMapper ===== */}
+      {/* ===== Modal con GenericMapper ===== */}
       {mostrarMapper && (
         <div style={S.modalBackdrop} role="dialog" aria-modal="true">
           <div style={S.modalCard}>
