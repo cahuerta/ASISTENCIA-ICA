@@ -41,6 +41,7 @@ export default function IAModulo({ initialDatos }) {
   const pollerRef = useRef(null);
 
   // ID de pago/módulo
+  the
   const [idPago, setIdPago] = useState(() => {
     return (
       sessionStorage.getItem("idPago") ||
@@ -431,12 +432,11 @@ export default function IAModulo({ initialDatos }) {
       !base.rut?.trim() ||
       !Number.isFinite(edadNum) ||
       edadNum <= 0 ||
-      !base.dolor?.trim() ||
       !datos.consulta?.trim() ||
       !previewIA?.trim()
     ) {
       alert(
-        "Completa los datos del formulario (incluye Dolor/Lado), genera el PREVIEW IA y luego realiza el pago."
+        "Completa nombre, RUT, edad (>0), genera el PREVIEW IA y luego realiza el pago."
       );
       return;
     }
