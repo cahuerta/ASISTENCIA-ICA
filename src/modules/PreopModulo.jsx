@@ -4,12 +4,15 @@ import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 
-/* === NUEVOS: solo para el paso "esquema" (sin mapper) === */
+/* NUEVO: aviso legal (gating como en Generales) */
+import AvisoLegal from "../components/AvisoLegal.jsx";
+
+/* === SOLO paso "esquema" (sin mapper) === */
 import EsquemaAnterior from "../EsquemaAnterior.jsx";
 import EsquemaPosterior from "../EsquemaPosterior.jsx";
 import EsquemaToggleTabs from "../EsquemaToggleTabs.jsx";
 
-/* === NUEVOS: pasos "tipo" y "comorb" usando tus formularios === */
+/* === Pasos "tipo" y "comorb" usando tus formularios === */
 import FormularioTipoCirugia from "../FormularioTipoCirugia.jsx";
 import FormularioComorbilidades from "../components/FormularioComorbilidades.jsx";
 
@@ -82,7 +85,7 @@ function resumenInicialPreop({ datos = {}, comorb = {}, tipoCirugia = "" }) {
 }
 
 export default function PreopModulo({ initialDatos }) {
-  /* ===== NUEVO: stepper interno de UX =====
+  /* ===== Stepper interno =====
      esquema -> tipo -> comorb -> preview */
   const [fase, setFase] = useState("esquema");
 
@@ -97,16 +100,33 @@ export default function PreopModulo({ initialDatos }) {
   const [stepStarted, setStepStarted] = useState(false);
   const [loadingIA, setLoadingIA] = useState(false);
 
-  // Salida IA y metadatos guardados POR App.jsx (se mantienen)
+  // IA y metadatos
   const [examenesIA, setExamenesIA] = useState([]);
   const [informeIA, setInformeIA] = useState("");
   const [comorbilidades, setComorbilidades] = useState({});
   const [tipoCirugia, setTipoCirugia] = useState("");
 
-  /* ===== NUEVO: UI para esquema (solo toggle) ===== */
+  /* UI esquema (solo toggle) */
   const [vista, setVista] = useState("anterior");
 
+  /* ===== NUEVO: gating por Aviso Legal ===== */
+  const [mostrarAviso, setMostrarAviso] = useState(false);
+  const continuarTrasAviso = () => {
+    setMostrarAviso(false);
+    try { sessionStorage.setItem("preop_aviso_ok", "1"); } catch {}
+  };
+  const rechazarAviso = () => {
+    setMostrarAviso(false);
+    alert("Debes aceptar el aviso legal para continuar.");
+  };
+
   useEffect(() => {
+    // Aviso Legal → si no aceptó, mostrarlo
+    const avisoOk = (() => {
+      try { return sessionStorage.getItem("preop_aviso_ok") === "1"; } catch { return false; }
+    })();
+    if (!avisoOk) setMostrarAviso(true);
+
     // Datos paciente (para mostrar y persistir)
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
@@ -121,7 +141,7 @@ export default function PreopModulo({ initialDatos }) {
       setTipoCirugia(final || "");
     } catch {}
 
-    // Comorbilidades (MISMA CLAVE QUE USA App.jsx)
+    // Comorbilidades
     try {
       const raw = sessionStorage.getItem("preop_comorbilidades_data");
       if (raw) {
@@ -134,34 +154,32 @@ export default function PreopModulo({ initialDatos }) {
       }
     } catch {}
 
-    // IA (si ya existía guardada)
+    // IA previa
     try {
       const ex = JSON.parse(sessionStorage.getItem("preop_ia_examenes") || "[]");
       const inf = sessionStorage.getItem("preop_ia_resumen") || "";
       setExamenesIA(Array.isArray(ex) ? ex : []);
       setInformeIA(inf);
-      // Si ya había IA previa, podemos ir directo a preview si el flujo vuelve
       if ((Array.isArray(ex) && ex.length) || inf) {
         setStepStarted(true);
         setFase("preview");
       }
     } catch {}
 
-    // Retorno de pago (marcar listo, mostrar SEGUNDO preview y hacer polling)
+    // Retorno de pago (pago ok)
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
     const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
 
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
-      setStepStarted(true);  // ← segundo preview
-      setFase("preview");    // ← ir directo a preview
+      setStepStarted(true);
+      setFase("preview");
       if (pollerRef.current) clearInterval(pollerRef.current);
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
-          // primero ruta específica, si falla, ruta genérica
           let r = await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`);
           if (!r.ok) r = await fetch(`${BACKEND_BASE}/obtener-datos/${idPago}`);
         } catch {}
@@ -182,7 +200,7 @@ export default function PreopModulo({ initialDatos }) {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /* ===== NUEVO: handler del esquema (SIN mapper) ===== */
+  /* ===== handler del esquema (SIN mapper) ===== */
   const onSeleccionZona = (zona) => {
     let dolor = "", lado = "";
     const zl = String(zona || "").toLowerCase();
@@ -202,7 +220,7 @@ export default function PreopModulo({ initialDatos }) {
     try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
   };
 
-  /* ===================== Continuar → LLAMA IA y pasa al preview (se mantiene) ===================== */
+  /* ===== Continuar → IA y pasar al preview ===== */
   const handleContinuar = async () => {
     try {
       setLoadingIA(true);
@@ -264,7 +282,7 @@ export default function PreopModulo({ initialDatos }) {
       setExamenesIA(ex);
       setInformeIA(inf);
       setStepStarted(true);
-      setFase("preview"); // ← NUEVO: avanzar al preview tras IA
+      setFase("preview");
     } catch (err) {
       console.error(err);
       alert("No fue posible obtener la información de IA (Preop). Intenta nuevamente.");
@@ -273,7 +291,7 @@ export default function PreopModulo({ initialDatos }) {
     }
   };
 
-  /* ===================== Pago ===================== */
+  /* ===== Pago ===== */
   const handlePagarDesdePreview = async () => {
     const idPago =
       sessionStorage.getItem("idPago") ||
@@ -282,7 +300,6 @@ export default function PreopModulo({ initialDatos }) {
     sessionStorage.setItem("modulo", "preop");
 
     try {
-      // guardamos con ruta específica y fallback genérico
       const payload = {
         idPago,
         datosPaciente: { ...datos },
@@ -312,13 +329,12 @@ export default function PreopModulo({ initialDatos }) {
     }
   };
 
-  /* ===================== Descargar PDF ===================== */
+  /* ===== Descargar PDF ===== */
   const handleDescargarPreop = async () => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) return alert("ID de pago no encontrado");
 
     const intentaDescarga = async () => {
-      // primero pdf-preop, si no existe, /pdf/:id
       let res = await fetch(`${BACKEND_BASE}/pdf-preop/${idPago}`, { cache: "no-store" });
       if (!res.ok) res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
 
@@ -357,7 +373,6 @@ export default function PreopModulo({ initialDatos }) {
         }
 
         if (r.status === 404) {
-          // reinyectar datos mínimos (compatibilidad)
           if (!reinyectado) {
             setMensajeDescarga("Restaurando datos…");
             const respaldo = sessionStorage.getItem("datosPacienteJSON");
@@ -409,6 +424,9 @@ export default function PreopModulo({ initialDatos }) {
 
   return (
     <div className="card" aria-live="polite">
+      {/* NUEVO: Modal/overlay Aviso Legal */}
+      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
+
       <h3 className="h1" style={{ color: T.primary }}>Vista previa — Exámenes preoperatorios</h3>
 
       {/* ====== FASE 1: ESQUEMA (SIN mapper) ====== */}
@@ -452,8 +470,6 @@ export default function PreopModulo({ initialDatos }) {
           <FormularioTipoCirugia
             datos={datos}
             onTipoCirugiaChange={() => {
-              // El propio formulario persiste en sessionStorage:
-              // preop_tipoCirugia / preop_tipoCirugia_otro
               try {
                 const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
                 const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
@@ -468,7 +484,8 @@ export default function PreopModulo({ initialDatos }) {
               onClick={() => {
                 const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "");
                 const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "");
-                const ok = (fijo && fijo !== "OTRO (ESPECIFICAR)") || (fijo === "OTRO (ESPECIFICAR)" && (otro || "").trim());
+                const isOtro = fijo.trim().toUpperCase().startsWith("OTRO");
+                const ok = (fijo && !isOtro) || (isOtro && (otro || "").trim());
                 if (!ok) {
                   alert("Seleccione el tipo de cirugía o especifique 'OTRO'.");
                   return;
@@ -498,18 +515,15 @@ export default function PreopModulo({ initialDatos }) {
                 sessionStorage.setItem("preop_comorbilidades_ok", "1");
               } catch {}
               setComorbilidades(payload || {});
-              // Llamamos IA y vamos a preview (reutiliza tu flujo existente)
               await handleContinuar();
               setFase("preview");
             }}
-            onCancel={() => {
-              // Si cancelan, se quedan en esta fase sin romper nada
-            }}
+            onCancel={() => { /* sin acción */ }}
           />
         </div>
       )}
 
-      {/* ====== FASE 4: PREVIEW (tu bloque actual) ====== */}
+      {/* ====== FASE 4: PREVIEW ====== */}
       {fase === "preview" && (
         <>
           <section style={{ marginBottom: 10 }}>
