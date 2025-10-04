@@ -30,11 +30,20 @@ function sexoPalabra(genero = "") {
   return s === "FEMENINO" ? "mujer" : "hombre";
 }
 
+function normalizeSide(lado = "") {
+  const l = String(lado).toLowerCase();
+  if (l.includes("izq")) return "izquierda";
+  if (l.includes("der")) return "derecha";
+  if (l.includes("iz")) return "izquierda";
+  if (l.includes("de")) return "derecha";
+  if (l.includes("izquierda")) return "izquierda";
+  if (l.includes("derecha")) return "derecha";
+  return "";
+}
+
 /* === Carga resúmenes por zona para enviar al backend (si se requiere) === */
 function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
-  const lado = (ladoTexto || "").toLowerCase();
-  const side =
-    lado.includes("izquierda") ? "izquierda" : lado.includes("derecha") ? "derecha" : "";
+  const side = normalizeSide(ladoTexto);
   if (!side) return null;
   try {
     const raw = sessionStorage.getItem(`${zonaKey}_resumen_${side}`);
@@ -61,6 +70,39 @@ function syncSeccionesExtra(ladoFallback = "") {
       } else {
         sessionStorage.removeItem(`${z}_seccionesExtra`);
       }
+    } catch {}
+  }
+}
+
+/* NUEVO: persistir la salida del mapper en las claves estándar que usan PantallaTres y el backend */
+function persistMapperToStorage({ zonaKey, lado, puntos, resumen }) {
+  if (!zonaKey) return;
+  const side = normalizeSide(lado);
+  // Deducir líneas
+  let lines = [];
+  if (Array.isArray(puntos)) lines = puntos;
+  else if (Array.isArray(resumen?.lines)) lines = resumen.lines;
+  else if (Array.isArray(resumen)) lines = resumen;
+
+  // Guardar `${zona}_data` (usado por PantallaTres -> secciones)
+  const data = { lado: lado || "", puntosSeleccionados: lines };
+  try {
+    sessionStorage.setItem(`${zonaKey}_data`, JSON.stringify(data));
+  } catch {}
+
+  // Guardar `${zona}_seccionesExtra` (preview inmediato)
+  try {
+    const title =
+      `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)}${lado ? ` ${lado}` : ""} — puntos marcados`;
+    const secciones = [{ title, lines }];
+    sessionStorage.setItem(`${zonaKey}_seccionesExtra`, JSON.stringify(secciones));
+  } catch {}
+
+  // Guardar `${zona}_resumen_{izquierda|derecha}` (usado al enviar al backend)
+  if (side) {
+    try {
+      const resumenObj = Array.isArray(lines) ? { lines } : { lines: [] };
+      sessionStorage.setItem(`${zonaKey}_resumen_${side}`, JSON.stringify(resumenObj));
     } catch {}
   }
 }
@@ -182,7 +224,7 @@ export default function TraumaModulo({
     };
   }, []);
 
-  /* Cerrar overlay si mapper hijo emite eventos (compat mappers antiguos) */
+  /* Compat: cerrar overlay si mappers antiguos emiten eventos genéricos */
   useEffect(() => {
     const close = () => setMostrarMapper(false);
     window.addEventListener("rodilla:volver", close);
@@ -194,6 +236,30 @@ export default function TraumaModulo({
       window.removeEventListener("genericmapper:close", close);
     };
   }, []);
+
+  /* NUEVO: compat para mappers que disparan un evento con el payload */
+  useEffect(() => {
+    const onSaved = (ev) => {
+      try {
+        const d = ev?.detail || {};
+        // Soportar distintas formas de payload
+        const zonaKey = d.zonaKey || d.mapperId || mapperId || resolveZonaKey(datos?.dolor);
+        const lado = d.lado || datos?.lado || "";
+        const puntos = d.puntos || d.puntosSeleccionados || d.lines || [];
+        const resumen = d.resumen || d.resumenMapper || { lines: puntos };
+        persistMapperToStorage({ zonaKey, lado, puntos, resumen });
+        syncSeccionesExtra(lado);
+      } catch {}
+      setMostrarMapper(false);
+    };
+    window.addEventListener("genericmapper:saved", onSaved);
+    // Por si algún mapper usa un nombre distinto
+    window.addEventListener("mapper:saved", onSaved);
+    return () => {
+      window.removeEventListener("genericmapper:saved", onSaved);
+      window.removeEventListener("mapper:saved", onSaved);
+    };
+  }, [mapperId, datos?.dolor, datos?.lado]);
 
   /* -------- “Continuar” → guarda lo necesario y navega a PantallaTres -------- */
   const handleContinuar = async () => {
@@ -265,6 +331,8 @@ export default function TraumaModulo({
     return partes.join("\n");
   };
 
+  // (Handlers de pago/descarga se mantienen por compat, aunque lo normal es ir a PantallaTres)
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const handlePagar = async () => {
     const edadNum = Number(datos.edad);
     if (
@@ -331,7 +399,6 @@ export default function TraumaModulo({
     }
   };
 
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const handleDescargar = async () => {
     const idPago = sessionStorage.getItem("idPago");
     if (!idPago) {
@@ -501,10 +568,22 @@ export default function TraumaModulo({
           <div className="trauma-modal-card">
             <GenericMapper
               mapperId={mapperId}
-              ladoInicial={(datos?.lado || "").toLowerCase().includes("izq") ? "izquierda" : "derecha"}
+              ladoInicial={normalizeSide(datos?.lado) || undefined}
               vistaInicial={mapperId === "mano" ? (vista === "anterior" ? "palmar" : "dorsal") : vista}
-              onSave={() => {
-                // El mapper ya guarda en sessionStorage; consolidamos para el preview
+              onSave={(payload) => {
+                // NUEVO: persistimos salida del mapper
+                try {
+                  const zonaKey = payload?.zonaKey || mapperId || resolveZonaKey(datos?.dolor);
+                  const lado = payload?.lado || datos?.lado || "";
+                  const puntos =
+                    payload?.puntos ||
+                    payload?.puntosSeleccionados ||
+                    payload?.lines ||
+                    [];
+                  const resumen = payload?.resumen || { lines: puntos };
+                  persistMapperToStorage({ zonaKey, lado, puntos, resumen });
+                } catch {}
+                // Consolidar secciones para el preview
                 syncSeccionesExtra(datos?.lado);
                 setMostrarMapper(false);
               }}
