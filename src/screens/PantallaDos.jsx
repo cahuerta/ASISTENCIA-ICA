@@ -10,6 +10,9 @@ import PreopModulo from "../modules/PreopModulo.jsx";
 import GeneralesModulo from "../modules/GeneralesModulo.jsx";
 import IAModulo from "../modules/IAModulo.jsx";
 
+/* Logo (header pequeño) */
+import logoICA from "../assets/ica.jpg";
+
 /**
  * PantallaDos
  * - Muestra los botones de módulos.
@@ -26,17 +29,28 @@ export default function PantallaDos({
   const T = getTheme();
 
   const cssVars = {
-    "--bg": T.bg, "--surface": T.surface, "--border": T.border,
-    "--text": T.text, "--text-muted": T.textMuted, "--muted": T.muted,
-    "--primary": T.primary, "--primary-dark": T.primaryDark, "--onPrimary": T.onPrimary,
-    "--accent-alpha": T.accentAlpha, "--shadow-sm": T.shadowSm, "--shadow-md": T.shadowMd,
+    "--bg": T.bg,
+    "--surface": T.surface,
+    "--border": T.border,
+    "--text": T.text,
+    "--text-muted": T.textMuted,
+    "--muted": T.muted,
+    "--primary": T.primary,
+    "--primary-dark": T.primaryDark,
+    "--onPrimary": T.onPrimary,
+    "--accent-alpha": T.accentAlpha,
+    "--shadow-sm": T.shadowSm,
+    "--shadow-md": T.shadowMd,
     "--overlay": T.overlay,
   };
 
   // === Helpers ===
   const getQuery = () => {
-    try { return new URLSearchParams(window.location.search); }
-    catch { return new URLSearchParams(""); }
+    try {
+      return new URLSearchParams(window.location.search);
+    } catch {
+      return new URLSearchParams("");
+    }
   };
 
   const inferModuloFromState = () => {
@@ -70,12 +84,16 @@ export default function PantallaDos({
   };
 
   // Datos paciente (prop > sessionStorage)
-  const datos = initialDatos || (() => {
-    try {
-      const raw = sessionStorage.getItem("datosPacienteJSON");
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
-  })();
+  const datos =
+    initialDatos ||
+    (() => {
+      try {
+        const raw = sessionStorage.getItem("datosPacienteJSON");
+        return raw ? JSON.parse(raw) : null;
+      } catch {
+        return null;
+      }
+    })();
 
   // ¿Debemos autoabrir?
   const [modulo, setModulo] = useState(() => {
@@ -89,14 +107,18 @@ export default function PantallaDos({
       // Prioridad: prop -> URL -> sessionStorage -> inferencia -> fallback
       const remembered =
         moduloActual ||
-        (moduloFromURL && ["trauma", "preop", "generales", "ia"].includes(moduloFromURL) ? moduloFromURL : null) ||
+        (moduloFromURL && ["trauma", "preop", "generales", "ia"].includes(moduloFromURL)
+          ? moduloFromURL
+          : null) ||
         sessionStorage.getItem("modulo") ||
         inferModuloFromState();
 
       if (returning) {
         const toOpen = remembered || "trauma";
         // persistir para siguientes montajes
-        try { sessionStorage.setItem("modulo", toOpen); } catch {}
+        try {
+          sessionStorage.setItem("modulo", toOpen);
+        } catch {}
         return toOpen;
       }
       return null;
@@ -119,11 +141,15 @@ export default function PantallaDos({
       if (returning) {
         const remembered =
           moduloActual ||
-          (moduloFromURL && ["trauma", "preop", "generales", "ia"].includes(moduloFromURL) ? moduloFromURL : null) ||
+          (moduloFromURL && ["trauma", "preop", "generales", "ia"].includes(moduloFromURL)
+            ? moduloFromURL
+            : null) ||
           sessionStorage.getItem("modulo") ||
           inferModuloFromState() ||
           "trauma";
-        try { sessionStorage.setItem("modulo", remembered); } catch {}
+        try {
+          sessionStorage.setItem("modulo", remembered);
+        } catch {}
         setModulo(remembered);
       }
     } catch {}
@@ -131,21 +157,44 @@ export default function PantallaDos({
 
   // En cuanto hay selección, renderizamos SOLO el módulo
   const mountProps = { initialDatos: datos || {} };
-  if (modulo === "trauma")    return <TraumaModulo    {...mountProps} />;
-  if (modulo === "preop")     return <PreopModulo     {...mountProps} />;
+  if (modulo === "trauma") return <TraumaModulo {...mountProps} />;
+  if (modulo === "preop") return <PreopModulo {...mountProps} />;
   if (modulo === "generales") return <GeneralesModulo {...mountProps} />;
-  if (modulo === "ia")        return <IAModulo        {...mountProps} />;
+  if (modulo === "ia") return <IAModulo {...mountProps} />;
 
-  // UI de selección (sin módulo activo)
+  // UI de selección (sin módulo activo) — NUEVO LAYOUT:
+  // Logo pequeño arriba → info paciente → botones → nota al final
   return (
     <div className="app" style={cssVars}>
       <div style={styles(T).wrap}>
-        <div style={styles(T).topBar}>
+        {/* Header con logo pequeño */}
+        <div style={styles(T).headerRow}>
+          <div style={styles(T).logoBadge}>
+            <img src={logoICA} alt="Instituto de Cirugía Articular" style={styles(T).logoImg} />
+          </div>
+        </div>
+
+        {/* Info paciente (nombre/RUT) */}
+        <div className="card" style={styles(T).infoCard}>
+          <div style={styles(T).infoText}>
+            {datos?.nombre ? (
+              <>
+                Paciente: <strong>{datos.nombre}</strong>
+                {datos.rut ? ` — RUT: ${datos.rut}` : ""}
+              </>
+            ) : (
+              <>Ingrese sus datos en la pantalla anterior para personalizar la experiencia.</>
+            )}
+          </div>
+        </div>
+
+        {/* Botones de módulos */}
+        <div style={styles(T).buttonsGrid}>
           {[
-            { key: "trauma",    label: "ASISTENTE TRAUMATOLÓGICO" },
-            { key: "preop",     label: "EXÁMENES PREQUIRÚRGICOS" },
+            { key: "trauma", label: "ASISTENTE TRAUMATOLÓGICO" },
+            { key: "preop", label: "EXÁMENES PREQUIRÚRGICOS" },
             { key: "generales", label: "REVISIÓN GENERAL" },
-            { key: "ia",        label: "ANÁLISIS MEDIANTE IA" },
+            { key: "ia", label: "ANÁLISIS MEDIANTE IA" },
           ].map((b) => (
             <button
               key={b.key}
@@ -153,7 +202,9 @@ export default function PantallaDos({
               className="btn"
               style={styles(T).btn}
               onClick={() => {
-                try { sessionStorage.setItem("modulo", b.key); } catch {}
+                try {
+                  sessionStorage.setItem("modulo", b.key);
+                } catch {}
                 setModulo(b.key);
               }}
               aria-label={`Abrir ${b.label}`}
@@ -163,14 +214,10 @@ export default function PantallaDos({
           ))}
         </div>
 
-        <div className="card" style={styles(T).card}>
-          <div style={styles(T).info}>
-            {datos?.nombre
-              ? <>Paciente: <strong>{datos.nombre}</strong>{datos.rut ? ` — RUT: ${datos.rut}` : ""}</>
-              : <>Seleccione un módulo para continuar.</>}
-          </div>
+        {/* Nota/leyenda al final */}
+        <div className="card" style={styles(T).noteCard}>
           <div style={styles(T).hintBox}>
-            Elija un módulo arriba para iniciar. Cada módulo usará los datos ya ingresados.
+            Elija un módulo para iniciar. Cada módulo usará los datos ya ingresados.
           </div>
         </div>
       </div>
@@ -181,8 +228,46 @@ export default function PantallaDos({
 /* ===== Estilos compactos y responsivos ===== */
 function styles(T) {
   return {
-    wrap: { maxWidth: 1200, margin: "0 auto", padding: "clamp(12px,2vw,16px)" },
-    topBar: {
+    wrap: {
+      maxWidth: 960,
+      margin: "0 auto",
+      padding: "clamp(12px,2vw,16px)",
+    },
+
+    /* Header con logo pequeño */
+    headerRow: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: "clamp(8px,1.6vw,12px)",
+    },
+    logoBadge: {
+      background: T.surface,
+      border: `1px solid ${T.border}`,
+      borderRadius: 12,
+      boxShadow: T.shadowSm,
+      padding: "8px 10px",
+    },
+    logoImg: {
+      display: "block",
+      height: "48px",
+      width: "auto",
+      objectFit: "contain",
+      borderRadius: 8,
+    },
+
+    /* Info paciente */
+    infoCard: {
+      padding: "clamp(10px,1.8vw,14px)",
+      marginBottom: "clamp(8px,1.6vw,12px)",
+    },
+    infoText: {
+      color: T.textMuted,
+      fontSize: "clamp(12px,1.6vw,13px)",
+    },
+
+    /* Botones en grid responsivo */
+    buttonsGrid: {
       display: "grid",
       gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
       gap: "clamp(8px,1.4vw,12px)",
@@ -200,9 +285,13 @@ function styles(T) {
       background: T.surface,
       color: T.primary,
       borderColor: T.primary,
+      boxShadow: `0 0 0 2px ${T.accentAlpha}, ${T.shadowSm}`,
     },
-    card: { padding: "clamp(12px,2.2vw,16px)" },
-    info: { margin: "6px 0 12px", color: T.textMuted, fontSize: "clamp(12px,1.6vw,13px)" },
+
+    /* Nota/leyenda al final */
+    noteCard: {
+      padding: "clamp(12px,2.2vw,16px)",
+    },
     hintBox: {
       padding: 14,
       borderRadius: 10,
