@@ -16,8 +16,8 @@ import PantallaDos from "./screens/PantallaDos.jsx";
  *   que el módulo correspondiente detecte el pago y habilite descargas.
  * - Si volvemos del pago con ?pago=cancelado|error|rechazado (o cualquier valor ≠ "ok"),
  *   limpiamos todo y reiniciamos en PantallaUno.
- * - Mantenemos `datosPacienteJSON` y `modulo` en sessionStorage para que los módulos
- *   sepan qué mostrar y puedan restaurar estado.
+ * - Solo se preserva lo guardado si el retorno trae ?pago=ok. Si no, se limpian
+ *   restos de sesiones anteriores para partir desde cero.
  */
 
 export default function App() {
@@ -126,7 +126,7 @@ export default function App() {
     } catch {}
   }, [pantalla]);
 
-  // ===== Procesar retorno de pago (OK o NO OK) =====
+  // ===== Procesar retorno de pago (OK o NO OK) + limpieza si hay restos sin ?pago =====
   useEffect(() => {
     if (handledReturnRef.current) return;
 
@@ -156,6 +156,7 @@ export default function App() {
       } catch {}
     }
 
+    // Caso 1: retorno OK -> preservar y pasar a PantallaDos
     if (pago === "ok") {
       setPagoOk(true);
       setPantalla("dos");
@@ -164,10 +165,37 @@ export default function App() {
       return;
     }
 
-    // Si venimos con ?pago distinto de "ok", reiniciar completamente
+    // Caso 2: retorno explícito NO OK -> limpiar todo
     if (pago && pago !== "ok") {
       handledReturnRef.current = true;
       resetAppHard();
+      return;
+    }
+
+    // Caso 3: NO hay parámetro ?pago (navegación "normal")
+    // Si hay restos de una sesión de pago previa, limpiar todo y reiniciar.
+    const hayRestosPrevios = (() => {
+      try {
+        const keys = [
+          "idPago",
+          "modulo",
+          "trauma_ia_examenes",
+          "trauma_ia_diagnostico",
+          "trauma_ia_justificacion",
+          "resonanciaChecklist",
+          "resonanciaResumenTexto",
+          "ordenAlternativa",
+        ];
+        return keys.some((k) => sessionStorage.getItem(k) !== null);
+      } catch {
+        return false;
+      }
+    })();
+
+    if (hayRestosPrevios) {
+      handledReturnRef.current = true;
+      resetAppHard();
+      return;
     }
   }, []);
 
