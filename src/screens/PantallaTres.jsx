@@ -5,15 +5,14 @@ import "../app.css";
 import { getTheme } from "../theme.js";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 
-/* Módulos que sí pueden usarse para otros flujos */
+/* Módulos */
 import PreopModulo from "../modules/PreopModulo.jsx";
 import GeneralesModulo from "../modules/GeneralesModulo.jsx";
 import IAModulo from "../modules/IAModulo.jsx";
 
-/* BACKEND (igual que en tu App.jsx) */
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* Helpers locales (mismos criterios usados en el proyecto) */
+/* === helpers === */
 function ensureTraumaIdPago() {
   let id = null;
   try { id = sessionStorage.getItem("idPago"); } catch {}
@@ -23,9 +22,7 @@ function ensureTraumaIdPago() {
   }
   return id;
 }
-
 function leerSecciones(zonaKey, ladoFallback = "") {
-  // 1) Preferir `${zona}_seccionesExtra` (lo dejamos desde Trauma/Mapper)
   try {
     const rawExtra = sessionStorage.getItem(`${zonaKey}_seccionesExtra`);
     if (rawExtra) {
@@ -34,16 +31,12 @@ function leerSecciones(zonaKey, ladoFallback = "") {
         return arr
           .filter((sec) => Array.isArray(sec?.lines) && sec.lines.length)
           .map((sec) => ({
-            title:
-              sec.title ||
-              `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${ladoFallback} — puntos marcados`,
+            title: sec.title || `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${ladoFallback} — puntos marcados`,
             lines: sec.lines,
           }));
       }
     }
   } catch {}
-
-  // 2) Fallback directo a `${zona}_data` (por si alguien abrió PantallaTres sin pasar antes por sync)
   try {
     const rawData = sessionStorage.getItem(`${zonaKey}_data`);
     if (rawData) {
@@ -51,41 +44,31 @@ function leerSecciones(zonaKey, ladoFallback = "") {
       const lines = Array.isArray(d?.puntosSeleccionados) ? d.puntosSeleccionados : [];
       if (lines.length) {
         const lado = d?.lado || ladoFallback || "";
-        return [
-          {
-            title: `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${lado} — puntos marcados`,
-            lines,
-          },
-        ];
+        return [{ title: `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${lado} — puntos marcados`, lines }];
       }
     }
   } catch {}
-
   return [];
 }
-
 function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
   const lado = (ladoTexto || "").toLowerCase();
-  const side =
-    lado.includes("izquierda") ? "izquierda" : lado.includes("derecha") ? "derecha" : "";
+  const side = lado.includes("izquierda") ? "izquierda" : lado.includes("derecha") ? "derecha" : "";
   if (!side) return null;
   try {
     const raw = sessionStorage.getItem(`${zonaKey}_resumen_${side}`);
     return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
+/* ======================================================= */
 export default function PantallaTres({
   initialDatos,
   moduloInicial,
   rmPdfListo: rmPdfListoProp,
   rmIdPago: rmIdPagoProp,
-  // sólo por compat: no los usamos aquí porque esto es preview renderizada
-  onPedirChecklistResonancia,
-  onDetectarResonancia,
-  resumenResoTexto,
+  onPedirChecklistResonancia, // compat
+  onDetectarResonancia,       // compat
+  resumenResoTexto,           // compat
 }) {
   const T = getTheme();
 
@@ -97,6 +80,50 @@ export default function PantallaTres({
     "--overlay": T.overlay,
   };
 
+  /* ==== URL state (pago ok, idPago, modulo deducido) ==== */
+  const [pagoOk, setPagoOk] = useState(false);
+  const [idPagoState, setIdPagoState] = useState("");
+
+  // deducimos módulo con prioridad: prop -> sessionStorage -> ?modulo -> prefijo idPago -> "trauma"
+  const [moduloState, setModuloState] = useState("trauma");
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const pago = params.get("pago");
+      const idPagoFromUrl = params.get("idPago") || "";
+      const moduloFromUrl = (params.get("modulo") || "").toLowerCase();
+
+      if (pago === "ok") setPagoOk(true);
+
+      // persistir idPago si vino por URL
+      if (idPagoFromUrl) {
+        setIdPagoState(idPagoFromUrl);
+        try { sessionStorage.setItem("idPago", idPagoFromUrl); } catch {}
+      } else {
+        const s = sessionStorage.getItem("idPago") || "";
+        setIdPagoState(s);
+      }
+
+      // determinar módulo
+      let mod =
+        (moduloInicial && ["trauma","preop","generales","ia"].includes(moduloInicial) && moduloInicial) ||
+        sessionStorage.getItem("modulo") ||
+        (["trauma","preop","generales","ia"].includes(moduloFromUrl) ? moduloFromUrl : "");
+
+      if (!mod) {
+        const probe = idPagoFromUrl || sessionStorage.getItem("idPago") || "";
+        if (probe.startsWith("preop_")) mod = "preop";
+        else if (probe.startsWith("generales_")) mod = "generales";
+        else mod = "trauma";
+      }
+
+      setModuloState(mod);
+      try { sessionStorage.setItem("modulo", mod); } catch {}
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moduloInicial]);
+
   // === datos del paciente
   const datos = useMemo(() => {
     if (initialDatos) return initialDatos;
@@ -106,34 +133,19 @@ export default function PantallaTres({
     } catch { return {}; }
   }, [initialDatos]);
 
-  // === módulo seleccionado
-  const modulo = useMemo(() => {
-    if (moduloInicial) return moduloInicial;
-    try {
-      const m = sessionStorage.getItem("modulo");
-      if (["trauma", "preop", "generales", "ia"].includes(m)) return m;
-    } catch {}
-    return "trauma";
-  }, [moduloInicial]);
-
   // === estado de RM para mostrar link PDF (solo trauma/ia)
   const rmPdfListo = useMemo(() => {
     if (typeof rmPdfListoProp === "boolean") return rmPdfListoProp;
     try { return sessionStorage.getItem("rm_pdf_disponible") === "1"; } catch { return false; }
   }, [rmPdfListoProp]);
-
   const rmIdPago = useMemo(() => {
     if (typeof rmIdPagoProp === "string") return rmIdPagoProp;
     try { return sessionStorage.getItem("rm_idPago") || ""; } catch { return ""; }
   }, [rmIdPagoProp]);
 
-  // === IA (Trauma) guardada en sessionStorage por el módulo previo
+  // === IA (Trauma) desde storage
   const examenesIA = useMemo(() => {
-    try {
-      const raw = sessionStorage.getItem("trauma_ia_examenes");
-      const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
-    } catch { return []; }
+    try { return JSON.parse(sessionStorage.getItem("trauma_ia_examenes") || "[]"); } catch { return []; }
   }, []);
   const diagnosticoIA = useMemo(() => {
     try { return sessionStorage.getItem("trauma_ia_diagnostico") || ""; } catch { return ""; }
@@ -142,7 +154,7 @@ export default function PantallaTres({
     try { return sessionStorage.getItem("trauma_ia_justificacion") || ""; } catch { return ""; }
   }, []);
 
-  // === Secciones de puntos marcados (por zona/lado)
+  // === Secciones puntos marcados (Trauma)
   const seccionesMarcadores = useMemo(() => {
     const lado = datos?.lado || "";
     const zonas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
@@ -154,24 +166,26 @@ export default function PantallaTres({
     return out;
   }, [datos?.lado]);
 
-  // ===== Pago / Descarga (mismo comportamiento que usas en Trauma)
-  const [descargando, setDescargando] = useState(false);
-  const [mensajeDescarga, setMensajeDescarga] = useState("");
+  /* ========= Polling de confirmación según módulo ========= */
   const pollerRef = useRef(null);
-
   useEffect(() => {
-    // Si venimos con ?pago=ok en la URL, ya lo maneja App, pero dejamos este
-    // bloque en caso de que PantallaTres se cargue directo.
     try {
       const params = new URLSearchParams(window.location.search);
       const pago = params.get("pago");
       const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
       if (pago === "ok" && idPago) {
+        const path =
+          moduloState === "preop"
+            ? `${BACKEND_BASE}/obtener-datos-preop/${idPago}`
+            : moduloState === "generales"
+            ? `${BACKEND_BASE}/obtener-datos-generales/${idPago}`
+            : `${BACKEND_BASE}/obtener-datos/${idPago}`;
+
         if (pollerRef.current) clearInterval(pollerRef.current);
         let intentos = 0;
         pollerRef.current = setInterval(async () => {
           intentos++;
-          try { await fetch(`${BACKEND_BASE}/obtener-datos/${idPago}`); } catch {}
+          try { await fetch(path, { cache: "no-store" }); } catch {}
           if (intentos >= 30) {
             clearInterval(pollerRef.current);
             pollerRef.current = null;
@@ -185,21 +199,18 @@ export default function PantallaTres({
         pollerRef.current = null;
       }
     };
-  }, []);
+  }, [moduloState]);
+
+  /* ========= Pago/Descarga (solo trauma aquí) ========= */
+  const [descargando, setDescargando] = useState(false);
+  const [mensajeDescarga, setMensajeDescarga] = useState("");
 
   const handlePagar = async () => {
     const edadNum = Number(datos.edad);
-    if (
-      !datos.nombre?.trim() ||
-      !datos.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0 ||
-      !datos.dolor?.trim()
-    ) {
+    if (!datos.nombre?.trim() || !datos.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0 || !datos.dolor?.trim()) {
       alert("Complete nombre, RUT, edad (>0) y dolor antes de pagar.");
       return;
     }
-
     try {
       const idPago = ensureTraumaIdPago();
       try {
@@ -222,26 +233,12 @@ export default function PantallaTres({
           datosPaciente: {
             ...datos,
             edad: edadNum,
-            // IA guardada:
             examenesIA,
             diagnosticoIA,
             justificacionIA,
-            // RM (si la llenaste antes):
-            rmForm: null,
-            rmObservaciones: "",
-            // Marcadores:
             rodillaMarcadores,
-            marcadores: {
-              rodilla: rodillaMarcadores,
-              mano: manoMarcadores,
-              hombro: hombroMarcadores,
-              codo: codoMarcadores,
-              tobillo: tobilloMarcadores,
-            },
-            manoMarcadores,
-            hombroMarcadores,
-            codoMarcadores,
-            tobilloMarcadores,
+            marcadores: { rodilla: rodillaMarcadores, mano: manoMarcadores, hombro: hombroMarcadores, codo: codoMarcadores, tobillo: tobilloMarcadores },
+            manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores,
           },
         }),
       });
@@ -255,11 +252,8 @@ export default function PantallaTres({
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const handleDescargar = async () => {
-    const idPago = sessionStorage.getItem("idPago");
-    if (!idPago) {
-      alert("ID de pago no encontrado");
-      return;
-    }
+    const idPago = idPagoState || sessionStorage.getItem("idPago");
+    if (!idPago) { alert("ID de pago no encontrado"); return; }
 
     const intentaDescarga = async () => {
       const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
@@ -298,7 +292,6 @@ export default function PantallaTres({
 
         if (r.status === 404) {
           if (!reinyectado) {
-            // Reinyectar datos mínimos y reintentar
             const edadNum = Number(datos.edad) || datos.edad;
             const lado = datos?.lado || "";
             const rodillaMarcadores = loadMarcadoresPorZona("rodilla", lado);
@@ -319,17 +312,8 @@ export default function PantallaTres({
                   diagnosticoIA,
                   justificacionIA,
                   rodillaMarcadores,
-                  marcadores: {
-                    rodilla: rodillaMarcadores,
-                    mano: manoMarcadores,
-                    hombro: hombroMarcadores,
-                    codo: codoMarcadores,
-                    tobillo: tobilloMarcadores,
-                  },
-                  manoMarcadores,
-                  hombroMarcadores,
-                  codoMarcadores,
-                  tobilloMarcadores,
+                  marcadores: { rodilla: rodillaMarcadores, mano: manoMarcadores, hombro: hombroMarcadores, codo: codoMarcadores, tobillo: tobilloMarcadores },
+                  manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores,
                 },
               }),
             });
@@ -355,6 +339,7 @@ export default function PantallaTres({
     }
   };
 
+  /* ===== UI ===== */
   const styles = {
     wrap: { maxWidth: 1200, margin: "0 auto", padding: "16px" },
     header: { marginBottom: 12, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" },
@@ -368,14 +353,9 @@ export default function PantallaTres({
     pdfLinkBox: { marginTop: 8 },
     pdfLink: {
       display: "inline-block",
-      fontWeight: 750,
-      fontSize: 13,
-      textDecoration: "none",
-      background: T.surface,
-      color: T.primaryDark || "#0d47a1",
-      border: `2px solid ${T.primaryDark || "#0d47a1"}`,
-      borderRadius: 10,
-      padding: "10px 12px",
+      fontWeight: 750, fontSize: 13, textDecoration: "none",
+      background: T.surface, color: T.primaryDark || "#0d47a1",
+      border: `2px solid ${T.primaryDark || "#0d47a1"}`, borderRadius: 10, padding: "10px 12px",
     },
   };
 
@@ -396,10 +376,9 @@ export default function PantallaTres({
         </div>
 
         <div className="card" style={styles.card}>
-          {/* ====== TRAUMA: PREVIEW ORDEN + PREVIEW IA + PAGO ====== */}
-          {modulo === "trauma" && (
+          {/* ===== TRAUMA ===== */}
+          {moduloState === "trauma" && (
             <>
-              {/* Preview Orden: puntos marcados por zona/lado */}
               <div style={styles.block}>
                 <div style={styles.hblock}>Puntos marcados</div>
                 {seccionesMarcadores.length ? (
@@ -416,26 +395,20 @@ export default function PantallaTres({
                 )}
               </div>
 
-              {/* Preview IA (diagnóstico + exámenes + justificación) */}
               <div style={styles.block}>
                 <div style={styles.hblock}>Análisis IA</div>
-
                 <div className="trauma-block">
                   <strong>Diagnóstico presuntivo:</strong>
                   <div className="trauma-mono mt-6">{diagnosticoIA || "—"}</div>
                 </div>
-
                 <div className="trauma-block">
                   <strong>Exámenes sugeridos:</strong>
-                  {examenesIA.length ? (
-                    <ul style={styles.list}>
-                      {examenesIA.map((e, i) => <li key={`${e}-${i}`}>{e}</li>)}
-                    </ul>
+                  {Array.isArray(examenesIA) && examenesIA.length ? (
+                    <ul style={styles.list}>{examenesIA.map((e, i) => <li key={`${e}-${i}`}>{e}</li>)}</ul>
                   ) : (
                     <div className="trauma-hint">Aún no hay lista generada.</div>
                   )}
                 </div>
-
                 {justificacionIA && (
                   <div className="trauma-block">
                     <strong>Justificación (≈100 palabras):</strong>
@@ -444,17 +417,18 @@ export default function PantallaTres({
                 )}
               </div>
 
-              {/* Pago / Descarga */}
               <div style={styles.block}>
-                <button className="trauma-btn primary" style={styles.btnPrimary} onClick={handlePagar}>
-                  Pagar ahora
-                </button>
+                {!pagoOk && (
+                  <button className="trauma-btn primary" style={styles.btnPrimary} onClick={handlePagar}>
+                    Pagar ahora
+                  </button>
+                )}
                 <button
                   className="trauma-btn"
                   style={{ marginLeft: 8 }}
                   onClick={handleDescargar}
-                  disabled={descargando}
-                  title={mensajeDescarga || "Verificar y descargar"}
+                  disabled={!pagoOk || descargando}
+                  title={!pagoOk ? "Completa el pago para descargar" : (mensajeDescarga || "Verificar y descargar")}
                 >
                   {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
                 </button>
@@ -476,10 +450,10 @@ export default function PantallaTres({
             </>
           )}
 
-          {/* ====== Otros módulos, si decides usarlos en esta pantalla ====== */}
-          {modulo === "preop" && <PreopModulo initialDatos={datos} />}
-          {modulo === "generales" && <GeneralesModulo initialDatos={datos} />}
-          {modulo === "ia" && (
+          {/* ===== PREOP / GENERALES / IA ===== */}
+          {moduloState === "preop" && <PreopModulo initialDatos={datos} />}
+          {moduloState === "generales" && <GeneralesModulo initialDatos={datos} />}
+          {moduloState === "ia" && (
             <>
               <IAModulo initialDatos={datos} />
               {rmPdfListo && !!rmIdPago && (
