@@ -6,6 +6,11 @@ import { getTheme } from "../theme.js";
 import FormularioResonancia from "../components/FormularioResonancia.jsx";
 import AvisoLegal from "../components/AvisoLegal.jsx";
 
+/* ESQUEMA (como en Preop) */
+import EsquemaAnterior from "../EsquemaAnterior.jsx";
+import EsquemaPosterior from "../EsquemaPosterior.jsx";
+import EsquemaToggleTabs from "../EsquemaToggleTabs.jsx";
+
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
 /* ================= Helpers ================= */
@@ -117,6 +122,14 @@ export default function TraumaModulo({
   const T = getTheme();
   const S = makeStyles(T);
 
+  /* === NUEVO: flujo por fases ===
+     1) "esquema" → seleccionar zona/lado
+     2) "preview" → vista previa de orden (sin IA)
+     3) "previewIA" → vista con IA (dx, exámenes, justificación) + pago/descarga
+  */
+  const [fase, setFase] = useState("esquema");
+  const [vista, setVista] = useState("anterior");
+
   const [datos, setDatos] = useState(initialDatos || {});
   const [stepStarted, setStepStarted] = useState(false);
   const [loadingIA, setLoadingIA] = useState(false);
@@ -147,7 +160,7 @@ export default function TraumaModulo({
 
   // Restaurar estado
   useEffect(() => {
-    // Aviso legal: si no está aceptado, mostrar overlay
+    // Aviso legal: si no está aceptado, mostrar overlay (bloqueante)
     const avisoOk = (() => {
       try {
         return sessionStorage.getItem("trauma_aviso_ok") === "1";
@@ -163,7 +176,7 @@ export default function TraumaModulo({
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
     } catch {}
 
-    // IA memorizada (NO autoactivar step, salvo retorno de pago OK + idPago)
+    // IA memorizada (para retorno de pago o recargas)
     let ex = [];
     let dx = "";
     let just = "";
@@ -180,15 +193,19 @@ export default function TraumaModulo({
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
     const idPago =
-      params.get("idPago") || (() => { try { return sessionStorage.getItem("idPago"); } catch { return ""; } })();
+      params.get("idPago") ||
+      (() => {
+        try {
+          return sessionStorage.getItem("idPago");
+        } catch {
+          return "";
+        }
+      })();
 
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
-
-      // Solo pasar directo a preview IA si hay IA en memoria (examenes)
-      if (Array.isArray(ex) && ex.length > 0) {
-        setStepStarted(true);
-      }
+      setStepStarted(true);
+      setFase("previewIA");
 
       // Polling de compatibilidad
       if (pollerRef.current) clearInterval(pollerRef.current);
@@ -238,8 +255,50 @@ export default function TraumaModulo({
     return out;
   }, [datos?.lado]);
 
+  /* ====== ESQUEMA HUMANO (selección zona/lado) ====== */
+  const onSeleccionZona = (zona) => {
+    let dolor = "",
+      lado = "";
+    const zl = String(zona || "").toLowerCase();
+
+    if (zl.includes("columna cervical")) {
+      dolor = "Columna cervical";
+      lado = "";
+    } else if (zl.includes("columna dorsal")) {
+      dolor = "Columna dorsal";
+      lado = "";
+    } else if (zl.includes("columna lumbar") || zl.includes("columna")) {
+      dolor = "Columna lumbar";
+      lado = "";
+    } else if (zl.includes("cadera")) {
+      dolor = "Cadera";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("rodilla")) {
+      dolor = "Rodilla";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("hombro")) {
+      dolor = "Hombro";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("codo")) {
+      dolor = "Codo";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("mano")) {
+      dolor = "Mano";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("tobillo")) {
+      dolor = "Tobillo";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    }
+
+    const next = { ...datos, dolor, lado };
+    setDatos(next);
+    try {
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
+    } catch {}
+  };
+
   /* -------- IA -------- */
-  const handleContinuar = async () => {
+  const handleContinuarIA = async () => {
     try {
       setLoadingIA(true);
 
@@ -324,6 +383,7 @@ export default function TraumaModulo({
       setResonanciaResumenTexto("");
 
       setStepStarted(true);
+      setFase("previewIA");
     } catch (e) {
       alert("No fue posible obtener la información de IA (Trauma). Intenta nuevamente.");
     } finally {
@@ -578,65 +638,106 @@ export default function TraumaModulo({
   /* -------- UI -------- */
   const usarIA = Array.isArray(examenesIA) && examenesIA.length > 0;
 
+  /* === Gating estricto: si no acepta Aviso, no mostramos nada más === */
+  if (mostrarAviso) {
+    return (
+      <div style={S.card}>
+        <AvisoLegal
+          visible={true}
+          persist={false}
+          onAccept={continuarTrasAviso}
+          onReject={rechazarAviso}
+        />
+      </div>
+    );
+  }
+
   return (
     <div style={S.card}>
-      {/* AVISO LEGAL (bloquea hasta aceptar) */}
-      <AvisoLegal
-        visible={mostrarAviso}
-        persist={false}
-        onAccept={continuarTrasAviso}
-        onReject={rechazarAviso}
-      />
-
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
         Vista previa — Imagenología
       </h3>
 
-      <div style={{ marginBottom: 10 }}>
-        <div>
-          <strong>Paciente:</strong> {datos?.nombre || "—"}
+      {/* ===== FASE 1: ESQUEMA ===== */}
+      {fase === "esquema" && (
+        <div style={{ marginTop: 6 }}>
+          <EsquemaToggleTabs vista={vista} onChange={setVista} />
+          {vista === "anterior" ? (
+            <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
+          ) : (
+            <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
+          )}
+          <div className="muted" style={{ marginTop: 10 }}>
+            {datos?.dolor ? (
+              <>
+                Zona: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong>
+              </>
+            ) : (
+              "Seleccione una zona del esquema para continuar"
+            )}
+          </div>
+          <button
+            style={{ ...S.btnPrimary, marginTop: 12 }}
+            onClick={() => setFase("preview")}
+            disabled={!datos?.dolor}
+            title={datos?.dolor ? "Ir a vista previa" : "Seleccione una zona primero"}
+          >
+            Continuar → Vista previa
+          </button>
         </div>
-        <div>
-          <strong>RUT:</strong> {datos?.rut || "—"}
-        </div>
-        <div>
-          <strong>Edad:</strong> {datos?.edad || "—"}
-        </div>
-        <div>
-          <strong>Género:</strong> {datos?.genero || "—"}
-        </div>
-        <div>
-          <strong>Dolor:</strong> {datos?.dolor || "—"}
-        </div>
-        <div>
-          <strong>Lado:</strong> {datos?.lado || "—"}
-        </div>
-      </div>
-
-      {/* Primer preview: SIEMPRE visible */}
-      <div style={{ ...S.mono, marginTop: 6 }}>{resumenInicialTrauma(datos)}</div>
-
-      {/* Secciones de puntos de cualquier zona disponible */}
-      {seccionesMarcadores.map((sec, idx) => (
-        <div style={S.block} key={`sec-${idx}`}>
-          <strong>{sec.title}</strong>
-          <ul style={{ marginTop: 6 }}>
-            {sec.lines.map((l, i) => (
-              <li key={i}>{l}</li>
-            ))}
-          </ul>
-        </div>
-      ))}
-
-      {/* Botón Continuar SOLO antes de iniciar IA */}
-      {!stepStarted && (
-        <button style={S.btnPrimary} onClick={handleContinuar} disabled={loadingIA}>
-          {loadingIA ? "Analizando con IA…" : "Continuar"}
-        </button>
       )}
 
-      {/* Segundo preview: IA + confirmación/pago/descarga */}
-      {stepStarted && (
+      {/* ===== FASE 2: PREVIEW ORDEN (sin IA) ===== */}
+      {fase === "preview" && (
+        <>
+          <div style={{ marginBottom: 10, marginTop: 8 }}>
+            <div>
+              <strong>Paciente:</strong> {datos?.nombre || "—"}
+            </div>
+            <div>
+              <strong>RUT:</strong> {datos?.rut || "—"}
+            </div>
+            <div>
+              <strong>Edad:</strong> {datos?.edad || "—"}
+            </div>
+            <div>
+              <strong>Género:</strong> {datos?.genero || "—"}
+            </div>
+            <div>
+              <strong>Dolor:</strong> {datos?.dolor || "—"}
+            </div>
+            <div>
+              <strong>Lado:</strong> {datos?.lado || "—"}
+            </div>
+          </div>
+
+          <div style={{ ...S.mono, marginTop: 6 }}>{resumenInicialTrauma(datos)}</div>
+
+          {/* Secciones de puntos de cualquier zona disponible */}
+          {seccionesMarcadores.map((sec, idx) => (
+            <div style={S.block} key={`sec-${idx}`}>
+              <strong>{sec.title}</strong>
+              <ul style={{ marginTop: 6 }}>
+                {sec.lines.map((l, i) => (
+                  <li key={i}>{l}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          <button
+            style={{ ...S.btnPrimary, marginTop: 12 }}
+            onClick={handleContinuarIA}
+            disabled={loadingIA || !datos?.dolor}
+            title={!datos?.dolor ? "Seleccione zona en el esquema" : "Analizar con IA"}
+          >
+            {loadingIA ? "Analizando con IA…" : "Continuar"}
+          </button>
+        </>
+      )}
+
+      {/* ===== FASE 3: PREVIEW IA + pago/descarga ===== */}
+      {fase === "previewIA" && (
         <>
           <div style={S.block}>
             <strong>Diagnóstico presuntivo:</strong>
@@ -747,20 +848,20 @@ export default function TraumaModulo({
               {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
             </button>
           )}
-        </>
-      )}
 
-      {/* ===== Modal local del Formulario de Resonancia ===== */}
-      {showRM && (
-        <div style={S.modalBackdrop} role="dialog" aria-modal="true">
-          <div style={S.modalCard}>
-            <FormularioResonancia
-              initial={resonanciaChecklist || {}}
-              onSave={handleSaveRM}
-              onCancel={() => setShowRM(false)}
-            />
-          </div>
-        </div>
+          {/* ===== Modal local del Formulario de Resonancia ===== */}
+          {showRM && (
+            <div style={S.modalBackdrop} role="dialog" aria-modal="true">
+              <div style={S.modalCard}>
+                <FormularioResonancia
+                  initial={resonanciaChecklist || {}}
+                  onSave={handleSaveRM}
+                  onCancel={() => setShowRM(false)}
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
