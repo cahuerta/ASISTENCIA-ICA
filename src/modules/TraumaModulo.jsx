@@ -11,6 +11,10 @@ import EsquemaAnterior from "../EsquemaAnterior.jsx";
 import EsquemaPosterior from "../EsquemaPosterior.jsx";
 import EsquemaToggleTabs from "../EsquemaToggleTabs.jsx";
 
+/* === NUEVO: mappers dinámicos === */
+import GenericMapper from "../mappers/GenericMapper.jsx";
+import { resolveZonaKey } from "../mappers/mapperRegistry.js";
+
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
 /* ================= Helpers ================= */
@@ -158,6 +162,10 @@ export default function TraumaModulo({
   // Aviso legal (gating)
   const [mostrarAviso, setMostrarAviso] = useState(false);
 
+  /* === NUEVO: estado para mappers === */
+  const [mostrarMapper, setMostrarMapper] = useState(false);
+  const [mapperId, setMapperId] = useState(null);
+
   // Restaurar estado
   useEffect(() => {
     // Aviso legal: si no está aceptado, mostrar overlay (bloqueante)
@@ -295,6 +303,18 @@ export default function TraumaModulo({
     try {
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
     } catch {}
+  };
+
+  /* === NUEVO: abrir mappers dinámicos === */
+  const abrirMapper = () => {
+    // (Aviso ya está gateado: si no ha aceptado, el componente retorna sólo el modal)
+    const id = resolveZonaKey(datos?.dolor || "");
+    if (!id) {
+      alert("No hay un esquema interactivo para la zona seleccionada.");
+      return;
+    }
+    setMapperId(id);
+    setMostrarMapper(true);
   };
 
   /* -------- IA -------- */
@@ -684,6 +704,16 @@ export default function TraumaModulo({
           >
             Continuar → Vista previa
           </button>
+
+          {/* Botón para abrir mappers también desde aquí */}
+          <button
+            style={{ ...S.btnSecondary, marginTop: 8 }}
+            onClick={abrirMapper}
+            disabled={!datos?.dolor}
+            title="Abrir esquema interactivo para marcar puntos"
+          >
+            Abrir esquema de puntos
+          </button>
         </div>
       )}
 
@@ -724,6 +754,16 @@ export default function TraumaModulo({
               </ul>
             </div>
           ))}
+
+          {/* Botón para abrir mappers desde el preview */}
+          <button
+            style={{ ...S.btnSecondary, marginTop: 12 }}
+            onClick={abrirMapper}
+            disabled={!datos?.dolor}
+            title="Abrir esquema interactivo para marcar puntos"
+          >
+            Abrir esquema de puntos
+          </button>
 
           <button
             style={{ ...S.btnPrimary, marginTop: 12 }}
@@ -862,6 +902,20 @@ export default function TraumaModulo({
             </div>
           )}
         </>
+      )}
+
+      {/* ===== NUEVO: Modal con GenericMapper ===== */}
+      {mostrarMapper && (
+        <div style={S.modalBackdrop} role="dialog" aria-modal="true">
+          <div style={S.modalCard}>
+            <GenericMapper mapperId={mapperId} lado={datos?.lado || ""} />
+            <div style={{ marginTop: 12, textAlign: "right" }}>
+              <button style={S.btnSecondary} onClick={() => setMostrarMapper(false)}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
