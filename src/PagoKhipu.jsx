@@ -83,7 +83,7 @@ export async function crearPagoKhipu({ idPago, datosPaciente, modulo = "trauma",
   return data.url;
 }
 
-/* ============ Detección de “guest” (SOLO para marcar modoGuest en backend) ============ */
+/* ==================== Detección de GUEST (solo para marcar modoGuest) ==================== */
 const GUEST_PERFIL = {
   nombre: "guest",
   rut: "11.111.111-1",
@@ -130,9 +130,7 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
   const idPago =
     opts?.idPago ||
     generarIdPago(
-      modulo === "preop" ? "preop" :
-      modulo === "generales" ? "generales" :
-      "pago"
+      modulo === "preop" ? "preop" : modulo === "generales" ? "generales" : "pago"
     );
 
   if (typeof window !== "undefined") {
@@ -142,14 +140,12 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
       "datosPacienteJSON",
       JSON.stringify({ ...datosPaciente, edad: edadNum })
     );
-    // Ayuda a que la app vuelva a la preview tras el retorno
-    sessionStorage.setItem("pantalla", "tres");
   }
 
-  // Guardar datos antes de ir a Khipu
+  // Persistimos antes de crear pago (tu backend luego hace merge no destructivo)
   await guardarDatos(idPago, { ...datosPaciente, edad: edadNum }, modulo);
 
-  // Si es “guest”, NO simulamos: pedimos al backend modoGuest=true
+  // Guest real: pedir al backend que trate este pago como pagado (modoGuest)
   const modoGuest = esGuest(datosPaciente);
 
   const urlPago = await crearPagoKhipu({
@@ -159,6 +155,7 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
     modoGuest,
   });
 
+  // Redirección (para guest vuelve directo ?pago=ok&idPago=..., para normal va a Khipu)
   window.location.href = urlPago;
 }
 
