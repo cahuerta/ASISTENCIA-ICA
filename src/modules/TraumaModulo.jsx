@@ -339,13 +339,8 @@ export default function TraumaModulo({
       setResonanciaChecklist(null);
       setResonanciaResumenTexto("");
 
-      // “Otra pantalla”: activar preview y subir a URL ?preview=1
-      const url = new URL(window.location.href);
-      url.searchParams.set("preview", "1");
-      window.history.pushState({}, "", url);
-      setIsPreview(true);
-      setStepStarted(true);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      // ✅ abrir preview en ventana/pestaña nueva
+      window.open("/preview-orden?scope=trauma", "_blank", "noopener,noreferrer");
     } catch {
       alert("No fue posible obtener la información de IA (Trauma). Intenta nuevamente.");
     } finally {
