@@ -3,11 +3,12 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
-import FormularioResonancia from "../components/FormularioResonancia.jsx"; // ← NUEVO
+import AvisoLegal from "../components/AvisoLegal.jsx"; // ← NUEVO: Aviso Legal
+import FormularioResonancia from "../components/FormularioResonancia.jsx";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistResonancia */ }) {
+export default function IAModulo({ initialDatos }) {
   const T = getTheme();
   const S = makeStyles(T);
 
@@ -27,6 +28,9 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
 
   // Modal local del FormularioResonancia
   const [showRM, setShowRM] = useState(false);
+
+  // Aviso legal (gating)
+  const [mostrarAviso, setMostrarAviso] = useState(false);
 
   // Pago/descarga
   const [pagoRealizado, setPagoRealizado] = useState(false);
@@ -135,7 +139,7 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
     return out;
   }, [leerResumenZona, previewIA, resonanciaChecklist, showRM]);
 
-  // ===== Montaje: sincroniza datos y detecta retorno de pago
+  // ===== Montaje: sincroniza datos y detecta retorno de pago (con gating de aviso legal)
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
@@ -146,16 +150,18 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
       if (savedPrev) setPreviewIA(savedPrev);
       const savedId = sessionStorage.getItem("idPago");
       if (savedId) setIdPago(savedId);
-
-      // restaurar checklist/alternativa si existían
-      const ck = sessionStorage.getItem("resonanciaChecklist");
-      const rs = sessionStorage.getItem("resonanciaResumenTexto");
-      const alt = sessionStorage.getItem("ordenAlternativa");
-      if (ck) setResonanciaChecklist(JSON.parse(ck));
-      if (rs) setResonanciaResumenTexto(rs);
-      if (alt) setOrdenAlternativa(alt);
     } catch {}
 
+    // === Aviso Legal ===
+    const avisoOk = (() => {
+      try { return sessionStorage.getItem("ia_aviso_ok") === "1"; } catch { return false; }
+    })();
+    if (!avisoOk) {
+      setMostrarAviso(true);
+      return; // no seguimos con detección de pago hasta aceptar
+    }
+
+    // retorno de pago
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
     const idFromURL = params.get("idPago") || sessionStorage.getItem("idPago");
@@ -190,6 +196,16 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
       }
     };
   }, []);
+
+  // Handlers Aviso Legal
+  const continuarTrasAviso = () => {
+    setMostrarAviso(false);
+    try { sessionStorage.setItem("ia_aviso_ok", "1"); } catch {}
+  };
+  const rechazarAviso = () => {
+    setMostrarAviso(false);
+    alert("Debes aceptar el aviso legal para continuar.");
+  };
 
   // ====== Detección robusta de RM ======
   const normaliza = (t = "") =>
@@ -251,7 +267,7 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
       return;
     }
     if (!datos.consulta?.trim()) {
-      alert("Escribe la consulta/indicaciones para el informe IA.");
+      alert("Escribe tus síntomas/indicaciones en el cuadro de texto.");
       return;
     }
 
@@ -375,7 +391,7 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
   };
 
   // Guardado desde el modal
-  const handleSaveRM = (form /*, { riesgos } */) => {
+  const handleSaveRM = (form) => {
     // Aquí podrías activar bloqueos automáticos si lo decides (p.ej. marcapasos)
     setBloqueaRM(false);
 
@@ -461,60 +477,6 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
       console.error("No se pudo generar el link de pago (IA):", err);
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
     }
-  };
-
-  // ===== Simular pago (guest)
-  const handleSimularPagoGuest = async () => {
-    const edadNum = Number(datos.edad) || 30;
-    const fake = {
-      nombre: datos.nombre || "Guest",
-      rut: datos.rut || "99999999-9",
-      edad: edadNum,
-      consulta:
-        datos.consulta ||
-        "Consulta de prueba para informe IA (simulación de pago guest).",
-    };
-
-    // Asegura preview en backend (por si no se generó)
-    try {
-      await fetch(`${BACKEND_BASE}/api/preview-informe`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPago,
-          consulta: fake.consulta,
-          nombre: fake.nombre,
-          edad: fake.edad,
-          rut: fake.rut,
-          genero: datos.genero,
-          dolor: datos.dolor,
-          lado: datos.lado,
-        }),
-      });
-      // y guarda marcadores actuales
-      const { marcadores, rodillaMarcadores, manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores } =
-        construirMarcadores();
-      await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPago,
-          datosPaciente: { ...datos, edad: edadNum },
-          marcadores,
-          rodillaMarcadores,
-          manoMarcadores,
-          hombroMarcadores,
-          codoMarcadores,
-          tobilloMarcadores,
-        }),
-      });
-    } catch {}
-
-    // Redirige simulando retorno pagado
-    const url = new URL(window.location.href);
-    url.searchParams.set("pago", "ok");
-    url.searchParams.set("idPago", idPago);
-    window.location.href = url.toString();
   };
 
   // ===== Descargar PDF IA (post-pago) — Informe de texto
@@ -773,6 +735,9 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
   // ===== UI
   return (
     <div style={S.card}>
+      {/* AVISO LEGAL (bloquea hasta aceptar) */}
+      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
+
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
         Vista previa — Informe IA (texto libre)
       </h3>
@@ -842,7 +807,7 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
           onChange={(e) =>
             setDatos((p) => ({ ...p, consulta: e.target.value }))
           }
-          placeholder="Ej.: Dolor de rodilla derecha; elaborar informe con sugerencias, exámenes, consideraciones, etc."
+          placeholder="Escribe aquí tus síntomas."
           style={S.textarea}
         />
         <button
@@ -890,21 +855,12 @@ export default function IAModulo({ initialDatos /* ← quitamos pedirChecklistRe
 
           {/* Si NO requiere RM, o ya completó checklist, o quedó bloqueada → Pagar */}
           {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
-            <>
-              <button
-                style={{ ...S.btnPrimary, marginTop: 12 }}
-                onClick={handlePagarIA}
-              >
-                Pagar ahora (Informe IA)
-              </button>
-              <button
-                style={{ ...S.btnSecondary, marginTop: 8 }}
-                onClick={handleSimularPagoGuest}
-                title="Simular retorno pagado (solo pruebas)"
-              >
-                Simular Pago (Guest)
-              </button>
-            </>
+            <button
+              style={{ ...S.btnPrimary, marginTop: 12 }}
+              onClick={handlePagarIA}
+            >
+              Pagar ahora (Informe IA)
+            </button>
           )}
         </>
       )}
@@ -1002,17 +958,6 @@ function makeStyles(T) {
     btnPrimary: {
       backgroundColor: T.primary ?? "#0072CE",
       color: T.onPrimary ?? "#fff",
-      border: "none",
-      padding: "12px",
-      borderRadius: 8,
-      fontSize: 16,
-      cursor: "pointer",
-      width: "100%",
-      boxShadow: T.shadowSm ?? "0 1px 4px rgba(0,0,0,0.08)",
-    },
-    btnSecondary: {
-      backgroundColor: T.muted ?? "#777",
-      color: T.onMuted ?? "#fff",
       border: "none",
       padding: "12px",
       borderRadius: 8,
