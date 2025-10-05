@@ -221,7 +221,7 @@ function FormularioPacienteBasico({
         inputMode="numeric"
       />
 
-      <label>Género:</label>
+      <label>Sexo:</label>
       <select
         value={String(curr?.genero ?? "")}
         onChange={(e) => setCampo("genero", e.target.value)}
