@@ -63,6 +63,38 @@ function savePersisted(lado, data) {
   } catch {}
 }
 
+/* ===== Barra de Tabs (fuera del overlay, como en Rodilla) ===== */
+function TabsBar({ vista, setVista }) {
+  return (
+    <div
+      className="tabs"
+      style={{
+        display: "inline-flex",
+        gap: 8,
+        justifyContent: "center",
+        alignItems: "center",
+        flexWrap: "wrap",
+        width: "100%",
+        marginTop: 8,
+        marginBottom: 4,
+      }}
+    >
+      {["palmar", "dorsal"].map((v) => (
+        <button
+          key={v}
+          type="button"
+          className={`tab ${vista === v ? "active" : ""}`}
+          onClick={() => setVista(v)}
+          style={{ pointerEvents: "auto" }}
+          aria-pressed={vista === v}
+        >
+          {VISTA_LABEL[v]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function ManoMapper({
   ladoInicial = "derecha",
   vistaInicial = "palmar",
@@ -270,25 +302,16 @@ export default function ManoMapper({
         margin: "0 auto",
       }}
     >
-      {/* Label del lado — alto contraste (mantengo inline para no alterar contraste/overlay) */}
-      <div className="mt-8">
-        <span
-          style={{
-            display: "inline-block",
-            fontSize: 15,
-            fontWeight: 800,
-            letterSpacing: 0.3,
-            padding: "8px 12px",
-            borderRadius: 10,
-            background: T?.primaryDark || "#0d47a1",
-            color: T?.onPrimary || "#fff",
-            border: `1px solid ${T?.primary || "#1976d2"}`,
-            boxShadow: T?.shadowSm || "0 2px 8px rgba(0,0,0,0.18)",
-          }}
-        >
-          {`Zona seleccionada: Mano — ${MANO_LABELS?.[lado] || lado}`}
-        </span>
+      {/* Encabezado con zona + instrucción (como en Rodilla) */}
+      <div className="mt-8" aria-live="polite">
+        <div style={{ fontWeight: 800, marginBottom: 4 }}>
+          {`Mano ${MANO_LABELS?.[lado] || lado}:`}
+        </div>
+        <div className="muted">Presiona el punto que más se acerque a tu dolor.</div>
       </div>
+
+      {/* Tabs ARRIBA (fuera del overlay, para no tapar puntos) */}
+      <TabsBar vista={vista} setVista={setVista} />
 
       {/* Contenedor 4:3 (proporción idéntica para que calcen los puntos) */}
       <div
@@ -304,31 +327,6 @@ export default function ManoMapper({
       >
         {/* Ratio 4:3 */}
         <div style={{ paddingTop: "133.333%" }} />
-
-        {/* Tabs de vista */}
-        <div
-          className="tabs"
-          style={{
-            position: "absolute",
-            top: 10,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 3,
-            pointerEvents: "auto",
-            backdropFilter: "blur(6px)",
-          }}
-        >
-          {["palmar", "dorsal"].map((v) => (
-            <button
-              key={v}
-              type="button"
-              className={`tab ${vista === v ? "active" : ""}`}
-              onClick={() => setVista(v)}
-            >
-              {VISTA_LABEL[v]}
-            </button>
-          ))}
-        </div>
 
         {/* Imagen base (solo la imagen se espeja cuando corresponde) */}
         <img
