@@ -69,28 +69,33 @@ export default function PantallaUno({ onIrPantallaDos }) {
                   </button>
                 </div>
 
-                {/* Aviso informativo (debajo de los botones) */}
-                <div role="note" aria-label="Información de orientación" style={styles.infoBox}>
-                  <div style={styles.infoIconWrap} aria-hidden="true">
-                    <svg
-                      width="18" height="18" viewBox="0 0 24 24" fill="none"
-                      xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}
-                    >
-                      <circle cx="12" cy="12" r="10" stroke={T.primary} strokeWidth="1.5" fill={T.accentAlpha}/>
-                      <path d="M12 7.2a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" fill={T.primary}/>
-                      <path d="M11.2 10.6h1.6v6h-1.6z" fill={T.primary}/>
-                    </svg>
+                {/* Aviso informativo (debajo de los botones) – UX refinada */}
+                <section role="note" aria-label="Orientación inicial" style={styles.infoBox}>
+                  {/* Acento lateral */}
+                  <span aria-hidden="true" style={styles.infoAccent} />
+
+                  {/* Icono + texto */}
+                  <div style={styles.infoRow}>
+                    <div style={styles.infoIconWrap} aria-hidden="true">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="9.5" stroke={T.primary} strokeWidth="1.2" fill="none"/>
+                        <circle cx="12" cy="8.2" r="1" fill={T.primary}/>
+                        <rect x="11.2" y="10.5" width="1.6" height="5.8" rx="0.8" fill={T.primary}/>
+                      </svg>
+                    </div>
+
+                    <div style={styles.infoTextWrap}>
+                      <div style={styles.infoKicker}>Orientación inicial</div>
+                      <p style={styles.infoMain}>
+                        Te orientamos según tus síntomas y zona de dolor, entregando una{" "}
+                        <strong>orden médica sugerida</strong> para iniciar tu estudio o consulta.
+                      </p>
+                      <p style={styles.infoSub}>
+                        No guardamos tu información y esta orientación no sustituye la evaluación profesional.
+                      </p>
+                    </div>
                   </div>
-                  <div style={styles.infoTextWrap}>
-                    <p style={styles.infoMain}>
-                      Te orientamos según tus síntomas y zona de dolor, entregando una{" "}
-                      <strong>orden médica sugerida</strong> para iniciar tu estudio o consulta.
-                    </p>
-                    <p style={styles.infoSub}>
-                      Tu información no se guarda y la orientación no sustituye la evaluación profesional.
-                    </p>
-                  </div>
-                </div>
+                </section>
                 {/* /Aviso informativo */}
               </div>
             ) : (
@@ -133,12 +138,8 @@ const styles = {
     placeItems: "start center",
     padding: "clamp(10px, 3vh, 28px) 12px",
   },
-  // un poco más ancho pero controlado
-  wrap: {
-    width: "min(94vw, 560px)",
-  },
+  wrap: { width: "min(94vw, 560px)" },
 
-  // “Header card” para el logo: mismo ancho visual que la card principal
   headerCard: {
     background: T.surface,
     border: `1px solid ${T.border}`,
@@ -147,7 +148,6 @@ const styles = {
     padding: "clamp(10px, 2vw, 14px)",
     marginBottom: "clamp(10px, 2.2vh, 14px)",
   },
-  // el logo ahora ocupa todo el ancho de la card
   logoImg: {
     width: "100%",
     height: "auto",
@@ -157,9 +157,7 @@ const styles = {
     borderRadius: 10,
   },
 
-  card: {
-    padding: "clamp(12px, 2.2vw, 18px)",
-  },
+  card: { padding: "clamp(12px, 2.2vw, 18px)" },
 
   menu: { textAlign: "center" },
   title: {
@@ -175,7 +173,6 @@ const styles = {
     fontSize: "clamp(12px, 1.6vw, 14px)",
   },
 
-  // columna única: botones y logo quedan exactamente del mismo ancho
   btnCol: {
     display: "grid",
     gridTemplateColumns: "1fr",
@@ -183,7 +180,6 @@ const styles = {
     marginTop: "clamp(12px, 2vh, 16px)",
   },
 
-  // botones más cómodos (48–52px) y menos “pesados”
   btn: {
     width: "100%",
     borderRadius: 12,
@@ -209,26 +205,47 @@ const styles = {
   },
   btnGhost: { background: T.surface, borderColor: T.border, color: T.text },
 
-  /* ===== Aviso informativo (debajo de botones) ===== */
+  /* ===== Aviso informativo refinado ===== */
   infoBox: {
+    position: "relative",
+    textAlign: "left",
+    background: T.surface,                   // más claro, sin bloque oscuro
+    border: `1px solid ${T.border}`,
+    borderRadius: 12,
+    padding: "12px 14px 12px 14px",
+    marginTop: "clamp(12px, 2vh, 16px)",
+    boxShadow: T.shadowSm,
+  },
+  infoAccent: {
+    position: "absolute",
+    left: 0,
+    top: 8,
+    bottom: 8,
+    width: 3,
+    borderRadius: 3,
+    background: T.primary,                   // acento lateral
+  },
+  infoRow: {
     display: "grid",
     gridTemplateColumns: "auto 1fr",
     gap: 10,
     alignItems: "start",
-    textAlign: "left",
-    background: `linear-gradient(0deg, ${T.accentAlpha}, ${T.accentAlpha})`,
-    border: `1px solid ${T.border}`,
-    borderRadius: 12,
-    padding: "10px 12px",
-    marginTop: "clamp(12px, 2vh, 16px)",
-    boxShadow: T.shadowSm,
   },
   infoIconWrap: {
-    width: 20,
-    height: 20,
-    marginTop: 2,
+    width: 18,
+    height: 18,
+    marginTop: 3,
+    opacity: 0.9,                            // sutil
   },
   infoTextWrap: {},
+  infoKicker: {
+    color: T.primary,
+    fontSize: "clamp(11px, 1.5vw, 12px)",
+    fontWeight: 800,
+    letterSpacing: ".3px",
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
   infoMain: {
     margin: 0,
     color: T.text,
