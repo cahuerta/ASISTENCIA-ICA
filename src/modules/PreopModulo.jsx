@@ -423,16 +423,24 @@ export default function PreopModulo({ initialDatos }) {
   /* ===================== UI ===================== */
   const comorbChips = prettyComorb(comorbilidades);
 
+  /* ====== NUEVO: TÍTULO DINÁMICO POR FASE ====== */
+  const tituloFase = {
+    esquema: "Seleccione la zona relacionada con su cirugía.",
+    tipo: "Indique el tipo de cirugía propuesta.",
+    comorb: "Consigne enfermedades previas, tratamientos y alergias relevantes.",
+    preview: "Revise y confirme la orden; exámenes preoperatorios sugeridos por IA.",
+  }[fase];
+
   return (
     <div className="card" aria-live="polite">
       <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
 
-      <h3 className="h1" style={{ color: T.primary }}>Vista previa — Exámenes preoperatorios</h3>
+      <h3 className="h1" style={{ color: T.primary }}>{tituloFase}</h3>
 
       {/* ====== FASE 1: ESQUEMA ====== */}
       {fase === "esquema" && (
         <div className="card" style={{ marginTop: 8 }}>
-          {/* Frase informativa */}
+          {/* Frase informativa (opcional, puede mantenerse) */}
           <div className="muted" style={{ marginBottom: 8 }}>
             Seleccione la zona relacionada con su cirugía.
           </div>
@@ -465,7 +473,7 @@ export default function PreopModulo({ initialDatos }) {
         <div className="card" style={{ marginTop: 12 }}>
           <div className="section">
             <h2 className="h1" style={{ margin: 0 }}>Tipo de cirugía</h2>
-            {/* Frase informativa */}
+            {/* Frase informativa (opcional) */}
             <div className="muted" style={{ marginTop: 6 }}>
               Indique el tipo de cirugía propuesta.
             </div>
@@ -513,7 +521,7 @@ export default function PreopModulo({ initialDatos }) {
         <div className="card" style={{ marginTop: 12 }}>
           <div className="section">
             <h2 className="h1" style={{ margin: 0 }}>Comorbilidades</h2>
-            {/* Frase informativa */}
+            {/* Frase informativa (opcional) */}
             <div className="muted">Consigne enfermedades previas, tratamientos y alergias relevantes.</div>
           </div>
           <div className="divider" />
@@ -539,7 +547,7 @@ export default function PreopModulo({ initialDatos }) {
       {/* ====== FASE 4: PREVIEW (orden) + PREVIEW IA (si stepStarted) ====== */}
       {fase === "preview" && (
         <>
-          {/* Frase informativa */}
+          {/* Frase informativa (opcional) */}
           <div className="muted" style={{ marginBottom: 8 }}>
             Revise y confirme la orden; exámenes preoperatorios sugeridos por IA.
           </div>
