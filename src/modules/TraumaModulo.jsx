@@ -907,7 +907,7 @@ export default function TraumaModulo({
             <GenericMapper
               mapperId={mapperId}
               lado={(datos?.lado || "").toLowerCase()}
-              vistaInicial={mapperVistaInicial}   {/* ← NUEVO: 'frente' | 'posterior' */}
+              vistaInicial={mapperVistaInicial}
               /* Volver: NO guarda, solo cierra el modal */
               onVolver={() => {
                 setMostrarMapper(false);
