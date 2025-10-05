@@ -43,11 +43,11 @@ const IMG = {
 /* Etiquetas tabs */
 const VISTA_LABEL = { frontal: "FRONTAL", posterior: "POSTERIOR" };
 
-/* Puntos base (visibles de inmediato) */
+/* Puntos base */
 const puntosDeVista = (vista) =>
   (HOMBRO_PUNTOS_BY_VISTA?.[vista] || []).map((p) => ({ ...p, selected: !!p.selected }));
 
-/* === Persistencia en sessionStorage (por lado y vista) === */
+/* === Persistencia en sessionStorage === */
 const storageKey = (lado) => `hombro:${lado}`;
 function loadPersisted(lado) {
   try {
@@ -98,7 +98,7 @@ export default function HombroMapper({
     setPuntos(withSelection);
   }, [vista, lado, setPuntos]);
 
-  /* Persistir cambios por vista */
+  /* Persistir cambios */
   useEffect(() => {
     const persisted = loadPersisted(lado) || { frontal: [], posterior: [] };
     persisted[vista] = puntos.map((p) => !!p.selected);
@@ -137,14 +137,12 @@ export default function HombroMapper({
   /* Imagen final */
   const imgSrcFinal = (typeof imagenSrc === "string" && imagenSrc) || IMG[vista] || IMG.frontal;
 
-  // Espejo según base:
-  // - FRONTAL base = derecha → espejar si lado = izquierda
-  // - POSTERIOR base = izquierda → espejar si lado = derecha
+  // Espejo según base
   const debeEspejar =
     (vista === "frontal" && lado === "izquierda") ||
     (vista === "posterior" && lado === "derecha");
 
-  /* Puntos render — espejo por coordenada (texto NO se espeja) */
+  /* Puntos render — espejo coordenadas */
   const puntosRender = useMemo(
     () =>
       puntos.map((p) => {
@@ -156,7 +154,7 @@ export default function HombroMapper({
     [puntos, debeEspejar]
   );
 
-  /* Guardar (suma 2 vistas) — robusto a timing */
+  /* Guardar (sin cambios) */
   const handleSave = () => {
     const persisted = loadPersisted(lado) || { frontal: [], posterior: [] };
     const persistedNow = {
@@ -215,100 +213,66 @@ export default function HombroMapper({
     onSave?.(r);
   };
 
-  /* === Tamaño (idéntico a mano/rodilla) === */
+  /* === Tamaño (idéntico a los demás) === */
   const WRAP_MAX_W = 480;
 
   return (
-    <div
-      className="card"
-      style={{
-        width: "100%",
-        maxWidth: WRAP_MAX_W,
-        margin: "0 auto",
-      }}
-    >
-      {/* Label del lado — alto contraste (lo dejo inline para conservar contraste/sombra exactos) */}
-      <div className="mt-8">
-        <span
-          style={{
-            display: "inline-block",
-            fontSize: 15,
-            fontWeight: 800,
-            letterSpacing: 0.3,
-            padding: "8px 12px",
-            borderRadius: 10,
-            background: T?.primaryDark || "#0d47a1",
-            color: T?.onPrimary || "#fff",
-            border: `1px solid ${T?.primary || "#1976d2"}`,
-            boxShadow: T?.shadowSm || "0 2px 8px rgba(0,0,0,0.18)",
-          }}
-        >
-          {`Zona seleccionada: Hombro — ${lado}`}
-        </span>
+    <div className="card" style={{ width: "100%", maxWidth: WRAP_MAX_W, margin: "0 auto" }}>
+      {/* Encabezado con zona + instrucción */}
+      <div className="mt-8" aria-live="polite">
+        <div style={{ fontWeight: 800, marginBottom: 4 }}>
+          {`Hombro ${lado}:`}
+        </div>
+        <div className="muted">Presiona el punto que más se acerque a tu dolor.</div>
       </div>
 
-      {/* Contenedor 4:3 (misma proporción para que calcen los puntos) */}
+      {/* Tabs de vista (fuera del overlay) */}
       <div
+        className="tabs"
         style={{
-          position: "relative",
+          display: "inline-flex",
+          gap: 8,
+          justifyContent: "center",
+          alignItems: "center",
+          flexWrap: "wrap",
           width: "100%",
-          borderRadius: 16,
-          overflow: "hidden",
-          boxShadow: T?.shadowMd || "0 8px 24px rgba(0,0,0,0.15)",
-          background: T?.bg || "#f2f2f2",
           marginTop: 8,
+          marginBottom: 4,
         }}
       >
-        {/* Ratio 4:3 */}
-        <div style={{ paddingTop: "133.333%" }} />
+        {["frontal", "posterior"].map((v) => (
+          <button
+            key={v}
+            type="button"
+            className={`tab ${vista === v ? "active" : ""}`}
+            onClick={() => setVista(v)}
+            style={{ pointerEvents: "auto" }}
+            aria-pressed={vista === v}
+          >
+            {VISTA_LABEL[v]}
+          </button>
+        ))}
+      </div>
 
-        {/* Tabs de vista */}
-        <div
-          className="tabs"
-          style={{
-            position: "absolute",
-            top: 10,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 3,
-            pointerEvents: "auto",
-            backdropFilter: "blur(6px)",
-          }}
-        >
-          {["frontal", "posterior"].map((v) => (
-            <button
-              key={v}
-              type="button"
-              className={`tab ${vista === v ? "active" : ""}`}
-              onClick={() => setVista(v)}
-            >
-              {VISTA_LABEL[v]}
-            </button>
-          ))}
-        </div>
-
-        {/* Imagen (se espeja cuando corresponde) */}
+      {/* Imagen + Overlay */}
+      <div className="figure ratio-4x3 mt-4" style={{ position: "relative" }}>
+        <div className="ratio-inner" />
         <img
           src={imgSrcFinal}
           alt={`Hombro ${vista} ${lado}`}
+          className="ratio-img"
           style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            display: "block",
             transform: debeEspejar ? "scaleX(-1)" : "none",
             transformOrigin: "center",
+            zIndex: 0,
           }}
           draggable={false}
         />
-
-        {/* Overlay de puntos (NO espejado; coordenadas ya invertidas si toca) */}
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "auto" }}
+          className="ratio-overlay"
+          style={{ pointerEvents: "auto", zIndex: 2 }}
         >
           {puntosRender.map((p, i) => (
             <Marker
@@ -325,7 +289,7 @@ export default function HombroMapper({
 
       {/* Acciones */}
       <div className="toolbar center mt-10">
-        <button type="button" className="btn secondary" onClick={clearSelection}>
+        <button type="button" className="btn ghost" onClick={clearSelection}>
           Desactivar todos
         </button>
         <button type="button" className="btn" onClick={handleSave}>
@@ -339,32 +303,7 @@ export default function HombroMapper({
   );
 }
 
-/* ===== UI helpers ===== */
-function VistaChip({ active, onClick, label }) {
-  // Compatibilidad: ya no se usa directamente (reemplazado por .tab), pero lo dejo por si lo llamas desde fuera
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`tab ${active ? "active" : ""}`}
-      style={{ pointerEvents: "auto" }}
-    >
-      {label}
-    </button>
-  );
-}
-
-function Button({ children, onClick, outline, subtle, type = "button" }) {
-  // Compatibilidad: mapea a clases globales .btn
-  const cls = `btn ${outline || subtle ? "secondary" : ""}`;
-  return (
-    <button type={type} onClick={onClick} className={cls}>
-      {children}
-    </button>
-  );
-}
-
-/* Marcador (mismo look que mano) */
+/* ===== Marcador (sin cambios) ===== */
 function Marker({ cx, cy, active, label, onClick }) {
   const r = 2.0;
   const textLen = Math.max(3, Math.min(30, (label || "").length));
@@ -378,7 +317,11 @@ function Marker({ cx, cy, active, label, onClick }) {
     <g
       transform={`translate(${cx} ${cy})`}
       style={{ pointerEvents: "auto", cursor: "pointer" }}
-      onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick?.(); }}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick?.();
+      }}
     >
       <circle r={6.5} fill="transparent" />
       <circle
@@ -386,7 +329,11 @@ function Marker({ cx, cy, active, label, onClick }) {
         fill="none"
         stroke={THEME.markerStroke}
         strokeWidth="0.6"
-        style={{ filter: `drop-shadow(0 0.5px 1.2px ${THEME.markerShadow || "rgba(0,0,0,0.18)"})` }}
+        style={{
+          filter: `drop-shadow(0 0.5px 1.2px ${
+            THEME.markerShadow || "rgba(0,0,0,0.18)"
+          })`,
+        }}
       />
       <circle r={r - 1.0} fill={active ? THEME.dotActive : THEME.dotInactive} />
       {active && !!label && (
@@ -402,7 +349,6 @@ function Marker({ cx, cy, active, label, onClick }) {
             stroke="rgba(255,255,255,0.12)"
             strokeWidth="0.2"
           />
-          {/* Texto normal (no espejado) */}
           <text
             x={tagW / 2}
             y={-tagH / 2 + 0.8}
