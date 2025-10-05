@@ -63,6 +63,38 @@ function savePersisted(lado, data) {
   } catch {}
 }
 
+/* ===== Barra de Tabs (fuera del overlay) ===== */
+function TabsBar({ vista, setVista }) {
+  return (
+    <div
+      className="tabs"
+      style={{
+        display: "inline-flex",
+        gap: 8,
+        justifyContent: "center",
+        alignItems: "center",
+        flexWrap: "wrap",
+        width: "100%",
+        marginTop: 8,
+        marginBottom: 4
+      }}
+    >
+      {["frente", "lateral", "posterior"].map((v) => (
+        <button
+          key={v}
+          type="button"
+          className={`tab ${vista === v ? "active" : ""}`}
+          onClick={() => setVista(v)}
+          style={{ pointerEvents: "auto" }}
+          aria-pressed={vista === v}
+        >
+          {VISTA_LABEL[v]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function RodillaMapper({
   ladoInicial = "derecha",
   vistaInicial = "frente",
@@ -143,7 +175,6 @@ export default function RodillaMapper({
     IMG[vista] ||
     IMG.frente;
 
-  // 🔧 FIX: sin paréntesis extra
   const debeEspejar =
     (lado === "izquierda") && (vista === "frente" || vista === "posterior");
 
@@ -166,10 +197,8 @@ export default function RodillaMapper({
 
   /* Guardar (suma 3 vistas) — ROBUSTO A TIMING */
   const handleSave = () => {
-    // 1) Tomamos lo persistido
     const persisted = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
 
-    // 2) Inyectamos la vista ACTUAL desde memoria (por si el useEffect aún no guardó)
     const persistedNow = {
       frente: Array.isArray(persisted.frente) ? [...persisted.frente] : [],
       lateral: Array.isArray(persisted.lateral) ? [...persisted.lateral] : [],
@@ -177,7 +206,6 @@ export default function RodillaMapper({
     };
     persistedNow[vista] = puntos.map((p) => !!p.selected);
 
-    // 3) Función que mapea flags → labels por vista
     const labelsDe = (v) => {
       const base = (RODILLA_PUNTOS_BY_VISTA?.[v] || []);
       const flags = Array.isArray(persistedNow[v]) ? persistedNow[v] : [];
@@ -188,7 +216,6 @@ export default function RodillaMapper({
       return out;
     };
 
-    // 4) Construimos resumen completo
     const resumenPorVista = {
       frente: labelsDe("frente"),
       lateral: labelsDe("lateral"),
@@ -233,7 +260,6 @@ export default function RodillaMapper({
       sessionStorage.setItem(`rodilla_resumen_${lado}`, JSON.stringify(resumenPorVista));
       sessionStorage.setItem("rodilla_data", JSON.stringify(rodilla));
       sessionStorage.setItem("rodilla_seccionesExtra", JSON.stringify(seccionesExtra));
-      // Y persistimos también el snapshot corregido (por si el efecto no alcanzó)
       savePersisted(lado, persistedNow);
     } catch {}
 
@@ -252,50 +278,28 @@ export default function RodillaMapper({
         </span>
       </div>
 
-      {/* Contenedor 4:3 con helpers de app.css */}
-      <div className="figure ratio-4x3 mt-10">
-        <div className="ratio-inner" />
+      {/* ===== Tabs ARRIBA (fuera del overlay) ===== */}
+      <TabsBar vista={vista} setVista={setVista} />
 
-        {/* Tabs de vista (centradas y por encima del SVG) */}
-        <div
-          className="ratio-overlay"
-          style={{
-            top: 10,
-            left: "50%",
-            transform: "translateX(-50%)",
-            pointerEvents: "auto",
-            zIndex: 5
-          }}
-        >
-          <div className="tabs" style={{ marginBottom: 0 }}>
-            {["frente", "lateral", "posterior"].map((v) => (
-              <button
-                key={v}
-                type="button"
-                className={`tab ${vista === v ? "active" : ""}`}
-                onClick={() => setVista(v)}
-              >
-                {VISTA_LABEL[v]}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Contenedor 4:3 con helpers de app.css */}
+      <div className="figure ratio-4x3 mt-4" style={{ position: "relative" }}>
+        <div className="ratio-inner" />
 
         {/* Imagen base (solo la imagen se espeja cuando corresponde) */}
         <img
           src={imgSrcFinal}
           alt={`Rodilla ${vista} ${lado}`}
           className="ratio-img"
-          style={{ transform: debeEspejar ? "scaleX(-1)" : "none", transformOrigin: "center" }}
+          style={{ transform: debeEspejar ? "scaleX(-1)" : "none", transformOrigin: "center", zIndex: 0 }}
           draggable={false}
         />
 
-        {/* Overlay de puntos (debajo de los tabs) */}
+        {/* Overlay de puntos (encima de la imagen) */}
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
           className="ratio-overlay"
-          style={{ pointerEvents: "auto", zIndex: 1 }}
+          style={{ pointerEvents: "auto", zIndex: 2 }}
         >
           {puntosRender.map((p, i) => (
             <Marker
