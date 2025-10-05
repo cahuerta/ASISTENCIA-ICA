@@ -1,6 +1,12 @@
 // src/modules/TraumaModulo.jsx
 "use client";
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+  useCallback,
+} from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 import FormularioResonancia from "../components/FormularioResonancia.jsx";
@@ -74,7 +80,9 @@ function leerSecciones(zonaKey, ladoFallback = "") {
           .map((sec) => ({
             title:
               sec.title ||
-              `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${ladoFallback} — puntos marcados`,
+              `${zonaKey[0].toUpperCase()}${zonaKey.slice(
+                1
+              )} ${ladoFallback} — puntos marcados`,
             lines: sec.lines,
           }));
       }
@@ -86,12 +94,16 @@ function leerSecciones(zonaKey, ladoFallback = "") {
     const rawData = sessionStorage.getItem(`${zonaKey}_data`);
     if (rawData) {
       const d = JSON.parse(rawData);
-      const lines = Array.isArray(d?.puntosSeleccionados) ? d.puntosSeleccionados : [];
+      const lines = Array.isArray(d?.puntosSeleccionados)
+        ? d.puntosSeleccionados
+        : [];
       if (lines.length) {
         const lado = d?.lado || ladoFallback || "";
         return [
           {
-            title: `${zonaKey[0].toUpperCase()}${zonaKey.slice(1)} ${lado} — puntos marcados`,
+            title: `${zonaKey[0].toUpperCase()}${zonaKey.slice(
+              1
+            )} ${lado} — puntos marcados`,
             lines,
           },
         ];
@@ -107,7 +119,11 @@ function leerSecciones(zonaKey, ladoFallback = "") {
 function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
   const lado = (ladoTexto || "").toLowerCase();
   const side =
-    lado.includes("izquierda") ? "izquierda" : lado.includes("derecha") ? "derecha" : "";
+    lado.includes("izquierda")
+      ? "izquierda"
+      : lado.includes("derecha")
+      ? "derecha"
+      : "";
   if (!side) return null;
   try {
     const raw = sessionStorage.getItem(`${zonaKey}_resumen_${side}`);
@@ -165,6 +181,9 @@ export default function TraumaModulo({
   /* Estado para mappers */
   const [mostrarMapper, setMostrarMapper] = useState(false);
   const [mapperId, setMapperId] = useState(null);
+
+  /* Refresco del preview cuando se guarda en el mapper o se cierra */
+  const [mapperRefresh, setMapperRefresh] = useState(0);
 
   // Restaurar estado
   useEffect(() => {
@@ -261,7 +280,7 @@ export default function TraumaModulo({
       if (secs.length) out.push(...secs);
     }
     return out;
-  }, [datos?.lado]);
+  }, [datos?.lado, mapperRefresh]); // ← se recomputa cuando volvemos/cerramos o guardamos en mapper
 
   /* ====== ESQUEMA HUMANO (selección zona/lado) ====== */
   const onSeleccionZona = (zona) => {
@@ -311,6 +330,32 @@ export default function TraumaModulo({
       setMostrarMapper(true);
     }
   };
+
+  /* ===== Eventos de “volver” desde mappers (NO guarda, solo cierra) ===== */
+  useEffect(() => {
+    const handleBack = () => {
+      setMostrarMapper(false);
+      setMapperRefresh((v) => v + 1); // refresca preview, pero no guarda nada nuevo
+    };
+    const evtsVolver = [
+      "rodilla:volver",
+      "mano:volver",
+      "hombro:volver",
+      "codo:volver",
+      "tobillo:volver",
+      "mapper:volver",
+    ];
+    evtsVolver.forEach((e) => window.addEventListener(e, handleBack));
+    return () => evtsVolver.forEach((e) => window.removeEventListener(e, handleBack));
+  }, []);
+
+  /* ===== onSave proveniente del mapper (GUARDAR → pasar a Preview) ===== */
+  const handleMapperSave = useCallback(() => {
+    // Los mappers ya persistieron en sessionStorage (ej: rodilla_*).
+    setMostrarMapper(false);
+    setMapperRefresh((v) => v + 1);
+    setFase("preview"); // “al apretar guardar, continuamos y pasamos… al preview”
+  }, []);
 
   /* -------- IA -------- */
   const handleContinuarIA = async () => {
@@ -369,7 +414,8 @@ export default function TraumaModulo({
       const j = await resp.json();
       const ex = Array.isArray(j?.examenes) ? j.examenes.slice(0, 4) : [];
       const dx = typeof j?.diagnostico === "string" ? j.diagnostico : "";
-      const just = typeof j?.justificacion === "string" ? j.justificacion : j?.resumen || "";
+      const just =
+        typeof j?.justificacion === "string" ? j.justificacion : j?.resumen || "";
 
       // Persistimos IA para retorno/PDF
       try {
@@ -387,7 +433,11 @@ export default function TraumaModulo({
       let solicitaRM = false;
 
       if (typeof onDetectarResonancia === "function") {
-        solicitaRM = await onDetectarResonancia({ ...datos, edad: edadNum, examen: textoEx });
+        solicitaRM = await onDetectarResonancia({
+          ...datos,
+          edad: edadNum,
+          examen: textoEx,
+        });
       } else {
         solicitaRM = isResonanciaTexto(textoEx);
       }
@@ -400,7 +450,9 @@ export default function TraumaModulo({
       setStepStarted(true);
       setFase("previewIA");
     } catch (e) {
-      alert("No fue posible obtener la información de IA (Trauma). Intenta nuevamente.");
+      alert(
+        "No fue posible obtener la información de IA (Trauma). Intenta nuevamente."
+      );
     } finally {
       setLoadingIA(false);
     }
@@ -417,7 +469,9 @@ export default function TraumaModulo({
     setBloqueaRM(false);
 
     const resumen =
-      typeof resumenResoTexto === "function" ? resumenResoTexto(form) : construirResumenRM(form);
+      typeof resumenResoTexto === "function"
+        ? resumenResoTexto(form)
+        : construirResumenRM(form);
 
     setResonanciaChecklist(form);
     setResonanciaResumenTexto(resumen);
@@ -488,7 +542,10 @@ export default function TraumaModulo({
     try {
       const idPago = ensureTraumaIdPago();
       sessionStorage.setItem("modulo", "trauma");
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
+      sessionStorage.setItem(
+        "datosPacienteJSON",
+        JSON.stringify({ ...datos, edad: edadNum })
+      );
 
       // Marcadores por zona para persistir en backend (no IA)
       const lado = datos?.lado || "";
@@ -685,7 +742,11 @@ export default function TraumaModulo({
           <div className="muted" style={{ marginTop: 10 }}>
             {datos?.dolor ? (
               <>
-                Zona: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong>
+                Zona:{" "}
+                <strong>
+                  {datos.dolor}
+                  {datos.lado ? ` — ${datos.lado}` : ""}
+                </strong>
               </>
             ) : (
               "Seleccione una zona del esquema para continuar"
@@ -728,7 +789,7 @@ export default function TraumaModulo({
 
           <div style={{ ...S.mono, marginTop: 6 }}>{resumenInicialTrauma(datos)}</div>
 
-          {/* Secciones de puntos de cualquier zona disponible */}
+          {/* Secciones de puntos de cualquier zona disponible (guardadas con “Guardar/Enviar” del mapper) */}
           {seccionesMarcadores.map((sec, idx) => (
             <div style={S.block} key={`sec-${idx}`}>
               <strong>{sec.title}</strong>
@@ -838,9 +899,26 @@ export default function TraumaModulo({
       {mostrarMapper && (
         <div style={S.modalBackdrop} role="dialog" aria-modal="true">
           <div style={S.modalCard}>
-            <GenericMapper mapperId={mapperId} lado={datos?.lado || ""} />
+            <GenericMapper
+              mapperId={mapperId}
+              lado={datos?.lado || ""}
+              /* Volver: NO guarda, solo cierra el modal */
+              onVolver={() => {
+                setMostrarMapper(false);
+                setMapperRefresh((v) => v + 1);
+              }}
+              /* Guardar: los mappers persisten y aquí pasamos a Preview */
+              onSave={handleMapperSave}
+            />
             <div style={{ marginTop: 12, textAlign: "right" }}>
-              <button style={S.btnSecondary} onClick={() => setMostrarMapper(false)}>
+              <button
+                style={S.btnSecondary}
+                onClick={() => {
+                  // Botón externo “Cerrar/Volver” NO guarda, solo cierra
+                  setMostrarMapper(false);
+                  setMapperRefresh((v) => v + 1);
+                }}
+              >
                 Cerrar
               </button>
             </div>
@@ -887,7 +965,8 @@ function makeStyles(T) {
     block: { marginTop: 12 },
     mono: {
       whiteSpace: "pre-wrap",
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+      fontFamily:
+        "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
       background: T.codeBg ?? "#f7f7f7",
       borderRadius: 8,
       padding: 10,
