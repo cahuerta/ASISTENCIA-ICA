@@ -427,7 +427,7 @@ export default function GeneralesModulo({ initialDatos }) {
       )}
 
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
-        Vista previa — Exámenes Generales
+        holaaaaaaaaa
       </h3>
 
       {/* ===== Frase informativa por paso (solo agregado) ===== */}
