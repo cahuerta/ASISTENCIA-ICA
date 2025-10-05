@@ -440,11 +440,6 @@ export default function PreopModulo({ initialDatos }) {
       {/* ====== FASE 1: ESQUEMA ====== */}
       {fase === "esquema" && (
         <div className="card" style={{ marginTop: 8 }}>
-          {/* Frase informativa (opcional, puede mantenerse) */}
-          <div className="muted" style={{ marginBottom: 8 }}>
-            Seleccione la zona relacionada con su cirugía.
-          </div>
-
           <EsquemaToggleTabs vista={vista} onChange={setVista} />
           {vista === "anterior" ? (
             <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
@@ -473,10 +468,6 @@ export default function PreopModulo({ initialDatos }) {
         <div className="card" style={{ marginTop: 12 }}>
           <div className="section">
             <h2 className="h1" style={{ margin: 0 }}>Tipo de cirugía</h2>
-            {/* Frase informativa (opcional) */}
-            <div className="muted" style={{ marginTop: 6 }}>
-              Indique el tipo de cirugía propuesta.
-            </div>
             <div className="muted">
               {datos?.dolor
                 ? <>Zona: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong></>
@@ -521,8 +512,6 @@ export default function PreopModulo({ initialDatos }) {
         <div className="card" style={{ marginTop: 12 }}>
           <div className="section">
             <h2 className="h1" style={{ margin: 0 }}>Comorbilidades</h2>
-            {/* Frase informativa (opcional) */}
-            <div className="muted">Consigne enfermedades previas, tratamientos y alergias relevantes.</div>
           </div>
           <div className="divider" />
           <FormularioComorbilidades
@@ -547,11 +536,6 @@ export default function PreopModulo({ initialDatos }) {
       {/* ====== FASE 4: PREVIEW (orden) + PREVIEW IA (si stepStarted) ====== */}
       {fase === "preview" && (
         <>
-          {/* Frase informativa (opcional) */}
-          <div className="muted" style={{ marginBottom: 8 }}>
-            Revise y confirme la orden; exámenes preoperatorios sugeridos por IA.
-          </div>
-
           <section style={{ marginBottom: 10 }}>
             <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
             <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
