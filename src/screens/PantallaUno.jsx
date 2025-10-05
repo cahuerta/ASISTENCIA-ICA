@@ -87,8 +87,8 @@ export default function PantallaUno({ onIrPantallaDos }) {
                     <div style={styles.infoTextWrap}>
                       <div style={styles.infoKicker}>Orientación inicial</div>
                       <p style={styles.infoMain}>
-                        Te orientamos según tus síntomas y zona de dolor, entregando una{" "}
-                        <strong>orden médica sugerida</strong> para iniciar tu estudio o consulta.
+                        Te sugerimos la orden de exámenes precisa y la derivación al especialista adecuado
+                        para llegar con el estudio inicial realizado. ¡Ahorra tiempo y dinero!
                       </p>
                       <p style={styles.infoSub}>
                         No guardamos tu información y esta orientación no sustituye la evaluación profesional.
