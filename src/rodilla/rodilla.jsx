@@ -271,11 +271,12 @@ export default function RodillaMapper({
 
   return (
     <div className="card" style={{ width: "100%", maxWidth: WRAP_MAX_W, margin: "0 auto" }}>
-      {/* Label del lado — chip alta visibilidad */}
-      <div className="mt-8">
-        <span className="chip active">
-          {`Zona seleccionada: Rodilla — ${RODILLA_LABELS?.[lado] || lado}`}
-        </span>
+      {/* Encabezado con zona + instrucción (reemplaza el chip) */}
+      <div className="mt-8" aria-live="polite">
+        <div style={{ fontWeight: 800, marginBottom: 4 }}>
+          {`Rodilla ${RODILLA_LABELS?.[lado] || lado}:`}
+        </div>
+        <div className="muted">Presiona el punto que más se acerque a tu dolor.</div>
       </div>
 
       {/* ===== Tabs ARRIBA (fuera del overlay) ===== */}
