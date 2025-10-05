@@ -906,7 +906,7 @@ export default function TraumaModulo({
           <div style={S.modalCard}>
             <GenericMapper
               mapperId={mapperId}
-              lado={(datos?.lado || "").toLowerCase()}
+              ladoInicial={(datos?.lado || "").toLowerCase()}
               vistaInicial={mapperVistaInicial}
               /* Volver: NO guarda, solo cierra el modal */
               onVolver={() => {
