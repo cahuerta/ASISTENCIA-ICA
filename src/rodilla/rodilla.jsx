@@ -33,31 +33,6 @@ function normVista(v) {
   return "frente";
 }
 
-/* Lee contexto entrante (lado/vista) desde URL y/o sessionStorage sin defaults extra */
-function readIncomingContext(fallbackLado, fallbackVista) {
-  let lado = (fallbackLado || "").toLowerCase();
-  let vista = normVista(fallbackVista || "frente");
-  try {
-    if (typeof window !== "undefined") {
-      const sp = new URLSearchParams(window.location.search);
-      const qLado  = (sp.get("lado")  || "").toLowerCase(); // "izquierda" | "derecha"
-      const qVista = (sp.get("vista") || "");               // "frente" | "lateral" | "posterior"
-      if (qLado)  lado  = qLado;
-      if (qVista) vista = normVista(qVista);
-
-      const raw = sessionStorage.getItem("mapper_context"); // {modulo:"rodilla",lado:"...",vista:"..."}
-      if (raw) {
-        const ctx = JSON.parse(raw);
-        if (ctx?.modulo === "rodilla") {
-          if (ctx.lado)  lado  = (ctx.lado || "").toLowerCase();
-          if (ctx.vista) vista = normVista(ctx.vista);
-        }
-      }
-    }
-  } catch {}
-  return { lado, vista };
-}
-
 /* Mapa imagen por vista (si lado = izquierda y vista = frente/posterior → espejo) */
 const IMG = {
   frente: toUrl(imgFrenteDerecha),
@@ -127,10 +102,8 @@ export default function RodillaMapper({
   onSave,
   onVolver,
 }) {
-  /* === ÚNICO CAMBIO: inicializar con lo que envía el SVG === */
-  const init = readIncomingContext(ladoInicial, vistaInicial);
-  const lado = (init.lado || "derecha").toLowerCase();
-  const vistaInicialNorm = normVista(init.vista || "frente");
+  const lado = (ladoInicial || "").toLowerCase();
+  const vistaInicialNorm = normVista(vistaInicial);
   const [vista, setVista] = useState(vistaInicialNorm);
 
   /* Estado de puntos */
@@ -196,7 +169,7 @@ export default function RodillaMapper({
     if (typeof window !== "undefined") window.location.assign("/");
   }, [onVolver]);
 
-  /* Imagen final + flag de espejo (SIN cambios) */
+  /* Imagen final + flag de espejo */
   const imgSrcFinal =
     (typeof imagenSrc === "string" && imagenSrc) ||
     IMG[vista] ||
@@ -205,7 +178,7 @@ export default function RodillaMapper({
   const debeEspejar =
     (lado === "izquierda") && (vista === "frente" || vista === "posterior");
 
-  /* Puntos render (SIN cambios: espejo numérico del cx cuando corresponde) */
+  /* Puntos render (espejar cx cuando corresponde) */
   const puntosRender = useMemo(
     () =>
       puntos.map((p) => {
@@ -222,7 +195,7 @@ export default function RodillaMapper({
     [puntos, debeEspejar]
   );
 
-  /* Guardar (suma 3 vistas) — SIN cambios */
+  /* Guardar (suma 3 vistas) — ROBUSTO A TIMING */
   const handleSave = () => {
     const persisted = loadPersisted(lado) || { frente: [], lateral: [], posterior: [] };
 
