@@ -143,7 +143,7 @@ export default function PreviewOrden({
         <p><strong>Nombre:</strong> {nombre || "—"}</p>
         <p><strong>RUT:</strong> {rut || "—"}</p>
         <p><strong>Edad:</strong> {edad ? `${edad} años` : "—"}</p>
-        {genero ? <p><strong>Género:</strong> {genero}</p> : null}
+        {genero ? <p><strong>Sexo:</strong> {genero}</p> : null}
         {dolor ? <p><strong>Motivo / Diagnóstico:</strong> Dolor de {dolor} {lado || ""}</p> : null}
       </div>
 
