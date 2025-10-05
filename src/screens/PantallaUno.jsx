@@ -209,7 +209,7 @@ const styles = {
   infoBox: {
     position: "relative",
     textAlign: "left",
-    background: T.surface,                   // más claro, sin bloque oscuro
+    background: T.surface,
     border: `1px solid ${T.border}`,
     borderRadius: 12,
     padding: "12px 14px 12px 14px",
@@ -223,7 +223,7 @@ const styles = {
     bottom: 8,
     width: 3,
     borderRadius: 3,
-    background: T.primary,                   // acento lateral
+    background: T.primary,
   },
   infoRow: {
     display: "grid",
@@ -235,7 +235,7 @@ const styles = {
     width: 18,
     height: 18,
     marginTop: 3,
-    opacity: 0.9,                            // sutil
+    opacity: 0.9,
   },
   infoTextWrap: {},
   infoKicker: {
