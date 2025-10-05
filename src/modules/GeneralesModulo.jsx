@@ -427,15 +427,10 @@ export default function GeneralesModulo({ initialDatos }) {
       )}
 
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
-        holaaaaaaaaa
-      </h3>
-
-      {/* ===== Frase informativa por paso (solo agregado) ===== */}
-      <div style={{ marginTop: -6, marginBottom: 12, color: "var(--text-muted, #666)" }}>
         {stepStarted
-          ? "Revise la lista sugerida por IA y agregue un examen opcional si lo requiere. Luego continúe al pago."
-          : "Revise sus datos y antecedentes. La IA sugerirá exámenes generales acordes a su perfil."}
-      </div>
+          ? "Revise la propuesta de exámenes y agregue un examen opcional si lo requiere. Luego continúe al pago."
+          : "Seleccione los datos e indique enfermedades previas."}
+      </h3>
 
       <div style={{ marginBottom: 10 }}>
         <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
