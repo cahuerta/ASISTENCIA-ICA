@@ -181,6 +181,7 @@ export default function TraumaModulo({
   /* Estado para mappers */
   const [mostrarMapper, setMostrarMapper] = useState(false);
   const [mapperId, setMapperId] = useState(null);
+  const [mapperVistaInicial, setMapperVistaInicial] = useState("frente"); // ← NUEVO
 
   /* Refresco del preview cuando se guarda en el mapper o se cierra */
   const [mapperRefresh, setMapperRefresh] = useState(0);
@@ -326,6 +327,10 @@ export default function TraumaModulo({
     // Abrir mapper inmediatamente al seleccionar en el SVG
     const id = resolveZonaKey(dolor);
     if (id) {
+      // === NUEVO: fijamos la vista inicial del mapper según el tab activo ===
+      const vi = vista === "anterior" ? "frente" : "posterior";
+      setMapperVistaInicial(vi);
+
       setMapperId(id);
       setMostrarMapper(true);
     }
@@ -901,7 +906,8 @@ export default function TraumaModulo({
           <div style={S.modalCard}>
             <GenericMapper
               mapperId={mapperId}
-              lado={datos?.lado || ""}
+              lado={(datos?.lado || "").toLowerCase()}
+              vistaInicial={mapperVistaInicial}   {/* ← NUEVO: 'frente' | 'posterior' */}
               /* Volver: NO guarda, solo cierra el modal */
               onVolver={() => {
                 setMostrarMapper(false);
