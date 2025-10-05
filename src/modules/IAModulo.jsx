@@ -41,7 +41,6 @@ export default function IAModulo({ initialDatos }) {
   const pollerRef = useRef(null);
 
   // ID de pago/módulo
-  the
   const [idPago, setIdPago] = useState(() => {
     return (
       sessionStorage.getItem("idPago") ||
