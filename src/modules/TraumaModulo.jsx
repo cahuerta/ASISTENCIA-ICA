@@ -786,7 +786,7 @@ export default function TraumaModulo({
               <strong>Edad:</strong> {datos?.edad || "—"}
             </div>
             <div>
-              <strong>Género:</strong> {datos?.genero || "—"}
+              <strong>Sexo:</strong> {datos?.genero || "—"}
             </div>
             <div>
               <strong>Dolor:</strong> {datos?.dolor || "—"}
