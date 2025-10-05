@@ -68,6 +68,30 @@ export default function PantallaUno({ onIrPantallaDos }) {
                     INVITADO (GUEST)
                   </button>
                 </div>
+
+                {/* Aviso informativo (debajo de los botones) */}
+                <div role="note" aria-label="Información de orientación" style={styles.infoBox}>
+                  <div style={styles.infoIconWrap} aria-hidden="true">
+                    <svg
+                      width="18" height="18" viewBox="0 0 24 24" fill="none"
+                      xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}
+                    >
+                      <circle cx="12" cy="12" r="10" stroke={T.primary} strokeWidth="1.5" fill={T.accentAlpha}/>
+                      <path d="M12 7.2a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" fill={T.primary}/>
+                      <path d="M11.2 10.6h1.6v6h-1.6z" fill={T.primary}/>
+                    </svg>
+                  </div>
+                  <div style={styles.infoTextWrap}>
+                    <p style={styles.infoMain}>
+                      Te orientamos según tus síntomas y zona de dolor, entregando una{" "}
+                      <strong>orden médica sugerida</strong> para iniciar tu estudio o consulta.
+                    </p>
+                    <p style={styles.infoSub}>
+                      Tu información no se guarda y la orientación no sustituye la evaluación profesional.
+                    </p>
+                  </div>
+                </div>
+                {/* /Aviso informativo */}
               </div>
             ) : (
               <div style={styles.formWrap}>
@@ -184,6 +208,41 @@ const styles = {
     color: T.primary,
   },
   btnGhost: { background: T.surface, borderColor: T.border, color: T.text },
+
+  /* ===== Aviso informativo (debajo de botones) ===== */
+  infoBox: {
+    display: "grid",
+    gridTemplateColumns: "auto 1fr",
+    gap: 10,
+    alignItems: "start",
+    textAlign: "left",
+    background: `linear-gradient(0deg, ${T.accentAlpha}, ${T.accentAlpha})`,
+    border: `1px solid ${T.border}`,
+    borderRadius: 12,
+    padding: "10px 12px",
+    marginTop: "clamp(12px, 2vh, 16px)",
+    boxShadow: T.shadowSm,
+  },
+  infoIconWrap: {
+    width: 20,
+    height: 20,
+    marginTop: 2,
+  },
+  infoTextWrap: {},
+  infoMain: {
+    margin: 0,
+    color: T.text,
+    fontSize: "clamp(13px, 1.8vw, 15px)",
+    lineHeight: 1.45,
+    fontWeight: 600,
+  },
+  infoSub: {
+    margin: "6px 0 0",
+    color: T.textMuted,
+    fontSize: "clamp(12px, 1.6vw, 13px)",
+    lineHeight: 1.35,
+  },
+  /* ===== /Aviso informativo ===== */
 
   formWrap: {},
   formHeader: {
