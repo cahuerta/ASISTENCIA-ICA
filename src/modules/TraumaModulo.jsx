@@ -732,7 +732,11 @@ export default function TraumaModulo({
   return (
     <div style={S.card}>
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
-        Vista previa — Imagenología
+        {fase === "esquema"
+          ? "Seleccione la zona donde presenta molestias o dolor."
+          : fase === "preview"
+          ? "Revise su información y las áreas marcadas antes de continuar."
+          : "Resultados y exámenes sugeridos según su evaluación."}
       </h3>
 
       {/* ===== FASE 1: ESQUEMA ===== */}
