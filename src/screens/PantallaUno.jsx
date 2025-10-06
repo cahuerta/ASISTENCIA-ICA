@@ -29,7 +29,7 @@ export default function PantallaUno({ onIrPantallaDos }) {
 
   // INVITADO: escribe los mismos campos que usa el resto de módulos
   const entrarComoInvitado = () => {
-    const guest = { nombre: "guest", rut: "11.111.111-1", edad: 50, genero: "FEMENINO" };
+    const guest = { nombre: "Guest", rut: "11.111.111-1", edad: 50, genero: "FEMENINO" };
     try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(guest)); } catch {}
     if (typeof onIrPantallaDos === "function") onIrPantallaDos(guest);
   };
