@@ -1,6 +1,6 @@
 // src/FormularioPacienteBasico.jsx
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 /* ================= Utilidades RUT (Chile) ================= */
 function limpiarRut(str = "") {
@@ -40,18 +40,29 @@ function validarRut(str = "") {
   return { valido, motivo: valido ? "" : `DV incorrecto, debería ser ${dvOk}` };
 }
 
+/* ================== Guest detection (solo nombre+rut) ================== */
+const GUEST_NOMBRE = "Guest";
+const GUEST_RUT = "11.111.111-1";
+function normRut(str){ return String(str||"").replace(/[^0-9kK]/g,"").toUpperCase(); }
+function isGuestPair(nombre, rut){
+  return String(nombre||"").trim().toLowerCase() === GUEST_NOMBRE
+      && normRut(rut) === normRut(GUEST_RUT);
+}
+
 /* ================= Formulario básico (autónomo si no recibe props) ================= */
 function FormularioPacienteBasico({
   datos,
   onCambiarDato,
   onSubmit,
-  modoInvitado = false, // si es true, no valida RUT estrictamente ni exige campos
+  modoInvitado = false,   // si es true, no valida RUT estrictamente ni exige campos
+  initialValues = null,   // ← NUEVO: precarga opcional (usado por PantallaUno)
 }) {
   // MODO AUTÓNOMO: si no me pasan datos/onCambiarDato, uso estado interno
   const isManaged = typeof onCambiarDato === "function" && datos && typeof datos === "object";
   const [localDatos, setLocalDatos] = useState(() => ({
-    nombre: "",
-    rut: "",
+    // Solo sembramos nombre y rut desde initialValues; edad y genero quedan vacíos
+    nombre: initialValues?.nombre ?? "",
+    rut: initialValues?.rut ?? "",
     edad: "",
     genero: "",
   }));
@@ -71,8 +82,19 @@ function FormularioPacienteBasico({
   const [rutMsg, setRutMsg] = useState("");
   const [rutValido, setRutValido] = useState(true);
 
+  // Bloqueo de Nombre/RUT cuando detectamos perfil guest real (nombre+rut)
+  const [bloquearNombreRut, setBloquearNombreRut] = useState(() =>
+    isGuestPair(curr?.nombre, curr?.rut)
+  );
+
+  useEffect(() => {
+    setBloquearNombreRut(isGuestPair(curr?.nombre, curr?.rut));
+  }, [curr?.nombre, curr?.rut]);
+
   /* ======= RUT en vivo ======= */
   const handleRutChange = (e) => {
+    if (bloquearNombreRut) return;
+
     if (modoInvitado) {
       setCampo("rut", e.target.value);
       setRutValido(true);
@@ -106,6 +128,7 @@ function FormularioPacienteBasico({
   };
 
   const handleRutBlur = () => {
+    if (bloquearNombreRut) return;
     if (modoInvitado) return;
 
     const s = limpiarRut(curr?.rut || "");
@@ -129,8 +152,8 @@ function FormularioPacienteBasico({
 
   /* ======= Submit ======= */
   const handleSubmit = (e) => {
-    // Validaciones cuando NO es invitado
-    if (!modoInvitado) {
+    // Validaciones cuando NO es invitado y NO está bloqueado (guest real)
+    if (!modoInvitado && !bloquearNombreRut) {
       const v = validarRut(curr?.rut || "");
       if (!v.valido) {
         e.preventDefault();
@@ -182,6 +205,7 @@ function FormularioPacienteBasico({
         required={req(true)}
         autoComplete="name"
         autoCapitalize="words"
+        readOnly={bloquearNombreRut}
       />
 
       <label>RUT:</label>
@@ -197,6 +221,7 @@ function FormularioPacienteBasico({
         aria-invalid={!rutValido}
         aria-describedby="rut-help"
         className={rutValido ? "" : "input-error"}
+        readOnly={bloquearNombreRut}
       />
       <div
         id="rut-help"
@@ -207,7 +232,7 @@ function FormularioPacienteBasico({
           color: rutValido ? "var(--text-muted)" : "var(--primary-dark)",
         }}
       >
-        {modoInvitado ? "" : rutMsg}
+        {bloquearNombreRut ? "" : (modoInvitado ? "" : rutMsg)}
       </div>
 
       <label>Edad:</label>
