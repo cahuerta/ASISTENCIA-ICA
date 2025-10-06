@@ -17,6 +17,7 @@ const cssVars = {
 
 export default function PantallaUno({ onIrPantallaDos }) {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [initialFormValues, setInitialFormValues] = useState(null);
 
   const continuar = () => {
     let datos = null;
@@ -27,18 +28,23 @@ export default function PantallaUno({ onIrPantallaDos }) {
     if (typeof onIrPantallaDos === "function") onIrPantallaDos(datos);
   };
 
-  // INVITADO: escribe los mismos campos que usa el resto de módulos
+  // INVITADO: abrir formulario con nombre/rut prellenados; edad y género vacíos
   const entrarComoInvitado = () => {
-    const guest = { nombre: "Guest", rut: "11.111.111-1", edad: 50, genero: "FEMENINO" };
-    try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(guest)); } catch {}
-    if (typeof onIrPantallaDos === "function") onIrPantallaDos(guest);
+    // No guardamos nada aún en sessionStorage para permitir edición en el form
+    setInitialFormValues({
+      nombre: "guest",
+      rut: "11.111.111-1",
+      // edad: undefined,
+      // genero: undefined,
+    });
+    setMostrarFormulario(true);
   };
 
   return (
     <div className="app" style={{ ...cssVars }}>
       <main style={styles.viewport}>
         <section style={styles.wrap}>
-          {/* Header card: mismo ancho visual que la card de los botones */}
+          {/* Header card */}
           <div style={styles.headerCard} aria-hidden="true">
             <img src={logoICA} alt="Instituto de Cirugía Articular" style={styles.logoImg} />
           </div>
@@ -54,7 +60,10 @@ export default function PantallaUno({ onIrPantallaDos }) {
                     type="button"
                     className="btn"
                     style={{ ...styles.btn, ...styles.btnPrimary }}
-                    onClick={() => setMostrarFormulario(true)}
+                    onClick={() => {
+                      setInitialFormValues(null); // formulario vacío
+                      setMostrarFormulario(true);
+                    }}
                   >
                     INGRESO PERSONA
                   </button>
@@ -69,12 +78,9 @@ export default function PantallaUno({ onIrPantallaDos }) {
                   </button>
                 </div>
 
-                {/* Aviso informativo (debajo de los botones) – UX refinada */}
+                {/* Aviso informativo */}
                 <section role="note" aria-label="Orientación inicial" style={styles.infoBox}>
-                  {/* Acento lateral */}
                   <span aria-hidden="true" style={styles.infoAccent} />
-
-                  {/* Icono + texto */}
                   <div style={styles.infoRow}>
                     <div style={styles.infoIconWrap} aria-hidden="true">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -83,7 +89,6 @@ export default function PantallaUno({ onIrPantallaDos }) {
                         <rect x="11.2" y="10.5" width="1.6" height="5.8" rx="0.8" fill={T.primary}/>
                       </svg>
                     </div>
-
                     <div style={styles.infoTextWrap}>
                       <div style={styles.infoKicker}>Orientación inicial</div>
                       <p style={styles.infoMain}>
@@ -115,6 +120,7 @@ export default function PantallaUno({ onIrPantallaDos }) {
                 {/* El formulario es autónomo; al enviar navega a PantallaDos */}
                 <div style={{ marginTop: 12 }}>
                   <FormularioPacienteBasico
+                    initialValues={initialFormValues /* ← NUEVO: precarga opcional */}
                     onSubmit={(e) => {
                       e.preventDefault();
                       continuar();
@@ -205,7 +211,7 @@ const styles = {
   },
   btnGhost: { background: T.surface, borderColor: T.border, color: T.text },
 
-  /* ===== Aviso informativo refinado ===== */
+  /* Aviso informativo */
   infoBox: {
     position: "relative",
     textAlign: "left",
@@ -259,7 +265,6 @@ const styles = {
     fontSize: "clamp(12px, 1.6vw, 13px)",
     lineHeight: 1.35,
   },
-  /* ===== /Aviso informativo ===== */
 
   formWrap: {},
   formHeader: {
