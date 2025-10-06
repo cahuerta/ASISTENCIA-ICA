@@ -178,4 +178,7 @@ export async function descargarPDF(nombreArchivo = "orden.pdf", idPagoParam) {
   a.click();
   a.remove();
   window.URL.revokeObjectURL(dlUrl);
+
+  // === Cambio mínimo solicitado: borrar idPago para que no se valide automático después ===
+  try { sessionStorage.removeItem("idPago"); } catch {}
 }
