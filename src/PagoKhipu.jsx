@@ -85,22 +85,17 @@ export async function crearPagoKhipu({ idPago, datosPaciente, modulo = "trauma",
 
 /* ==================== Detección de GUEST (solo para marcar modoGuest) ==================== */
 const GUEST_PERFIL = {
-  nombre: "guest",
+  nombre: "Guest",
   rut: "11.111.111-1",
-  edad: 50,
-  genero: "FEMENINO",
 };
 
 function normRut(str) {
   return String(str || "").replace(/[^0-9kK]/g, "").toUpperCase();
 }
 function esGuest(datos) {
-  return (
-    String(datos?.nombre || "").trim().toLowerCase() === "guest" &&
-    normRut(datos?.rut) === normRut(GUEST_PERFIL.rut) &&
-    Number(datos?.edad) === Number(GUEST_PERFIL.edad) &&
-    String(datos?.genero || "").trim().toUpperCase() === GUEST_PERFIL.genero
-  );
+  const nombreOk = String(datos?.nombre || "").trim().toLowerCase() === "guest";
+  const rutOk = normRut(datos?.rut) === normRut(GUEST_PERFIL.rut);
+  return nombreOk && rutOk;
 }
 
 /* ==================== Flujo principal ==================== */
