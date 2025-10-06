@@ -215,7 +215,7 @@ export default function GeneralesModulo({ initialDatos }) {
       return;
     }
     if (!datos.genero) {
-      alert("Seleccione el género (MASCULINO/FEMENINO) en el formulario.");
+      alert("Seleccione el sexo (MASCULINO/FEMENINO) en el formulario.");
       return;
     }
 
@@ -436,7 +436,7 @@ export default function GeneralesModulo({ initialDatos }) {
         <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
         <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
         <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
-        <div><strong>Género:</strong> {datos?.genero || "—"}</div>
+        <div><strong>Sexo:</strong> {datos?.genero || "—"}</div>
       </div>
 
       {/* Primer preview: SOLO resumen (si NO está abierto el formulario de comorbilidades) */}
