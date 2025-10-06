@@ -540,7 +540,7 @@ export default function PreopModulo({ initialDatos }) {
             <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
             <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
             <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
-            <div><strong>Género:</strong> {datos?.genero || "—"}</div>
+            <div><strong>Sexo:</strong> {datos?.genero || "—"}</div>
             <div>
               <strong>Motivo/Área:</strong>{" "}
               {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
