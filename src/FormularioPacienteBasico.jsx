@@ -229,8 +229,8 @@ function FormularioPacienteBasico({
       >
         <option value="">{modoInvitado ? "Opcional…" : "Seleccione…"}</option>
         {/* Valores compatibles con el resto de la app */}
-        <option value="MASCULINO">MASCULINO</option>
-        <option value="FEMENINO">FEMENINO</option>
+        <option value="Masculino">Masculino</option>
+        <option value="Femenino">Femenino</option>
       </select>
 
       <button className="btn fullw mt-16" type="submit">
