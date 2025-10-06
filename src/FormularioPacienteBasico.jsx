@@ -41,7 +41,7 @@ function validarRut(str = "") {
 }
 
 /* ================== Guest detection (solo nombre+rut) ================== */
-const GUEST_NOMBRE = "Guest";
+const GUEST_NOMBRE = "guest"; // ← corregido a minúsculas para comparar con toLowerCase()
 const GUEST_RUT = "11.111.111-1";
 function normRut(str){ return String(str||"").replace(/[^0-9kK]/g,"").toUpperCase(); }
 function isGuestPair(nombre, rut){
@@ -55,7 +55,7 @@ function FormularioPacienteBasico({
   onCambiarDato,
   onSubmit,
   modoInvitado = false,   // si es true, no valida RUT estrictamente ni exige campos
-  initialValues = null,   // ← NUEVO: precarga opcional (usado por PantallaUno)
+  initialValues = null,   // ← precarga opcional (usado por PantallaUno)
 }) {
   // MODO AUTÓNOMO: si no me pasan datos/onCambiarDato, uso estado interno
   const isManaged = typeof onCambiarDato === "function" && datos && typeof datos === "object";
