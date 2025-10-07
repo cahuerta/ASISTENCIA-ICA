@@ -3,15 +3,11 @@
 import React, { useEffect, useState } from "react";
 
 /**
- * Botón “Volver / Reiniciar” (sin inline).
- * - Renderízalo DEBAJO del botón “Descargar Documento”.
- * - Se muestra si la URL trae ?pago=ok&idPago=...
- * - Al hacer clic: limpia sessionStorage, limpia query params y vuelve a "/".
- *
- * Estilos: usa clases para que tomen tu CSS/theme existente.
- *   Sugeridas: .pago-ok-wrap { margin-top: 8px; }
- *              .pago-ok-btn  { (puedes reutilizar tu clase primario) }
- *              o simplemente reaprovecha las que ya usas en tu botón principal.
+ * Botón “Volver / Reiniciar”
+ * - SIN estilos inline: usa tus clases globales (btn, btn-primary, btn-block).
+ * - Colócalo DEBAJO del botón “Descargar Documento” en el mismo módulo.
+ * - Se muestra solo si la URL trae ?pago=ok&idPago=...
+ * - Al hacer clic: limpia estado local, limpia query params y vuelve a "/".
  */
 
 export default function PagoOkBanner() {
@@ -28,7 +24,7 @@ export default function PagoOkBanner() {
   if (!visible) return null;
 
   const onVolver = () => {
-    // limpiar estado local por si quedó algo
+    // limpiar estado local principal
     try {
       sessionStorage.removeItem("pdfDescargado");
       sessionStorage.removeItem("idPago");
@@ -45,7 +41,7 @@ export default function PagoOkBanner() {
       window.history.replaceState({}, "", u.pathname + u.search + u.hash);
     } catch {}
 
-    // volver a inicio
+    // volver al inicio
     window.location.href = "/";
   };
 
@@ -53,7 +49,7 @@ export default function PagoOkBanner() {
     <div className="pago-ok-wrap">
       <button
         type="button"
-        className="pago-ok-btn btn btn-primary"
+        className="btn btn-primary btn-block pago-ok-btn"
         onClick={onVolver}
         aria-label="Volver y reiniciar"
       >
