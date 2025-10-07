@@ -1,27 +1,39 @@
 // src/components/PagoOkBanner.jsx
 "use client";
-import React, { useMemo } from "react";
+import React from "react";
 
-export default function PagoOkBanner() {
-  // Muestra el botón solo si venimos con ?pago=ok&idPago=...
-  const show = useMemo(() => {
-    if (typeof window === "undefined") return false;
-    const sp = new URLSearchParams(window.location.search);
-    return sp.get("pago") === "ok" && !!sp.get("idPago");
-  }, []);
+export default function PagoOkBanner({
+  className = "btn btn-primary btn-block",
+  redirectTo = "/",
+  children = "Volver / Reiniciar",
+  onlyWhenPagoOk = true,
+}) {
+  const shouldShow = (() => {
+    if (!onlyWhenPagoOk) return true;
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      return sp.get("pago") === "ok" && !!(sp.get("idPago") || sessionStorage.getItem("idPago"));
+    } catch {
+      return false;
+    }
+  })();
 
-  if (!show) return null;
+  if (!shouldShow) return null;
 
-  const onVolver = () => {
-    // limpiar estado local para no validar automático al volver
+  const onClick = () => {
     try {
       sessionStorage.removeItem("idPago");
       sessionStorage.removeItem("modulo");
       sessionStorage.removeItem("datosPacienteJSON");
       sessionStorage.removeItem("pantalla");
+      sessionStorage.removeItem("trauma_ia_examenes");
+      sessionStorage.removeItem("trauma_ia_diagnostico");
+      sessionStorage.removeItem("trauma_ia_justificacion");
+      sessionStorage.removeItem("resonanciaChecklist");
+      sessionStorage.removeItem("resonanciaResumenTexto");
+      sessionStorage.removeItem("ordenAlternativa");
     } catch {}
 
-    // limpiar la query
     try {
       const u = new URL(window.location.href);
       u.searchParams.delete("pago");
@@ -30,17 +42,12 @@ export default function PagoOkBanner() {
       window.history.replaceState({}, "", u.pathname + u.search + u.hash);
     } catch {}
 
-    // ir a PantallaUno
-    window.location.href = "/";
+    window.location.href = redirectTo; // vuelve a PantallaUno
   };
 
   return (
-    <button
-      type="button"
-      className="btn btn-primary btn-block"
-      onClick={onVolver}
-    >
-      Volver / Reiniciar
+    <button type="button" className={className} onClick={onClick}>
+      {children}
     </button>
   );
 }
