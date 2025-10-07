@@ -1,101 +1,27 @@
 // src/components/PagoOkBanner.jsx
 "use client";
-import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import React, { useMemo } from "react";
 
 export default function PagoOkBanner() {
-  const [holder, setHolder] = useState(null);
-  const [btnClass, setBtnClass] = useState("btn btn-primary btn-block");
-  const [disabled, setDisabled] = useState(false);
-  const [show, setShow] = useState(false);
-  const [downloaded, setDownloaded] = useState(false);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-
-    const findAnchor = () => {
-      let a =
-        document.querySelector("#btn-descargar-documento") ||
-        document.querySelector("#btn-descargar") ||
-        document.querySelector("[data-descargar-doc]") ||
-        document.querySelector('[data-role="descargar-documento"]');
-      if (!a) {
-        const buttons = Array.from(document.querySelectorAll("button"));
-        a = buttons.find((b) =>
-          /descargar\s+(documento|pdf)/i.test((b.textContent || "").trim())
-        );
-      }
-      return a;
-    };
-
-    let anchor = findAnchor();
-    let tries = 0;
-
-    const iv = setInterval(() => {
-      if (anchor || tries++ > 25) {
-        clearInterval(iv);
-        if (!anchor) return;
-
-        // clases y estado inicial idénticos
-        setBtnClass(anchor.className || "btn btn-primary btn-block");
-        setDisabled(
-          !!anchor.disabled ||
-            (anchor.getAttribute("aria-disabled") || "") === "true"
-        );
-
-        // contenedor inmediatamente debajo
-        const h = document.createElement("div");
-        h.className = "pago-ok-wrap";
-        anchor.insertAdjacentElement("afterend", h);
-        setHolder(h);
-
-        // marcar descarga al clickear el botón original
-        const onClick = () => {
-          try { sessionStorage.setItem("pdfDescargado", "1"); } catch {}
-          setDownloaded(true);
-        };
-        anchor.addEventListener("click", onClick);
-
-        // espía cambios de clase/disabled del botón original
-        const mo = new MutationObserver(() => {
-          setBtnClass(anchor.className || "btn btn-primary btn-block");
-          setDisabled(
-            !!anchor.disabled ||
-              (anchor.getAttribute("aria-disabled") || "") === "true"
-          );
-        });
-        mo.observe(anchor, {
-          attributes: true,
-          attributeFilter: ["class", "disabled", "aria-disabled"],
-        });
-
-        return () => {
-          mo.disconnect();
-          anchor.removeEventListener("click", onClick);
-          if (h && h.parentNode) h.parentNode.removeChild(h);
-        };
-      }
-      anchor = findAnchor();
-    }, 120);
-
-    return () => clearInterval(iv);
+  // Muestra el botón solo si venimos con ?pago=ok&idPago=...
+  const show = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const sp = new URLSearchParams(window.location.search);
+    return sp.get("pago") === "ok" && !!sp.get("idPago");
   }, []);
 
-  useEffect(() => {
-    const sp = new URLSearchParams(window.location.search);
-    const ok = sp.get("pago") === "ok";
-    const id = sp.get("idPago");
-    const flag = sessionStorage.getItem("pdfDescargado") === "1";
-    setShow(Boolean(ok && id && (downloaded || flag)));
-  }, [downloaded]);
+  if (!show) return null;
 
   const onVolver = () => {
-    try { sessionStorage.removeItem("pdfDescargado"); } catch {}
+    // limpiar estado local para no validar automático al volver
     try {
       sessionStorage.removeItem("idPago");
       sessionStorage.removeItem("modulo");
       sessionStorage.removeItem("datosPacienteJSON");
+      sessionStorage.removeItem("pantalla");
     } catch {}
+
+    // limpiar la query
     try {
       const u = new URL(window.location.href);
       u.searchParams.delete("pago");
@@ -103,25 +29,18 @@ export default function PagoOkBanner() {
       u.searchParams.delete("modulo");
       window.history.replaceState({}, "", u.pathname + u.search + u.hash);
     } catch {}
+
+    // ir a PantallaUno
     window.location.href = "/";
   };
 
-  if (!holder || !show) return null;
-
-  return createPortal(
+  return (
     <button
       type="button"
-      className={`${btnClass} pago-ok-btn`}
-      disabled={disabled}
+      className="btn btn-primary btn-block"
       onClick={onVolver}
-      aria-label="Volver y reiniciar"
     >
       Volver / Reiniciar
-    </button>,
-    holder
+    </button>
   );
 }
-
-/* opcional en tu CSS:
-.pago-ok-wrap { margin-top: 8px; }
-*/
