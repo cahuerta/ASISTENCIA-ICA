@@ -1,8 +1,7 @@
 // src/components/PagoOkBanner.jsx
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import "../app.css";            // usa TU css existente
-import theme from "../theme.json"; // usa TU theme.json
+import getTheme from "../theme.js"; // tu tema carga theme.json por dentro
 
 // Igual que en PagoKhipu.jsx
 const BACKEND_BASE =
@@ -45,6 +44,7 @@ async function descargarPDFGenerico(modulo, idPago, nombre = "documento.pdf") {
   a.remove();
   window.URL.revokeObjectURL(dlUrl);
 
+  // limpiar estado local para no validar automático al volver
   try {
     sessionStorage.removeItem("idPago");
     sessionStorage.removeItem("modulo");
@@ -64,32 +64,42 @@ async function descargarPDFGenerico(modulo, idPago, nombre = "documento.pdf") {
 
 export default function PagoOkBanner() {
   const [visible, setVisible] = useState(false);
+  const T = useMemo(() => getTheme(), []);
 
-  // Mapeo flexible desde tu theme.json -> CSS variables locales del banner
-  const cssVars = useMemo(() => {
-    const c  = theme?.colors || theme?.palette || {};
-    const r  = theme?.radii || theme?.radius || {};
-    const sp = theme?.spacing || theme?.space || {};
-    return {
-      "--pago-bg": c.surface || c.background || "#ffffff",
-      "--pago-fg": c.text || c.foreground || "#111827",
-      "--pago-border": c.border || "rgba(0,0,0,0.1)",
-      "--pago-shadow": c.shadow || "rgba(0,0,0,0.12)",
-      "--pago-radius": r.container || r.md || "12px",
-      "--pago-pad": sp.padding || sp.md || "12px",
-      "--pago-gap": sp.gap || sp.sm || "12px",
-      "--pago-z": String(theme?.zIndex || 1000),
-      "--pago-btn-radius": r.button || r.sm || "8px",
-      "--pago-btn-border": c.btnBorder || c.border || "#e5e7eb",
-      "--pago-btn-bg": c.btnBg || c.surface || "#ffffff",
-      "--pago-btn-fg": c.btnText || c.text || "#111827",
-      "--pago-btnY": sp.btnY || "8px",
-      "--pago-btnX": sp.btnX || "12px",
-      "--pago-primary-bg": c.primaryBg || c.primary || "#111827",
-      "--pago-primary-fg": c.primaryText || "#ffffff",
-      "--pago-primary-border": c.primaryBorder || c.primary || "#111827"
-    };
-  }, []);
+  // Estilos 100% con tus tokens del tema
+  const styleBanner = useMemo(() => ({
+    position: "fixed",
+    left: 16,
+    right: 16,
+    bottom: 16,
+    zIndex: 1000,
+    background: T.surface,             // ✔ surface
+    color: T.text,                     // ✔ text
+    border: `1px solid ${T.border}`,   // ✔ border
+    boxShadow: T.shadowMd,             // ✔ shadowMd
+    borderRadius: 12,
+    padding: 12,
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    fontFamily: "inherit",
+  }), [T]);
+
+  const styleBtn = useMemo(() => ({
+    padding: "8px 12px",
+    borderRadius: 8,
+    border: `1px solid ${T.border}`,   // ✔ border
+    background: T.surface,             // ✔ surface
+    color: T.text,                     // ✔ text
+    cursor: "pointer",
+  }), [T]);
+
+  const styleBtnPrimary = useMemo(() => ({
+    ...styleBtn,
+    background: T.primary,             // ✔ primary
+    color: T.onPrimary,                // ✔ onPrimary
+    borderColor: T.primaryDark,        // ✔ primaryDark
+  }), [styleBtn, T]);
 
   const params = useMemo(() => {
     if (typeof window === "undefined") return {};
@@ -137,27 +147,19 @@ export default function PagoOkBanner() {
   };
 
   return (
-    <div className="pagoOkBanner" style={cssVars} role="dialog" aria-live="polite">
-      <div className="pagoOkBanner__title">✅ Pago confirmado</div>
-      <div className="pagoOkBanner__meta">
+    <div style={styleBanner} role="dialog" aria-live="polite">
+      <div style={{ fontWeight: 600 }}>✅ Pago confirmado</div>
+      <div style={{ opacity: 0.8 }}>
         ID: {params.idPago} · Módulo: {params.modulo || "trauma"}
       </div>
-      <div className="pagoOkBanner__actions">
-        <button
-          onClick={onDescargar}
-          className="pagoOkBanner__btn pagoOkBanner__btn--primary"
-          title="Descargar PDF"
-        >
+      <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+        <button onClick={onDescargar} style={styleBtnPrimary} title="Descargar PDF">
           Descargar PDF
         </button>
-        <button
-          onClick={onReiniciar}
-          className="pagoOkBanner__btn"
-          title="Borrar datos locales y volver al inicio"
-        >
+        <button onClick={onReiniciar} style={styleBtn} title="Borrar datos y volver al inicio">
           Reiniciar
         </button>
       </div>
     </div>
   );
-      }
+}
