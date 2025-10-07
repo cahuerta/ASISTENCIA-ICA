@@ -5,6 +5,7 @@ import "./app.css";
 
 import PantallaUno from "./screens/PantallaUno.jsx";
 import PantallaDos from "./screens/PantallaDos.jsx";
+import PagoOkBanner from "./components/PagoOkBanner.jsx";
 
 /**
  * APP con 2 pantallas:
@@ -246,16 +247,32 @@ export default function App() {
     return <PantallaUno onIrPantallaDos={irPantallaDos} />;
   }
 
+  // Mostrar el banner SOLO en la misma pantalla (PantallaDos) y módulo del pago
+  const moduloFromURL = (() => {
+    try {
+      return getQuery().get("modulo") || "";
+    } catch {
+      return "";
+    }
+  })();
+  const shouldShowBanner =
+    pagoOk &&
+    Boolean(idPago) &&
+    (moduloFromURL ? moduloFromURL === moduloActual : true);
+
   // pantalla === "dos"
   return (
-    <PantallaDos
-      initialDatos={datosPaciente}
-      // Props informativas para coordinar la UI de módulos dentro de PantallaDos:
-      pagoOk={pagoOk}
-      idPago={idPago}
-      moduloActual={moduloActual}
-      onIrPantallaTres={irPantallaTres} // compat
-      onReset={resetAppHard}
-    />
+    <>
+      {shouldShowBanner && <PagoOkBanner />}
+      <PantallaDos
+        initialDatos={datosPaciente}
+        // Props informativas para coordinar la UI de módulos dentro de PantallaDos:
+        pagoOk={pagoOk}
+        idPago={idPago}
+        moduloActual={moduloActual}
+        onIrPantallaTres={irPantallaTres} // compat
+        onReset={resetAppHard}
+      />
+    </>
   );
 }
