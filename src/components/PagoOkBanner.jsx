@@ -3,13 +3,15 @@
 import React, { useEffect, useState } from "react";
 
 /**
- * Botón “Volver / Reiniciar” (sin estilos inline).
- * - Debe renderizarse DEBAJO del botón “Descargar Documento” del módulo.
- * - Se muestra SOLO si venimos de ?pago=ok&idPago=... y ya se descargó el PDF.
- *   (el helper de descarga debe guardar sessionStorage.setItem('pdfDescargado','1'))
- * - Al hacer clic: limpia estado local, limpia query params y vuelve a "/".
+ * Botón “Volver / Reiniciar” (sin inline).
+ * - Renderízalo DEBAJO del botón “Descargar Documento”.
+ * - Se muestra si la URL trae ?pago=ok&idPago=...
+ * - Al hacer clic: limpia sessionStorage, limpia query params y vuelve a "/".
  *
- * Reutiliza tus clases globales (.btn .btn-primary, etc.) definidas en app.css/theme.
+ * Estilos: usa clases para que tomen tu CSS/theme existente.
+ *   Sugeridas: .pago-ok-wrap { margin-top: 8px; }
+ *              .pago-ok-btn  { (puedes reutilizar tu clase primario) }
+ *              o simplemente reaprovecha las que ya usas en tu botón principal.
  */
 
 export default function PagoOkBanner() {
@@ -17,31 +19,24 @@ export default function PagoOkBanner() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    const check = () => {
-      const sp = new URLSearchParams(window.location.search);
-      const pagoOk = sp.get("pago") === "ok";
-      const idPago = sp.get("idPago");
-      const descargado = sessionStorage.getItem("pdfDescargado") === "1";
-      setVisible(Boolean(pagoOk && idPago && descargado));
-    };
-
-    // Chequeo inmediato + polling corto por si el flag se setea tras la descarga
-    check();
-    const iv = setInterval(check, 400);
-    return () => clearInterval(iv);
+    const sp = new URLSearchParams(window.location.search);
+    const pagoOk = sp.get("pago") === "ok";
+    const idPago = sp.get("idPago");
+    setVisible(Boolean(pagoOk && idPago));
   }, []);
 
   if (!visible) return null;
 
   const onVolver = () => {
-    try { sessionStorage.removeItem("pdfDescargado"); } catch {}
+    // limpiar estado local por si quedó algo
     try {
+      sessionStorage.removeItem("pdfDescargado");
       sessionStorage.removeItem("idPago");
       sessionStorage.removeItem("modulo");
       sessionStorage.removeItem("datosPacienteJSON");
     } catch {}
 
+    // limpiar parámetros de la URL
     try {
       const u = new URL(window.location.href);
       u.searchParams.delete("pago");
@@ -50,6 +45,7 @@ export default function PagoOkBanner() {
       window.history.replaceState({}, "", u.pathname + u.search + u.hash);
     } catch {}
 
+    // volver a inicio
     window.location.href = "/";
   };
 
@@ -57,7 +53,7 @@ export default function PagoOkBanner() {
     <div className="pago-ok-wrap">
       <button
         type="button"
-        className="btn btn-primary pago-ok-btn"
+        className="pago-ok-btn btn btn-primary"
         onClick={onVolver}
         aria-label="Volver y reiniciar"
       >
@@ -66,9 +62,3 @@ export default function PagoOkBanner() {
     </div>
   );
 }
-
-/* 
-Sugerencia (opcional) en tu app.css para ajustar el margen inferior:
-.pago-ok-wrap { margin-top: 8px; }
-.pago-ok-btn  { /* hereda colores de .btn .btn-primary definidos por tu theme * / }
-*/
