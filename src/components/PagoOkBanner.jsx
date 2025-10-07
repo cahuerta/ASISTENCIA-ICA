@@ -38,8 +38,14 @@ export default function PagoOkBanner() {
   };
 
   return (
-    <button type="button" className="btn btn-primary btn-block" onClick={onClick}>
-      Volver / Reiniciar
-    </button>
+    <div className="pago-ok-wrap">
+      <button
+        type="button"
+        className="btn btn-primary btn-block pago-ok-btn"
+        onClick={onClick}
+      >
+        Volver / Reiniciar
+      </button>
+    </div>
   );
 }
