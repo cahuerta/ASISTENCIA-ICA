@@ -1,37 +1,29 @@
 // src/components/PagoOkBanner.jsx
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 
-export default function PagoOkBanner({
-  className = "btn btn-primary btn-block",
-  redirectTo = "/",
-  children = "Volver / Reiniciar",
-  onlyWhenPagoOk = true,
-}) {
-  const shouldShow = (() => {
-    if (!onlyWhenPagoOk) return true;
+export default function PagoOkBanner() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
     try {
       const sp = new URLSearchParams(window.location.search);
-      return sp.get("pago") === "ok" && !!(sp.get("idPago") || sessionStorage.getItem("idPago"));
+      const ok = sp.get("pago") === "ok";
+      const id = sp.get("idPago");
+      setVisible(Boolean(ok && id));
     } catch {
-      return false;
+      setVisible(false);
     }
-  })();
+  }, []);
 
-  if (!shouldShow) return null;
+  if (!visible) return null;
 
   const onClick = () => {
     try {
-      sessionStorage.removeItem("idPago");
-      sessionStorage.removeItem("modulo");
-      sessionStorage.removeItem("datosPacienteJSON");
-      sessionStorage.removeItem("pantalla");
-      sessionStorage.removeItem("trauma_ia_examenes");
-      sessionStorage.removeItem("trauma_ia_diagnostico");
-      sessionStorage.removeItem("trauma_ia_justificacion");
-      sessionStorage.removeItem("resonanciaChecklist");
-      sessionStorage.removeItem("resonanciaResumenTexto");
-      sessionStorage.removeItem("ordenAlternativa");
+      const basic = sessionStorage.getItem("datosPacienteJSON");
+      sessionStorage.clear();
+      if (basic) sessionStorage.setItem("datosPacienteJSON", basic);
+      sessionStorage.setItem("pantalla", "dos");
     } catch {}
 
     try {
@@ -42,12 +34,12 @@ export default function PagoOkBanner({
       window.history.replaceState({}, "", u.pathname + u.search + u.hash);
     } catch {}
 
-    window.location.href = redirectTo; // vuelve a PantallaUno
+    window.location.href = "/";
   };
 
   return (
-    <button type="button" className={className} onClick={onClick}>
-      {children}
+    <button type="button" className="btn btn-primary btn-block" onClick={onClick}>
+      Volver / Reiniciar
     </button>
   );
 }
