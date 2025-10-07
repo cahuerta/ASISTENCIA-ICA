@@ -1,9 +1,10 @@
 // src/components/PagoOkBanner.jsx
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export default function PagoOkBanner() {
   const [visible, setVisible] = useState(false);
+  const wrapRef = useRef(null);
 
   useEffect(() => {
     try {
@@ -15,6 +16,24 @@ export default function PagoOkBanner() {
       setVisible(false);
     }
   }, []);
+
+  // Coloca este botón justo DESPUÉS del botón "Descargar Documento"
+  useEffect(() => {
+    if (!visible) return;
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+
+    // Busca el botón/anchor cuyo texto diga "Descargar Documento"
+    const candidates = Array.from(document.querySelectorAll("button, a"));
+    const downloadBtn = candidates.find((el) =>
+      /descargar\s+documento/i.test((el.textContent || "").trim())
+    );
+
+    if (downloadBtn && downloadBtn.parentNode) {
+      // Inserta el contenedor después del botón de descarga
+      downloadBtn.parentNode.insertBefore(wrap, downloadBtn.nextSibling);
+    }
+  }, [visible]);
 
   if (!visible) return null;
 
@@ -38,7 +57,7 @@ export default function PagoOkBanner() {
   };
 
   return (
-    <div className="pago-ok-wrap">
+    <div ref={wrapRef} className="pago-ok-wrap" style={{ marginTop: 12 }}>
       <button
         type="button"
         className="btn btn-primary btn-block pago-ok-btn"
