@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 export default function PagoOkBanner() {
   const [holder, setHolder] = useState(null);
   const [btnClass, setBtnClass] = useState("btn btn-primary btn-block");
+  const [disabled, setDisabled] = useState(false);
   const [show, setShow] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
 
@@ -28,30 +29,54 @@ export default function PagoOkBanner() {
     };
 
     let anchor = findAnchor();
-    let attempts = 0;
+    let tries = 0;
+
     const iv = setInterval(() => {
-      if (anchor || attempts++ > 20) {
+      if (anchor || tries++ > 25) {
         clearInterval(iv);
         if (!anchor) return;
-        const cls = anchor.getAttribute("class") || "btn btn-primary btn-block";
-        setBtnClass(cls);
+
+        // clases y estado inicial idénticos
+        setBtnClass(anchor.className || "btn btn-primary btn-block");
+        setDisabled(
+          !!anchor.disabled ||
+            (anchor.getAttribute("aria-disabled") || "") === "true"
+        );
+
+        // contenedor inmediatamente debajo
         const h = document.createElement("div");
         h.className = "pago-ok-wrap";
         anchor.insertAdjacentElement("afterend", h);
         setHolder(h);
+
+        // marcar descarga al clickear el botón original
         const onClick = () => {
           try { sessionStorage.setItem("pdfDescargado", "1"); } catch {}
           setDownloaded(true);
         };
         anchor.addEventListener("click", onClick);
-        // cleanup
+
+        // espía cambios de clase/disabled del botón original
+        const mo = new MutationObserver(() => {
+          setBtnClass(anchor.className || "btn btn-primary btn-block");
+          setDisabled(
+            !!anchor.disabled ||
+              (anchor.getAttribute("aria-disabled") || "") === "true"
+          );
+        });
+        mo.observe(anchor, {
+          attributes: true,
+          attributeFilter: ["class", "disabled", "aria-disabled"],
+        });
+
         return () => {
+          mo.disconnect();
           anchor.removeEventListener("click", onClick);
           if (h && h.parentNode) h.parentNode.removeChild(h);
         };
       }
       anchor = findAnchor();
-    }, 150);
+    }, 120);
 
     return () => clearInterval(iv);
   }, []);
@@ -87,6 +112,7 @@ export default function PagoOkBanner() {
     <button
       type="button"
       className={`${btnClass} pago-ok-btn`}
+      disabled={disabled}
       onClick={onVolver}
       aria-label="Volver y reiniciar"
     >
@@ -95,3 +121,7 @@ export default function PagoOkBanner() {
     holder
   );
 }
+
+/* opcional en tu CSS:
+.pago-ok-wrap { margin-top: 8px; }
+*/
