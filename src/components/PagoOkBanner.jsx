@@ -1,7 +1,7 @@
 // src/components/PagoOkBanner.jsx
 "use client";
 import React, { useEffect, useMemo, useState } from "react";
-import getTheme from "../theme.js"; // tu tema carga theme.json por dentro
+import getTheme from "../theme.js"; // usa tu theme (lee theme.json por dentro)
 
 // Igual que en PagoKhipu.jsx
 const BACKEND_BASE =
@@ -27,6 +27,7 @@ function endpointPDF(modulo, idPago) {
   }
 }
 
+// Descarga + limpia estado local + limpia query + vuelve al home
 async function descargarPDFGenerico(modulo, idPago, nombre = "documento.pdf") {
   const url = joinURL(BACKEND_BASE, endpointPDF(modulo, idPago));
   const r = await fetch(url, { cache: "no-store" });
@@ -51,7 +52,7 @@ async function descargarPDFGenerico(modulo, idPago, nombre = "documento.pdf") {
     sessionStorage.removeItem("datosPacienteJSON");
   } catch {}
 
-  // limpiar query y volver al inicio
+  // limpiar query
   try {
     const u = new URL(window.location.href);
     u.searchParams.delete("pago");
@@ -59,63 +60,43 @@ async function descargarPDFGenerico(modulo, idPago, nombre = "documento.pdf") {
     u.searchParams.delete("modulo");
     window.history.replaceState({}, "", u.pathname + u.search + u.hash);
   } catch {}
+
+  // volver al inicio
   window.location.href = "/";
 }
 
+/**
+ * BOTÓN INLINE (no flotante).
+ * Pon <PagoOkBanner /> justo DEBAJO del botón "Descargar Documento" de tu módulo.
+ * Solo aparece si la URL trae ?pago=ok&idPago=...
+ */
 export default function PagoOkBanner() {
-  const [visible, setVisible] = useState(false);
   const T = useMemo(() => getTheme(), []);
-
-  // Estilos 100% con tus tokens del tema
-  const styleBanner = useMemo(() => ({
-    position: "fixed",
-    left: 16,
-    right: 16,
-    bottom: 16,
-    zIndex: 1000,
-    background: T.surface,             // ✔ surface
-    color: T.text,                     // ✔ text
-    border: `1px solid ${T.border}`,   // ✔ border
-    boxShadow: T.shadowMd,             // ✔ shadowMd
-    borderRadius: 12,
-    padding: 12,
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    fontFamily: "inherit",
-  }), [T]);
-
-  const styleBtn = useMemo(() => ({
-    padding: "8px 12px",
-    borderRadius: 8,
-    border: `1px solid ${T.border}`,   // ✔ border
-    background: T.surface,             // ✔ surface
-    color: T.text,                     // ✔ text
-    cursor: "pointer",
-  }), [T]);
-
-  const styleBtnPrimary = useMemo(() => ({
-    ...styleBtn,
-    background: T.primary,             // ✔ primary
-    color: T.onPrimary,                // ✔ onPrimary
-    borderColor: T.primaryDark,        // ✔ primaryDark
-  }), [styleBtn, T]);
-
-  const params = useMemo(() => {
-    if (typeof window === "undefined") return {};
-    const sp = new URLSearchParams(window.location.search);
-    return {
-      pago: sp.get("pago"),
-      idPago: sp.get("idPago"),
-      modulo: sp.get("modulo") || sessionStorage.getItem("modulo"),
-    };
-  }, []);
+  const [visible, setVisible] = useState(false);
+  const [params, setParams] = useState({ pago: null, idPago: null, modulo: null });
 
   useEffect(() => {
-    if (params.pago === "ok" && params.idPago) setVisible(true);
-  }, [params]);
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const modulo = sp.get("modulo") || sessionStorage.getItem("modulo");
+    const obj = { pago: sp.get("pago"), idPago: sp.get("idPago"), modulo };
+    setParams(obj);
+    setVisible(obj.pago === "ok" && !!obj.idPago);
+  }, []);
 
   if (!visible) return null;
+
+  const styleBtn = {
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: `1px solid ${T.primaryDark}`,
+    background: T.primary,
+    color: T.onPrimary,
+    boxShadow: T.shadowMd,
+    cursor: "pointer",
+    fontFamily: "inherit",
+    marginTop: 8, // queda "abajo" del de descargar documento
+  };
 
   const onDescargar = async () => {
     try {
@@ -128,38 +109,14 @@ export default function PagoOkBanner() {
           ? "orden_generales.pdf"
           : "ordenIA.pdf";
       await descargarPDFGenerico(params.modulo || "trauma", params.idPago, nombre);
-      setVisible(false);
     } catch (e) {
       alert(e?.message || "No se pudo descargar el PDF");
     }
   };
 
-  const onReiniciar = () => {
-    try { sessionStorage.clear(); } catch {}
-    try {
-      const u = new URL(window.location.href);
-      u.searchParams.delete("pago");
-      u.searchParams.delete("idPago");
-      u.searchParams.delete("modulo");
-      window.history.replaceState({}, "", u.pathname + u.search + u.hash);
-    } catch {}
-    window.location.href = "/";
-  };
-
   return (
-    <div style={styleBanner} role="dialog" aria-live="polite">
-      <div style={{ fontWeight: 600 }}>✅ Pago confirmado</div>
-      <div style={{ opacity: 0.8 }}>
-        ID: {params.idPago} · Módulo: {params.modulo || "trauma"}
-      </div>
-      <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-        <button onClick={onDescargar} style={styleBtnPrimary} title="Descargar PDF">
-          Descargar PDF
-        </button>
-        <button onClick={onReiniciar} style={styleBtn} title="Borrar datos y volver al inicio">
-          Reiniciar
-        </button>
-      </div>
-    </div>
+    <button onClick={onDescargar} style={styleBtn} title="Descargar PDF nuevamente y reiniciar">
+      Descargar PDF y Volver
+    </button>
   );
 }
