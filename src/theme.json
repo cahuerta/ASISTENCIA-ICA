@@ -26,5 +26,14 @@
   "/* --- Sombras y overlay --- */": "",
   "shadowSm": "0 2px 10px rgba(0,0,0,0.08)",
   "shadowMd": "0 6px 18px rgba(0,0,0,0.12)",
-  "overlay": "rgba(0,0,0,0.50)"
+  "overlay": "rgba(0,0,0,0.50)",
+
+  "/* --- Botones metálicos (opcional, si mapeas en theme.js) --- */": "",
+  "btnBg": "#2F3A45",
+  "btnBgHover": "#27323C",
+  "btnBgActive": "#212B34",
+  "btnText": "#F1F5F9",
+  "btnBorder": "#1E262E",
+  "btnGloss": "rgba(255,255,255,0.06)",
+  "btnShadowStrong": "0 2px 10px rgba(0,0,0,0.18)"
 }
