@@ -12,10 +12,11 @@
   --text-muted:#6B7280;
   --muted:#4B5563;
 
-  --primary:#0056A6;
-  --primary-dark:#003B73;
+  /* PRIMARIO → Gris metálico (todo el acento del sistema) */
+  --primary:#3A4753;
+  --primary-dark:#2B333C;
   --onPrimary:#FFFFFF;
-  --accent-alpha: rgba(0, 86, 166, 0.25);
+  --accent-alpha: rgba(58,71,83,0.25);
 
   --shadow-sm: 0 2px 10px rgba(0,0,0,0.08);
   --shadow-md: 0 6px 18px rgba(0,0,0,0.12);
@@ -29,6 +30,15 @@
   --fs-body: clamp(15px, 1.2vw + 12px, 18px);
   --fs-small: 0.9rem;
   --fs-title: clamp(18px, 1.2vw + 16px, 22px);
+
+  /* Tokens de botón derivados del primario (para consistencia total) */
+  --btn-bg: var(--primary);
+  --btn-bg-hover: color-mix(in oklab, var(--primary) 85%, black 15%);
+  --btn-bg-active: color-mix(in oklab, var(--primary) 75%, black 25%);
+  --btn-text: var(--onPrimary);
+  --btn-border: color-mix(in oklab, var(--primary) 60%, black 40%);
+  --btn-gloss: rgba(255,255,255,0.06);
+  --btn-shadow-strong: 0 2px 10px rgba(0,0,0,0.18);
 }
 
 *{ box-sizing:border-box }
@@ -114,41 +124,41 @@ input:focus,select:focus,textarea:focus{
 .input-error{ border-color:#dc2626 !important }
 .input-ok{ border-color:#16a34a !important }
 
-/* Botones */
+/* =======================
+   Botones (gris metálico)
+   ======================= */
 .btn{
   display:inline-flex; align-items:center; justify-content:center; gap:8px;
   padding: 12px 16px;
   border-radius: 999px;
-  border: 1px solid transparent;
-  background: var(--primary);
-  color: var(--onPrimary);
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--btn-text);
   font-weight: 600;
   cursor: pointer;
   min-height: 44px; /* touch-friendly */
   text-decoration: none;
+  box-shadow: var(--btn-shadow-strong), inset 0 1px 0 var(--btn-gloss);
 }
-.btn:hover{ filter: brightness(1.05) }
-.btn:active{ transform: translateY(1px) }
-.btn.secondary{
-  background: transparent;
-  color: var(--text);
-  border-color: var(--border);
+.btn:hover{ background: var(--btn-bg-hover); }
+.btn:active{ background: var(--btn-bg-active); transform: translateY(1px) }
+/* Todas las variantes comparten el look */
+.btn.secondary,
+.btn.ghost,
+.btn.danger,
+.btn.btn--guest{
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border-color: var(--btn-border);
+  box-shadow: var(--btn-shadow-strong), inset 0 1px 0 var(--btn-gloss);
 }
-.btn.ghost{
-  background: color-mix(in oklab, var(--primary) 10%, transparent);
-  color: var(--primary);
-  border-color: color-mix(in oklab, var(--primary) 25%, transparent);
-}
-.btn.danger{ background:#ef4444; color:#fff }
 
-/* Toolbars / acciones arriba/abajo (Guardar / Volver) */
-.toolbar{
-  display:flex; gap: var(--gap); flex-wrap: wrap;
-}
+/* Toolbars / acciones */
+.toolbar{ display:flex; gap: var(--gap); flex-wrap: wrap; }
 .toolbar.right{ justify-content: flex-end }
 .toolbar.center{ justify-content: center }
 
-/* Pestañas simples (para EsquemaAnterior/Posterior/Lateral) */
+/* Pestañas */
 .tabs{
   display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;
 }
@@ -156,6 +166,10 @@ input:focus,select:focus,textarea:focus{
   padding:8px 12px; border-radius:999px;
   border:1px solid var(--border); background:#fff; color:var(--text);
   cursor:pointer; user-select:none;
+}
+.tab:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 25%, transparent);
 }
 .tab.active{
   background: var(--primary); color: var(--onPrimary);
@@ -172,10 +186,9 @@ input:focus,select:focus,textarea:focus{
   padding: 8px;
   box-shadow: var(--shadow-sm);
 }
-/* Quita padding para mapas (opcional) */
 .figure.no-pad{ padding:0; }
 
-/* Chips / etiquetas (p.ej. lado: derecha/izquierda) */
+/* Chips */
 .chips{ display:flex; gap:8px; flex-wrap:wrap }
 .chip{
   padding:6px 10px; border-radius:999px;
@@ -194,13 +207,8 @@ input:focus,select:focus,textarea:focus{
 .center{ display:flex; align-items:center; justify-content:center }
 .nowrap{ white-space: nowrap }
 .fullw{ width:100% }
-
-/* → utilidades ampliadas para márgenes */
-.mt-6{ margin-top:6px }      /* NUEVA */
-.mt-8{ margin-top:8px }
-.mt-10{ margin-top:10px }    /* NUEVA */
-.mt-12{ margin-top:12px }
-.mt-16{ margin-top:16px }
+.mt-6{ margin-top:6px } .mt-8{ margin-top:8px } .mt-10{ margin-top:10px }
+.mt-12{ margin-top:12px } .mt-16{ margin-top:16px }
 .mb-8{ margin-bottom:8px } .mb-12{ margin-bottom:12px } .mb-16{ margin-bottom:16px }
 
 /* ----- Responsivo móvil ----- */
@@ -209,22 +217,17 @@ input:focus,select:focus,textarea:focus{
   .row{ flex-direction: column }
   .card{ padding:16px; border-radius:14px; box-shadow: var(--shadow-md) }
   .toolbar{ gap:12px }
-  .btn{ padding:14px 18px } /* + área táctil */
+  .btn{ padding:14px 18px }
   input,select,textarea{ padding:14px 16px }
 }
 
-/* ----- Dark overlay genérico (para modales si los usas) ----- */
-.overlay{
-  position: fixed; inset: 0; background: var(--overlay);
-  display: none;
-}
+/* ----- Overlay genérico ----- */
+.overlay{ position: fixed; inset: 0; background: var(--overlay); display: none; }
 .overlay.show{ display:block }
 
 /* ==========================================================
-   Estilos específicos de módulos (migración a app.css)
+   Módulo Trauma (usa --t-* o cae en globales)
    ========================================================== */
-
-/* ===== TraumaModulo (usa variables del tema inyectadas en el contenedor) ===== */
 .trauma-card{
   background: var(--t-surface, var(--surface));
   color: var(--t-text, var(--text));
@@ -233,10 +236,7 @@ input:focus,select:focus,textarea:focus{
   padding: 16px;
   box-shadow: var(--t-shadow-sm, var(--shadow-sm));
 }
-.trauma-title{
-  margin-top: 0;
-  color: var(--t-primary-dark, var(--primary-dark));
-}
+.trauma-title{ margin-top: 0; color: var(--t-primary-dark, var(--primary-dark)); }
 .trauma-info{ margin-bottom: 10px; }
 .trauma-block{ margin-top: 12px; }
 .trauma-mono{
@@ -250,203 +250,73 @@ input:focus,select:focus,textarea:focus{
   line-height: 1.45;
   color: var(--t-text, var(--text));
 }
-.trauma-hint{
-  margin-top: 6px;
-  font-style: italic;
-  color: var(--t-text-muted, var(--text-muted));
-}
+.trauma-hint{ margin-top: 6px; font-style: italic; color: var(--t-text-muted, var(--text-muted)); }
 .trauma-btn{
-  display: inline-block;
-  width: 100%;
-  border: none;
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 16px;
-  cursor: pointer;
+  display: inline-block; width: 100%; border: none; padding: 12px;
+  border-radius: 8px; font-size: 16px; cursor: pointer;
   box-shadow: var(--t-shadow-sm, var(--shadow-sm));
 }
-.trauma-btn.primary{
-  background: var(--t-primary, var(--primary));
-  color: var(--t-on-primary, var(--onPrimary));
-}
+.trauma-btn.primary,
 .trauma-btn.secondary{
-  background: var(--t-muted, var(--muted));
-  color: var(--t-on-muted, #fff);
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border: 1px solid var(--btn-border);
+  box-shadow: var(--btn-shadow-strong), inset 0 1px 0 var(--btn-gloss);
 }
-
-/* Modal simple del módulo */
-.trauma-modal-backdrop{
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  z-index: 50;
-}
-.trauma-modal-card{
-  width: min(920px, 100%);
-  max-height: 90vh;
-  overflow: auto;
-  background: var(--t-surface, var(--surface));
-  border-radius: 12px;
-  box-shadow: 0 12px 40px rgba(0,0,0,.18);
-  border: 1px solid var(--t-border, var(--border));
-  padding: 12px;
-}
+.trauma-btn.primary:hover,
+.trauma-btn.secondary:hover{ background: var(--btn-bg-hover); }
+.trauma-btn.primary:active,
+.trauma-btn.secondary:active{ background: var(--btn-bg-active); transform: translateY(1px) }
 
 /* ==========================================================
-   Helpers de contenedor con relación 3:4 (igual que antes)
+   Helpers ratio 3:4 y 4:3 (mapas)
    ========================================================== */
 .ratio-3x4 { position: relative; }
-.ratio-3x4 .ratio-inner { width: 100%; padding-top: 133.333%; } /* 3:4 exacto */
-.ratio-3x4 .ratio-img {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
-  object-fit: cover; display: block;
-}
+.ratio-3x4 .ratio-inner { width: 100%; padding-top: 133.333%; }
+.ratio-3x4 .ratio-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .ratio-3x4 .ratio-overlay { position: absolute; inset: 0; }
 
-/* ==========================================================
-   Soporte de contenedores con ratio fijo (4:3) para mapas
-   ========================================================== */
-
-/* Contenedor con proporción 4:3 (mantiene coordenadas SVG) */
 .ratio-4x3{
-  position: relative;
-  width: 100%;
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  position: relative; width: 100%;
+  border-radius: var(--radius); overflow: hidden;
+  background: var(--surface); box-shadow: var(--shadow-sm);
   border: 1px solid var(--border);
 }
+.ratio-4x3 .ratio-inner{ padding-top: 133.333%; }
+.ratio-4x3 .ratio-img{ position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.ratio-4x3 .ratio-overlay{ position: absolute; inset: 0; }
 
-/* “Espaciador” que fija la altura: 4:3 = 133.333% */
-.ratio-4x3 .ratio-inner{
-  padding-top: 133.333%;
-}
-
-/* Imagen base del mapa (se espeja inline cuando corresponde) */
-.ratio-4x3 .ratio-img{
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* Capa absoluta para overlays (tabs y/o SVG) */
-.ratio-4x3 .ratio-overlay{
-  position: absolute;
-  inset: 0;
-}
-
-/* ===== FIX universal para overlays de mapas ===== */
-.ratio-overlay{
-  position: absolute;
-  inset: 0;
-}
-/* No bloquear eventos del contenedor; los hijos sí reciben clic */
-.ratio-overlay{ pointer-events: none; }
-.ratio-overlay > *{ pointer-events: auto; }
-
-/* En móvil le damos un poco más de elevación y radio suave */
+/* En móvil más elevación y radio suave */
 @media (max-width: 768px){
-  .ratio-4x3{
-    border-radius: 14px;
-    box-shadow: var(--shadow-md);
-  }
+  .ratio-4x3{ border-radius: 14px; box-shadow: var(--shadow-md); }
 }
 
 /* ==========================================================
-   Pantalla 1 — Ingreso Personas (con logo y botón Guest abajo)
+   Pantalla 1 — Ingreso Personas (logo y botón abajo)
    ========================================================== */
-
-.ica-p1{
-  min-height: 100vh;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-}
-
-.ica-p1__header{
-  width: 100%;
-  padding: 2.5rem 1.25rem 1rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.ica-p1__logo{
-  max-width: 220px;
-  width: 100%;
-  height: auto;
-  user-select: none;
-}
-
-.ica-p1__main{
-  flex: 1;
-  width: 100%;
-  padding: 0 1.25rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.ica-p1__title{
-  font-size: var(--fs-title);
-  font-weight: 600;
-  margin: 0 0 0.5rem 0;
-  text-align: center;
-  color: var(--text);
-}
-
-.ica-p1__subtitle{
-  font-size: var(--fs-small);
-  opacity: 0.8;
-  text-align: center;
-  margin: 0 0 2rem 0;
-  color: var(--text-muted);
-}
-
+.ica-p1{ min-height: 100vh; width: 100%; display: flex; flex-direction: column; background: var(--surface); }
+.ica-p1__header{ width: 100%; padding: 2.5rem 1.25rem 1rem; display: flex; flex-direction: column; align-items: center; }
+.ica-p1__logo{ max-width: 220px; width: 100%; height: auto; user-select: none; }
+.ica-p1__main{ flex: 1; width: 100%; padding: 0 1.25rem; display: flex; flex-direction: column; align-items: center; }
+.ica-p1__title{ font-size: var(--fs-title); font-weight: 600; margin: 0 0 0.5rem 0; text-align: center; color: var(--text); }
+.ica-p1__subtitle{ font-size: var(--fs-small); opacity: 0.8; text-align: center; margin: 0 0 2rem 0; color: var(--text-muted); }
 .ica-p1__footer{
-  width: 100%;
-  padding: 0.75rem 1.25rem 1.25rem;
-  position: sticky;
-  bottom: 0;
+  width: 100%; padding: 0.75rem 1.25rem 1.25rem; position: sticky; bottom: 0;
   backdrop-filter: blur(6px);
   background: linear-gradient(to top, rgba(255,255,255,0.95), rgba(255,255,255,0.6));
   border-top: 1px solid rgba(0,0,0,0.06);
 }
-
-/* Botón Guest heredando tokens globales */
+/* Guest = igual de metálico */
 .btn.btn--guest{
-  background: #ffffff;
-  color: #111;
-  border: 1px solid rgba(0,0,0,0.12);
-  box-shadow: var(--shadow-sm);
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border: 1px solid var(--btn-border);
+  box-shadow: var(--btn-shadow-strong), inset 0 1px 0 var(--btn-gloss);
 }
 .btn.btn--guest:active{ transform: scale(0.98); }
 
-.ica-p1__note{
-  margin-top: 0.5rem;
-  font-size: 0.72rem;
-  text-align: center;
-  opacity: 0.7;
-  color: var(--text-muted);
-}
-
-/* Responsivo específico de Pantalla 1 */
 @media (min-width: 768px){
-  .ica-p1__footer{
-    padding-left: 2rem;
-    padding-right: 2rem;
-    background: rgba(255,255,255,0.9);
-  }
+  .ica-p1__footer{ padding-left: 2rem; padding-right: 2rem; background: rgba(255,255,255,0.9); }
   .btn.btn--guest{ max-width: 520px; margin: 0 auto; }
 }
 @media (min-width: 1100px){
