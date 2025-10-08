@@ -23,14 +23,12 @@ export default function PagoOkBanner() {
     const wrap = wrapRef.current;
     if (!wrap) return;
 
-    // Busca el botón/anchor cuyo texto diga "Descargar Documento"
     const candidates = Array.from(document.querySelectorAll("button, a"));
     const downloadBtn = candidates.find((el) =>
       /descargar\s+documento/i.test((el.textContent || "").trim())
     );
 
     if (downloadBtn && downloadBtn.parentNode) {
-      // Inserta el contenedor después del botón de descarga
       downloadBtn.parentNode.insertBefore(wrap, downloadBtn.nextSibling);
     }
   }, [visible]);
@@ -60,7 +58,7 @@ export default function PagoOkBanner() {
     <div ref={wrapRef} className="pago-ok-wrap" style={{ marginTop: 12 }}>
       <button
         type="button"
-        className="btn btn-primary btn-block pago-ok-btn"
+        className="btn danger fullw pago-ok-btn"
         onClick={onClick}
       >
         Volver / Reiniciar
