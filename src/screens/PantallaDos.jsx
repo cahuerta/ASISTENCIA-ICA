@@ -220,6 +220,56 @@ export default function PantallaDos({
             Elija un módulo para iniciar. Cada módulo usará los datos ya ingresados.
           </div>
         </div>
+
+        {/* === Botón SALIR (al final, sin tocar nada más) === */}
+        <div className="toolbar" style={{ flexDirection: "column", gap: 12, marginTop: 12 }}>
+          <button
+            type="button"
+            className="btn danger fullw"
+            onClick={async () => {
+              const ok = window.confirm(
+                "Se borrarán TODOS los datos (incluido el JSON del paciente) y se cerrará la aplicación. ¿Continuar?"
+              );
+              if (!ok) return;
+
+              try { sessionStorage.clear(); } catch {}
+              try { localStorage.clear(); } catch {}
+              try {
+                if ("caches" in window) {
+                  const names = await caches.keys();
+                  await Promise.all(names.map((n) => caches.delete(n)));
+                }
+              } catch {}
+              try {
+                if ("serviceWorker" in navigator) {
+                  const regs = await navigator.serviceWorker.getRegistrations();
+                  await Promise.all(regs.map((r) => r.unregister()));
+                }
+              } catch {}
+              try {
+                if (window.indexedDB && indexedDB.databases) {
+                  const dbs = await indexedDB.databases();
+                  await Promise.all(
+                    (dbs || []).map((db) =>
+                      db?.name
+                        ? new Promise((res) => {
+                            const req = indexedDB.deleteDatabase(db.name);
+                            req.onsuccess = req.onerror = req.onblocked = () => res();
+                          })
+                        : Promise.resolve()
+                    )
+                  );
+                }
+              } catch {}
+
+              try { window.open("", "_self"); window.close(); } catch {}
+              try { window.location.replace("about:blank"); } catch { window.location.href = "about:blank"; }
+            }}
+          >
+            Salir
+          </button>
+        </div>
+        {/* === /Botón SALIR === */}
       </div>
     </div>
   );
