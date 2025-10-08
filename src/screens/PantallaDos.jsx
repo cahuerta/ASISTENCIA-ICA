@@ -221,47 +221,22 @@ export default function PantallaDos({
           </div>
         </div>
 
-        {/* === Botón SALIR (al final, sin tocar nada más) === */}
+        {/* === Botón SALIR (mensaje corto + borrar datos del paciente + cerrar ventana) === */}
         <div className="toolbar" style={{ flexDirection: "column", gap: 12, marginTop: 12 }}>
           <button
             type="button"
             className="btn danger fullw"
             onClick={async () => {
               const ok = window.confirm(
-                "Se borrarán TODOS los datos (incluido el JSON del paciente) y se cerrará la aplicación. ¿Continuar?"
+                "Se borrarán los datos del paciente y se cerrará la aplicación/ventana. ¿Continuar?"
               );
               if (!ok) return;
 
-              try { sessionStorage.clear(); } catch {}
-              try { localStorage.clear(); } catch {}
-              try {
-                if ("caches" in window) {
-                  const names = await caches.keys();
-                  await Promise.all(names.map((n) => caches.delete(n)));
-                }
-              } catch {}
-              try {
-                if ("serviceWorker" in navigator) {
-                  const regs = await navigator.serviceWorker.getRegistrations();
-                  await Promise.all(regs.map((r) => r.unregister()));
-                }
-              } catch {}
-              try {
-                if (window.indexedDB && indexedDB.databases) {
-                  const dbs = await indexedDB.databases();
-                  await Promise.all(
-                    (dbs || []).map((db) =>
-                      db?.name
-                        ? new Promise((res) => {
-                            const req = indexedDB.deleteDatabase(db.name);
-                            req.onsuccess = req.onerror = req.onblocked = () => res();
-                          })
-                        : Promise.resolve()
-                    )
-                  );
-                }
-              } catch {}
+              // Eliminar SOLO la info del paciente del JSON almacenado
+              try { sessionStorage.removeItem("datosPacienteJSON"); } catch {}
+              try { localStorage.removeItem("datosPacienteJSON"); } catch {}
 
+              // Cerrar/Salir (best-effort)
               try { window.open("", "_self"); window.close(); } catch {}
               try { window.location.replace("about:blank"); } catch { window.location.href = "about:blank"; }
             }}
@@ -352,4 +327,4 @@ function styles(T) {
       fontSize: "clamp(12px,1.7vw,14px)",
     },
   };
-}
+      }
