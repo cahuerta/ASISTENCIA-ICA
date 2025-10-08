@@ -334,3 +334,93 @@ input:focus,select:focus,textarea:focus{
   .ica-p1__main{ max-width: 900px; margin: 0 auto; }
   .btn.btn--guest{ max-width: 560px; }
 }
+
+/* ==========================================================
+   Mejora UX genérica (solo CSS, sin tocar JSX)
+   ========================================================== */
+
+/* Título grande si h1/h2 es el primero dentro de .card */
+.card > h1:first-child,
+.card > h2:first-child{
+  font-size: clamp(20px, 1.6vw + 18px, 26px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0 0 12px;
+}
+
+/* Listas dentro de cards a columnas (auto-responsivo) */
+.card > ul{
+  padding-left: 1.1rem;
+  margin: 0;
+}
+.card > ul li{
+  line-height: 1.5;
+  margin: 0 0 6px;
+  break-inside: avoid;
+}
+@media (min-width: 640px){ .card > ul{ columns: 2; column-gap: 24px; } }
+@media (min-width: 1024px){ .card > ul{ columns: 3; } }
+
+/* Bloques de párrafos con aspecto “callout” suave */
+.card > div:has(p){
+  background: #F6F7F9;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  color: var(--text);
+}
+
+/* CTA sticky si el último elemento de la card es un botón fullw */
+.card > .btn.fullw:last-child{
+  position: sticky;
+  bottom: 0;
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  z-index: 1;
+}
+
+/* ==========================================================
+   Marcos reutilizables (opt-in + global suave)
+   ========================================================== */
+
+/* 0) Marco suave global para .card/.figure */
+.card, .figure { position: relative; }
+.card::before, .figure::before{
+  content:"";
+  position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.65),
+    inset 0 0 0 2px rgba(0,0,0,.04);
+}
+
+/* 1) Marco metálico (gradiente en el borde) */
+.frame-metal{
+  position: relative;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(145deg, rgba(255,255,255,.75), rgba(0,0,0,.18)) border-box;
+  background-clip: padding-box, border-box;
+}
+
+/* 2) Marco con halo de acento del tema */
+.frame-accent{
+  position: relative;
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 20%, transparent);
+}
+
+/* 3) Marco interior (doble línea interna) */
+.frame-inset{ position: relative; }
+.frame-inset::after{
+  content:"";
+  position:absolute; inset:8px; border-radius: calc(var(--radius) - 8px);
+  border: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
+  pointer-events:none;
+}
+
+/* Extra: aplicar a contenedores ratio */
+.ratio-4x3.frame-metal,
+.ratio-3x4.frame-metal { background-clip: padding-box, border-box; }
