@@ -2,7 +2,8 @@
    App global styles (UX móvil)
    =========================== */
 
-/* Fallbacks: si el wrapper no define vars, usa estos valores por defecto */
+/* Fallbacks: si el wrapper no define vars, usa estos valores por defecto
+   (theme.js inyecta tokens desde theme.json a estas CSS vars en :root) */
 :root{
   --bg:#F3F5F8;
   --surface:#FFFFFF;
