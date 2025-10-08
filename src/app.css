@@ -142,16 +142,26 @@ input:focus,select:focus,textarea:focus{
 }
 .btn:hover{ background: var(--btn-bg-hover); }
 .btn:active{ background: var(--btn-bg-active); transform: translateY(1px) }
-/* Todas las variantes comparten el look */
+/* Todas las variantes comparten el look (salvo .danger que se define aparte) */
 .btn.secondary,
 .btn.ghost,
-.btn.danger,
 .btn.btn--guest{
   background: var(--btn-bg);
   color: var(--btn-text);
   border-color: var(--btn-border);
   box-shadow: var(--btn-shadow-strong), inset 0 1px 0 var(--btn-gloss);
 }
+/* Botón peligro (rojo para acciones destructivas) */
+.btn.danger{
+  background: #B91C1C;
+  border: 1px solid #991B1B;
+  color: #FFFFFF;
+  box-shadow: var(--btn-shadow-strong), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.btn.danger:hover{ background:#A31616; }
+.btn.danger:active{ background:#8D1212; transform: translateY(1px) }
+/* Alias para ancho completo en botones */
+.btn.fullw{ width:100%; }
 
 /* Toolbars / acciones */
 .toolbar{ display:flex; gap: var(--gap); flex-wrap: wrap; }
