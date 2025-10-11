@@ -2,6 +2,10 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 
+// ← NUEVO: base del backend para el reset
+const BACKEND_BASE =
+  process.env.NEXT_PUBLIC_BACKEND_BASE || "https://asistencia-ica-backend.onrender.com";
+
 export default function PagoOkBanner() {
   const [visible, setVisible] = useState(false);
   const wrapRef = useRef(null);
@@ -35,7 +39,24 @@ export default function PagoOkBanner() {
 
   if (!visible) return null;
 
-  const onClick = () => {
+  const onClick = async () => {
+    // ===== NUEVO: pedir al backend borrar lo asociado a idPago
+    let idPago = "";
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      idPago = sp.get("idPago") || "";
+    } catch {}
+    if (idPago) {
+      try {
+        await fetch(`${BACKEND_BASE}/reset/${encodeURIComponent(idPago)}`, {
+          method: "DELETE",
+        });
+      } catch {
+        // si falla, continuamos igual (al menos se limpia el front)
+      }
+    }
+    // ===== FIN CAMBIO
+
     try {
       const basic = sessionStorage.getItem("datosPacienteJSON");
       sessionStorage.clear();
