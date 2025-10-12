@@ -98,6 +98,54 @@ function esGuest(datos) {
   return nombreOk && rutOk;
 }
 
+/* ================= Helper: obtener datos ya guardados en backend (según modulo) ================ */
+async function obtenerDatosExistentes(idPago, modulo = "trauma") {
+  if (!idPago) return null;
+  try {
+    let url;
+    if (modulo === "preop") {
+      url = joinURL(BACKEND_BASE, `/obtener-datos-preop/${encodeURIComponent(idPago)}`);
+    } else if (modulo === "generales") {
+      url = joinURL(BACKEND_BASE, `/obtener-datos-generales/${encodeURIComponent(idPago)}`);
+    } else {
+      // trauma
+      url = joinURL(BACKEND_BASE, `/obtener-datos/${encodeURIComponent(idPago)}`);
+    }
+    const { ok, data } = await fetchJSON(url, { method: "GET" });
+    if (!ok || !data?.ok) return null;
+    return data.datos || null;
+  } catch {
+    return null;
+  }
+}
+
+/* ================ Helper: merge no-destructivo cliente <- servidor =========================
+   Reglas:
+   - Si el cliente trae undefined o "" o [] no sobreescribirá campos existentes del servidor.
+   - Si cliente trae campos válidos, los usa.
+   - Para arrays: si cliente trae array no vacío lo usa; si vacío -> no pisa.
+   - Para objetos simples, hacemos shallow merge (cliente tiene prioridad si tiene keys).
+*/
+function mergeNoDestructivo(server = {}, cliente = {}) {
+  const out = { ...server };
+  for (const [k, v] of Object.entries(cliente || {})) {
+    if (v === undefined) continue;
+    if (Array.isArray(v)) {
+      if (v.length === 0) continue; // no pisar con array vacío
+      out[k] = v;
+      continue;
+    }
+    if (typeof v === "string") {
+      if (v.trim() === "") continue; // no pisar con string vacío
+      out[k] = v;
+      continue;
+    }
+    // objeto u otros (number, boolean, etc) -> aceptar (incluye null explícito)
+    out[k] = v;
+  }
+  return out;
+}
+
 /* ==================== Flujo principal ==================== */
 export async function irAPagoKhipu(datosPaciente, opts = {}) {
   const modulo = (
@@ -128,30 +176,51 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
       modulo === "preop" ? "preop" : modulo === "generales" ? "generales" : "pago"
     );
 
+  // Guardamos temporalmente el idPago en sessionStorage (para otros flujos)
   if (typeof window !== "undefined") {
     sessionStorage.setItem("idPago", idPago);
     sessionStorage.setItem("modulo", modulo);
-    sessionStorage.setItem(
-      "datosPacienteJSON",
-      JSON.stringify({ ...datosPaciente, edad: edadNum })
-    );
   }
 
-  // Persistimos antes de crear pago (tu backend luego hace merge no destructivo)
-  await guardarDatos(idPago, { ...datosPaciente, edad: edadNum }, modulo);
+  // ---------- LÓGICA NUEVA: NO SOBREESCRIBIR
+  // 1) Intentar obtener datos previamente guardados en backend para este idPago (si existen)
+  let datosServer = null;
+  try {
+    datosServer = await obtenerDatosExistentes(idPago, modulo);
+  } catch (e) {
+    datosServer = null;
+  }
+
+  // 2) Hacemos merge no destructivo (server <- cliente)
+  const clienteConEdad = { ...datosPaciente, edad: edadNum };
+  const merged = datosServer ? mergeNoDestructivo(datosServer, clienteConEdad) : clienteConEdad;
+
+  // 3) Actualizar sessionStorage con la versión mergeada (evita reinyeciones con datos viejos)
+  if (typeof window !== "undefined") {
+    try {
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(merged));
+    } catch {}
+  }
+
+  // Persistimos antes de crear pago (tu backend luego hace merge no destructivo también)
+  await guardarDatos(idPago, merged, modulo);
 
   // Guest real: pedir al backend que trate este pago como pagado (modoGuest)
-  const modoGuest = esGuest(datosPaciente);
+  const modoGuest = esGuest(merged);
 
   const urlPago = await crearPagoKhipu({
     idPago,
-    datosPaciente: { ...datosPaciente, edad: edadNum },
+    datosPaciente: merged,
     modulo,
     modoGuest,
   });
 
   // Redirección (para guest vuelve directo ?pago=ok&idPago=..., para normal va a Khipu)
-  window.location.href = urlPago;
+  if (typeof window !== "undefined") {
+    window.location.href = urlPago;
+  } else {
+    return urlPago;
+  }
 }
 
 /* ==================== Descargar PDF (trauma) ==================== */
