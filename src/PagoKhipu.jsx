@@ -83,7 +83,7 @@ export async function crearPagoKhipu({ idPago, datosPaciente, modulo = "trauma",
   return data.url;
 }
 
-/* ==================== Detección de GUEST (solo para marcar modoGuest) ==================== */
+/* ==================== Detección de GUEST ==================== */
 const GUEST_PERFIL = {
   nombre: "Guest",
   rut: "11.111.111-1",
@@ -98,7 +98,7 @@ function esGuest(datos) {
   return nombreOk && rutOk;
 }
 
-/* ================= Helper: obtener datos ya guardados en backend (según modulo) ================ */
+/* ================= Helpers de lectura y validación ================= */
 async function obtenerDatosExistentes(idPago, modulo = "trauma") {
   if (!idPago) return null;
   try {
@@ -108,7 +108,6 @@ async function obtenerDatosExistentes(idPago, modulo = "trauma") {
     } else if (modulo === "generales") {
       url = joinURL(BACKEND_BASE, `/obtener-datos-generales/${encodeURIComponent(idPago)}`);
     } else {
-      // trauma
       url = joinURL(BACKEND_BASE, `/obtener-datos/${encodeURIComponent(idPago)}`);
     }
     const { ok, data } = await fetchJSON(url, { method: "GET" });
@@ -119,29 +118,44 @@ async function obtenerDatosExistentes(idPago, modulo = "trauma") {
   }
 }
 
-/* ================ Helper: merge no-destructivo cliente <- servidor =========================
-   Reglas:
-   - Si el cliente trae undefined o "" o [] no sobreescribirá campos existentes del servidor.
-   - Si cliente trae campos válidos, los usa.
-   - Para arrays: si cliente trae array no vacío lo usa; si vacío -> no pisa.
-   - Para objetos simples, hacemos shallow merge (cliente tiene prioridad si tiene keys).
-*/
-function mergeNoDestructivo(server = {}, cliente = {}) {
-  const out = { ...server };
-  for (const [k, v] of Object.entries(cliente || {})) {
+// ¿El cliente intenta borrar algo que ya existe en el server?
+function esParcheDestructivo(server = {}, cliente = {}) {
+  for (const [k, vCliente] of Object.entries(cliente || {})) {
+    const vServer = server?.[k];
+
+    // si el server NO tiene valor previo, no hay conflicto
+    if (vServer === undefined || vServer === null) continue;
+
+    // string vacío pisa string no vacío => destructivo
+    if (typeof vCliente === "string" && vCliente.trim() === "" &&
+        typeof vServer === "string" && vServer.trim() !== "") {
+      return true;
+    }
+    // array vacío pisa array no vacío => destructivo
+    if (Array.isArray(vCliente) && vCliente.length === 0 &&
+        Array.isArray(vServer) && vServer.length > 0) {
+      return true;
+    }
+    // objeto vacío pisa objeto no vacío => destructivo
+    if (vCliente && typeof vCliente === "object" && !Array.isArray(vCliente) &&
+        Object.keys(vCliente).length === 0 &&
+        vServer && typeof vServer === "object" && !Array.isArray(vServer) &&
+        Object.keys(vServer).length > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Tomar SOLO campos no vacíos del cliente (para aplicar sobre server sin borrar)
+function soloCamposNoVacios(obj = {}) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
     if (v === undefined) continue;
-    if (Array.isArray(v)) {
-      if (v.length === 0) continue; // no pisar con array vacío
-      out[k] = v;
-      continue;
-    }
-    if (typeof v === "string") {
-      if (v.trim() === "") continue; // no pisar con string vacío
-      out[k] = v;
-      continue;
-    }
-    // objeto u otros (number, boolean, etc) -> aceptar (incluye null explícito)
-    out[k] = v;
+    if (typeof v === "string") { if (v.trim() === "") continue; out[k] = v; continue; }
+    if (Array.isArray(v)) { if (v.length === 0) continue; out[k] = v; continue; }
+    if (v && typeof v === "object") { if (Object.keys(v).length === 0) continue; out[k] = v; continue; }
+    out[k] = v; // number, boolean, null explícito
   }
   return out;
 }
@@ -156,7 +170,7 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
 
   const edadNum = Number(datosPaciente?.edad);
 
-  // Validaciones estándar
+  // Requisitos mínimos
   const baseIncompleto =
     !datosPaciente?.nombre?.trim() ||
     !datosPaciente?.rut?.trim() ||
@@ -176,46 +190,48 @@ export async function irAPagoKhipu(datosPaciente, opts = {}) {
       modulo === "preop" ? "preop" : modulo === "generales" ? "generales" : "pago"
     );
 
-  // Guardamos temporalmente el idPago en sessionStorage (para otros flujos)
+  // Setear id/modulo para flujos posteriores
   if (typeof window !== "undefined") {
     sessionStorage.setItem("idPago", idPago);
     sessionStorage.setItem("modulo", modulo);
   }
 
-  // ---------- LÓGICA NUEVA: NO SOBREESCRIBIR
-  // 1) Intentar obtener datos previamente guardados en backend para este idPago (si existen)
-  let datosServer = null;
-  try {
-    datosServer = await obtenerDatosExistentes(idPago, modulo);
-  } catch (e) {
-    datosServer = null;
+  // 1) Leer lo que ya existe en backend (si existe)
+  const server = await obtenerDatosExistentes(idPago, modulo);
+
+  // 2) Preparar datos del cliente (normalizamos edad a número)
+  const cliente = { ...datosPaciente, edad: edadNum };
+
+  // 3) Si existe server, validar que el cliente NO borre nada: si es destructivo → cancelar
+  if (server && esParcheDestructivo(server, cliente)) {
+    alert("Detectamos datos vacíos que borrarían información ya guardada. Corrige y vuelve a intentar.");
+    return;
   }
 
-  // 2) Hacemos merge no destructivo (server <- cliente)
-  const clienteConEdad = { ...datosPaciente, edad: edadNum };
-  const merged = datosServer ? mergeNoDestructivo(datosServer, clienteConEdad) : clienteConEdad;
+  // 4) Construir payload a guardar:
+  //    - Si NO hay server → guarda cliente tal cual.
+  //    - Si HAY server → aplicar SOLO campos no vacíos del cliente encima del server (preserva resto).
+  const payload = server ? { ...server, ...soloCamposNoVacios(cliente) } : cliente;
 
-  // 3) Actualizar sessionStorage con la versión mergeada (evita reinyeciones con datos viejos)
+  // 5) Persistir ANTES de crear el pago
+  await guardarDatos(idPago, payload, modulo);
+
+  // 6) Guardar la versión final en sessionStorage (evita reinyectar obsoletos)
   if (typeof window !== "undefined") {
-    try {
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(merged));
-    } catch {}
+    try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(payload)); } catch {}
   }
 
-  // Persistimos antes de crear pago (tu backend luego hace merge no destructivo también)
-  await guardarDatos(idPago, merged, modulo);
-
-  // Guest real: pedir al backend que trate este pago como pagado (modoGuest)
-  const modoGuest = esGuest(merged);
+  // 7) Guest: marcar modoGuest (el backend devolverá URL directa de retorno)
+  const modoGuest = esGuest(payload);
 
   const urlPago = await crearPagoKhipu({
     idPago,
-    datosPaciente: merged,
+    datosPaciente: payload,
     modulo,
     modoGuest,
   });
 
-  // Redirección (para guest vuelve directo ?pago=ok&idPago=..., para normal va a Khipu)
+  // 8) Redirección
   if (typeof window !== "undefined") {
     window.location.href = urlPago;
   } else {
@@ -248,6 +264,6 @@ export async function descargarPDF(nombreArchivo = "orden.pdf", idPagoParam) {
   a.remove();
   window.URL.revokeObjectURL(dlUrl);
 
-  // === Cambio mínimo solicitado: borrar idPago para que no se valide automático después ===
+  // Limpieza post-descarga
   try { sessionStorage.removeItem("idPago"); } catch {}
 }
