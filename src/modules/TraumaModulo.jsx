@@ -427,6 +427,8 @@ export default function TraumaModulo({
         sessionStorage.setItem("trauma_ia_examenes", JSON.stringify(ex));
         sessionStorage.setItem("trauma_ia_diagnostico", dx || "");
         sessionStorage.setItem("trauma_ia_justificacion", just || "");
+        // ← compatibilidad con lectores antiguos
+        sessionStorage.setItem("trauma_ia_resumen", just || "");
       } catch {}
 
       setExamenesIA(ex);
