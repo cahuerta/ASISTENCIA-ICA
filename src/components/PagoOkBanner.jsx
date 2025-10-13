@@ -2,9 +2,10 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 
-// ← NUEVO: base del backend para el reset
+// Base del backend para el reset
 const BACKEND_BASE =
-  process.env.NEXT_PUBLIC_BACKEND_BASE || "https://asistencia-ica-backend.onrender.com";
+  process.env.NEXT_PUBLIC_BACKEND_BASE ||
+  "https://asistencia-ica-backend.onrender.com";
 
 export default function PagoOkBanner() {
   const [visible, setVisible] = useState(false);
@@ -40,7 +41,7 @@ export default function PagoOkBanner() {
   if (!visible) return null;
 
   const onClick = async () => {
-    // ===== Pedir al backend borrar lo asociado a idPago (URL → fallback sessionStorage)
+    // === 1) Reset backend por idPago (URL → fallback sessionStorage)
     let idPago = "";
     try {
       const sp = new URLSearchParams(window.location.search);
@@ -54,30 +55,49 @@ export default function PagoOkBanner() {
 
     if (idPago) {
       try {
-        const resp = await fetch(`${BACKEND_BASE}/reset/${encodeURIComponent(idPago)}`, {
-          method: "DELETE",
-        });
-        if (!resp.ok) {
-          console.warn("RESET backend falló:", resp.status);
-          // (opcional) alert("No se pudo borrar datos del backend. Reintenta.");
-        }
+        const resp = await fetch(
+          `${BACKEND_BASE}/reset/${encodeURIComponent(idPago)}`,
+          { method: "DELETE" }
+        );
+        if (!resp.ok) console.warn("RESET backend falló:", resp.status);
       } catch (e) {
         console.warn("Error al llamar RESET backend:", e);
-        // (opcional) alert("No se pudo borrar datos del backend. Reintenta.");
       }
     }
-    // ===== FIN borrado backend
 
-    // ===== Limpieza del front
+    // === 2) Guardar SOLO datos básicos del paciente antes de limpiar
+    let basicJSON = "";
     try {
-      const basic = sessionStorage.getItem("datosPacienteJSON");
-      sessionStorage.clear(); // borra todo, incluido idPago
-      sessionStorage.removeItem("idPago"); // extra por seguridad
-      if (basic) sessionStorage.setItem("datosPacienteJSON", basic);
-      sessionStorage.setItem("pantalla", "dos");
+      const raw = sessionStorage.getItem("datosPacienteJSON");
+      const d = raw ? JSON.parse(raw) : {};
+      const soloBasicos = {
+        nombre: d?.nombre || "",
+        rut: d?.rut || "",
+        edad: d?.edad || "",
+        genero: d?.genero || d?.sexo || "",
+      };
+      basicJSON = JSON.stringify(soloBasicos);
+    } catch {
+      basicJSON = "";
+    }
+
+    // === 3) Limpiar TODO el frontend (sessionStorage + localStorage)
+    try {
+      sessionStorage.clear();
+    } catch {}
+    try {
+      // Si tu app no usa localStorage, no pasa nada.
+      if (typeof localStorage !== "undefined" && localStorage.clear) {
+        localStorage.clear();
+      }
     } catch {}
 
-    // Limpiar la URL de query params del pago
+    // Vuelve a dejar SOLO los datos básicos
+    try {
+      if (basicJSON) sessionStorage.setItem("datosPacienteJSON", basicJSON);
+    } catch {}
+
+    // === 4) Limpiar query params del pago
     try {
       const u = new URL(window.location.href);
       u.searchParams.delete("pago");
@@ -86,7 +106,7 @@ export default function PagoOkBanner() {
       window.history.replaceState({}, "", u.pathname + u.search + u.hash);
     } catch {}
 
-    // Redirigir al inicio
+    // === 5) Redirigir al inicio
     window.location.href = "/";
   };
 
