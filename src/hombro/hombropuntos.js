@@ -16,7 +16,7 @@ export const HOMBRO_PUNTOS_ANTERIOR = [
   { key: "subacromial_ant", x: 0.15, y: 0.40, label: "Espacio subacromial (anterior)" },
 
   // 3) Surco bicipital (PLB)
-  { key: "surco_bicipital", x: 0.35, y: 0.80, label: "Surco bicipital (PLB)" },
+  { key: "surco_bicipital", x: 0.25, y: 0.90, label: "Surco bicipital (PLB)" },
 
   // 4) Apófisis coracoides
   { key: "coracoides", x: 0.36, y: 0.40, label: "Apófisis coracoides" },
