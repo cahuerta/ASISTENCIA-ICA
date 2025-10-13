@@ -40,30 +40,44 @@ export default function PagoOkBanner() {
   if (!visible) return null;
 
   const onClick = async () => {
-    // ===== NUEVO: pedir al backend borrar lo asociado a idPago
+    // ===== Pedir al backend borrar lo asociado a idPago (URL → fallback sessionStorage)
     let idPago = "";
     try {
       const sp = new URLSearchParams(window.location.search);
       idPago = sp.get("idPago") || "";
     } catch {}
+    if (!idPago) {
+      try {
+        idPago = sessionStorage.getItem("idPago") || "";
+      } catch {}
+    }
+
     if (idPago) {
       try {
-        await fetch(`${BACKEND_BASE}/reset/${encodeURIComponent(idPago)}`, {
+        const resp = await fetch(`${BACKEND_BASE}/reset/${encodeURIComponent(idPago)}`, {
           method: "DELETE",
         });
-      } catch {
-        // si falla, continuamos igual (al menos se limpia el front)
+        if (!resp.ok) {
+          console.warn("RESET backend falló:", resp.status);
+          // (opcional) alert("No se pudo borrar datos del backend. Reintenta.");
+        }
+      } catch (e) {
+        console.warn("Error al llamar RESET backend:", e);
+        // (opcional) alert("No se pudo borrar datos del backend. Reintenta.");
       }
     }
-    // ===== FIN CAMBIO
+    // ===== FIN borrado backend
 
+    // ===== Limpieza del front
     try {
       const basic = sessionStorage.getItem("datosPacienteJSON");
-      sessionStorage.clear();
+      sessionStorage.clear(); // borra todo, incluido idPago
+      sessionStorage.removeItem("idPago"); // extra por seguridad
       if (basic) sessionStorage.setItem("datosPacienteJSON", basic);
       sessionStorage.setItem("pantalla", "dos");
     } catch {}
 
+    // Limpiar la URL de query params del pago
     try {
       const u = new URL(window.location.href);
       u.searchParams.delete("pago");
@@ -72,6 +86,7 @@ export default function PagoOkBanner() {
       window.history.replaceState({}, "", u.pathname + u.search + u.hash);
     } catch {}
 
+    // Redirigir al inicio
     window.location.href = "/";
   };
 
