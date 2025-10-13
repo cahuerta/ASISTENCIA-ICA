@@ -81,20 +81,20 @@ export default function PagoOkBanner() {
       basicJSON = "";
     }
 
-    // === 3) Limpiar TODO el frontend (sessionStorage + localStorage)
+    // === 3) Limpiar TODO el frontend
     try {
       sessionStorage.clear();
     } catch {}
     try {
-      // Si tu app no usa localStorage, no pasa nada.
       if (typeof localStorage !== "undefined" && localStorage.clear) {
         localStorage.clear();
       }
     } catch {}
 
-    // Vuelve a dejar SOLO los datos básicos
+    // Volver a dejar SOLO los datos básicos + marcar pantalla dos
     try {
       if (basicJSON) sessionStorage.setItem("datosPacienteJSON", basicJSON);
+      sessionStorage.setItem("pantalla", "dos");
     } catch {}
 
     // === 4) Limpiar query params del pago
@@ -106,8 +106,8 @@ export default function PagoOkBanner() {
       window.history.replaceState({}, "", u.pathname + u.search + u.hash);
     } catch {}
 
-    // === 5) Redirigir al inicio
-    window.location.href = "/";
+    // === 5) Ir a PANTALLA DOS (sin volver al inicio en blanco)
+    window.location.href = "/?pantalla=dos";
   };
 
   return (
