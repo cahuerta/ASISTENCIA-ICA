@@ -10,10 +10,10 @@
    ========================= */
 export const HOMBRO_PUNTOS_ANTERIOR = [
   // 1) Articulación acromioclavicular (AC)
-  { key: "acromioclavicular", x: 0.30, y: 0.30, label: "Articulación acromioclavicular (AC)" },
+  { key: "acromioclavicular", x: 0.30, y: 0.30, label: "Articulación acromioclavicular" },
 
   // 2) Espacio subacromial (anterior)
-  { key: "subacromial_ant", x: 0.15, y: 0.40, label: "Espacio subacromial (anterior)" },
+  { key: "subacromial_ant", x: 0.15, y: 0.40, label: "Espacio subacromial" },
 
   // 3) Surco bicipital (PLB)
   { key: "surco_bicipital", x: 0.25, y: 0.90, label: "Surco bicipital (PLB)" },
@@ -22,7 +22,7 @@ export const HOMBRO_PUNTOS_ANTERIOR = [
   { key: "coracoides", x: 0.36, y: 0.40, label: "Apófisis coracoides" },
 
   // 5) Tubérculo mayor / footprint supraespinoso
-  { key: "tuberculo_mayor", x: 0.10, y: 0.45, label: "Tubérculo mayor / footprint supraespinoso" },
+  { key: "tuberculo_mayor", x: 0.10, y: 0.45, label: "Trocanter mayor" },
 
   // 6) Surco deltopectoral (región)
   { key: "surco_deltopectoral", x: 0.44, y: 0.54, label: "Surco deltopectoral" },
