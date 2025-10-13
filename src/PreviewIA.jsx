@@ -10,7 +10,7 @@ import React, { useEffect, useMemo, useState } from "react";
  *  - Botón "Pagar ahora"
  *
  * Props:
- *  - scope: "preop" | "generales" | "ia" (define claves de sessionStorage)
+ *  - scope: "preop" | "generales" | "ia" (define claves de sessionStorage)  ← (no se usa para claves en trauma)
  *  - datos: { nombre, rut, ... }
  *  - iaResultado?: { examenes?: string[], observaciones?: string }
  *  - onPagar?: () => void
@@ -25,11 +25,11 @@ export default function PreviewIA({
 }) {
   const { nombre = "", rut = "" } = datos || {};
 
-  // Claves por scope (compat con tu app)
-  const keyExams =
-    scope === "generales" ? "generales_ia_examenes" : "preop_ia_examenes";
-  const keyInfo =
-    scope === "generales" ? "generales_ia_resumen" : "preop_ia_resumen";
+  // Claves (trauma)
+  const keyExams = "trauma_ia_examenes";
+  // Para compatibilidad, primero intentamos justificación; si no existe, probamos resumen.
+  const keyInfoPrimary = "trauma_ia_justificacion";
+  const keyInfoFallback = "trauma_ia_resumen";
 
   // Estado local (si no viene iaResultado por props, lo cargamos de sessionStorage)
   const [examenes, setExamenes] = useState(
@@ -43,14 +43,19 @@ export default function PreviewIA({
     if (iaResultado) return; // Si ya llegó por props, no leemos storage
     try {
       const r1 = sessionStorage.getItem(keyExams);
-      const r2 = sessionStorage.getItem(keyInfo) || "";
+      // primero justificación; si no, resumen
+      const rInfo =
+        sessionStorage.getItem(keyInfoPrimary) ??
+        sessionStorage.getItem(keyInfoFallback) ??
+        "";
+
       setExamenes(r1 ? JSON.parse(r1) : []);
-      setObservaciones(r2 || "");
+      setObservaciones(rInfo || "");
     } catch {
       setExamenes([]);
       setObservaciones("");
     }
-  }, [iaResultado, keyExams, keyInfo]);
+  }, [iaResultado, keyExams, keyInfoPrimary, keyInfoFallback]);
 
   return (
     <div className="card">
