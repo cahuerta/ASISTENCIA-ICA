@@ -3,15 +3,15 @@
 // Vista: frontal / posterior (igual que otros módulos).
 
 export const CODO_PUNTOS_FRONTAL = [
-  { key: "epicondilo_medial",  x: 0.38, y: 0.50, label: "Epicóndilo medial" },
-  { key: "epicondilo_lateral", x: 0.62, y: 0.50, label: "Epicóndilo lateral" },
-  { key: "tendon_biceps",      x: 0.50, y: 0.57, label: "Tendón del bíceps" },
+  { key: "epicondilo_medial",  x: 0.68, y: 0.40, label: "Epicóndilo medial" },
+  { key: "epicondilo_lateral", x: 0.22, y: 0.40, label: "Epicóndilo lateral" },
+  { key: "tendon_biceps",      x: 0.50, y: 0.37, label: "Tendón del bíceps" },
 ];
 
 export const CODO_PUNTOS_POSTERIOR = [
-  { key: "epicondilo_medial_post",  x: 0.36, y: 0.50, label: "Epicóndilo medial (post.)" },
-  { key: "epicondilo_lateral_post", x: 0.64, y: 0.50, label: "Epicóndilo lateral (post.)" },
-  { key: "tendon_triceps",          x: 0.50, y: 0.60, label: "Tendón del tríceps" },
+  { key: "epicondilo_medial_post",  x: 0.16, y: 0.50, label: "Epicóndilo medial (post.)" },
+  { key: "epicondilo_lateral_post", x: 0.74, y: 0.45, label: "Epicóndilo lateral (post.)" },
+  { key: "tendon_triceps",          x: 0.40, y: 0.50, label: "Tendón del tríceps" },
 ];
 
 export const CODO_PUNTOS_BY_VISTA = {
