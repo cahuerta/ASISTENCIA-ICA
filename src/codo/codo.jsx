@@ -19,7 +19,7 @@ const THEME = {
 /* Imágenes locales base (derecho) */
 import imgFrontalDerecha from "./codoanteriorderecho.png";
 // OJO: nombre de archivo según repo: "codoposterioderecho.png"
-import imgPosteriorDerecha from "./codoposterioderecho.png";
+import imgPosteriorDerecha from "./codoposteriorderecho.png";
 
 /* Helper: import → URL (Vite/Next) */
 const toUrl = (img) => (typeof img === "string" ? img : img?.src || "");
