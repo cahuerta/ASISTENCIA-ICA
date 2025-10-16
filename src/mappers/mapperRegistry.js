@@ -23,6 +23,7 @@ export function resolveZonaKey(zonaTexto) {
   if (z.includes("mano"))    return "mano";
   if (z.includes("hombro"))  return "hombro";
   if (z.includes("codo"))    return "codo";
+  if (z.includes("cadera"))  return "cadera";
   if (z.includes("tobillo")) return "tobillo";
   return null;
 }
@@ -32,6 +33,6 @@ export function resolveZonaKey(zonaTexto) {
 */
 registerMapper("rodilla", () => import("../rodilla/rodilla.jsx"));
 registerMapper("mano",    () => import("../mano/mano.jsx"));
-registerMapper("hombro", () => import("../hombro/hombro.jsx"));
-registerMapper("codo", () => import("../codo/codo.jsx"));
-
+registerMapper("hombro",  () => import("../hombro/hombro.jsx"));
+registerMapper("codo",    () => import("../codo/codo.jsx"));
+registerMapper("cadera",  () => import("../cadera/cadera.jsx"));
