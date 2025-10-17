@@ -36,3 +36,4 @@ registerMapper("mano",    () => import("../mano/mano.jsx"));
 registerMapper("hombro",  () => import("../hombro/hombro.jsx"));
 registerMapper("codo",    () => import("../codo/codo.jsx"));
 registerMapper("cadera",  () => import("../cadera/cadera.jsx"));
+registerMapper("tobillo", () => import("../tobillo/tobilloypie.jsx")); // ← agregado
