@@ -1,31 +1,51 @@
 // src/pie/piepuntos.js
-// Puntos anatómicos clave para Pie/Tobillo derecho
-// Coordenadas normalizadas (0–100) respecto a la imagen por vista.
+// Puntos predispuestos (x,y normalizados). SIN textos en PNG/SVG, solo pins.
+// Se agrega `label` (nombre coloquial) para usar directo en resúmenes.
 
+// ==== VISTA FRENTE (DORSAL) ====
+export const PIE_PUNTOS_FRENTE = [
+  { key: "fr_maleolo_medial",  x: 0.58, y: 0.34, label: "Maléolo medial" },
+  { key: "fr_maleolo_lateral", x: 0.42, y: 0.35, label: "Maléolo lateral" },
+  { key: "fr_tibial_ant",      x: 0.52, y: 0.24, label: "Tendón tibial anterior" },
+  { key: "fr_cabeza_mt1",      x: 0.63, y: 0.84, label: "Cabeza 1.º metatarsiano" },
+  { key: "fr_dorso_mt2",       x: 0.55, y: 0.70, label: "Dorso 2.º metatarsiano" },
+];
+
+// ==== VISTA POSTERIOR ====
+export const PIE_PUNTOS_POSTERIOR = [
+  { key: "po_aquiles_medio", x: 0.50, y: 0.30, label: "Aquiles (porción media)" },
+  { key: "po_aquiles_ins",   x: 0.50, y: 0.55, label: "Inserción calcánea de Aquiles" },
+  { key: "po_maleolo_med",   x: 0.58, y: 0.38, label: "Maléolo medial (posterior)" },
+  { key: "po_maleolo_lat",   x: 0.42, y: 0.39, label: "Maléolo lateral (posterior)" },
+  { key: "po_centro_talon",  x: 0.50, y: 0.78, label: "Centro del talón" },
+];
+
+// ==== VISTA PLANTAR ====
+export const PIE_PUNTOS_PLANTAR = [
+  { key: "pl_ins_fascia",     x: 0.50, y: 0.78, label: "Inserción fascia en calcáneo" },
+  { key: "pl_arco_long_int",  x: 0.58, y: 0.60, label: "Arco longitudinal interno" },
+  { key: "pl_cabeza_mt1",     x: 0.64, y: 0.85, label: "Cabeza 1.º metatarsiano" },
+  { key: "pl_cabeza_mt5",     x: 0.36, y: 0.86, label: "Cabeza 5.º metatarsiano" },
+  { key: "pl_centro_antepie", x: 0.50, y: 0.88, label: "Centro plantar del antepié" },
+];
+
+// ==== BY_VISTA (mismo patrón que rodilla) ====
 export const PIE_PUNTOS_BY_VISTA = {
-  FRONTAL: [
-    { id: "fr_maleolo_medial",   nombre: "Maléolo medial",              x: 58, y: 34 },
-    { id: "fr_maleolo_lateral",  nombre: "Maléolo lateral",             x: 42, y: 35 },
-    { id: "fr_tibial_anterior",  nombre: "Tendón tibial anterior",      x: 52, y: 24 },
-    { id: "fr_cabeza_mt1",       nombre: "Cabeza 1.º metatarsiano",     x: 63, y: 84 },
-    { id: "fr_dorso_mt2",        nombre: "Dorso 2.º metatarsiano",      x: 55, y: 70 },
-  ],
-
-  POSTERIOR: [
-    { id: "po_aquiles_medio",    nombre: "Aquiles (porción media)",     x: 50, y: 30 },
-    { id: "po_aquiles_insercion",nombre: "Inserción calcánea de Aquiles", x: 50, y: 55 },
-    { id: "po_maleolo_medial",   nombre: "Maléolo medial (posterior)",  x: 58, y: 38 },
-    { id: "po_maleolo_lateral",  nombre: "Maléolo lateral (posterior)", x: 42, y: 39 },
-    { id: "po_centro_talon",     nombre: "Centro del talón",            x: 50, y: 78 },
-  ],
-
-  PLANTAR: [
-    { id: "pl_insercion_fascia", nombre: "Inserción fascia en calcáneo", x: 50, y: 78 },
-    { id: "pl_arco_long_int",    nombre: "Arco longitudinal interno",    x: 58, y: 60 },
-    { id: "pl_cabeza_mt1",       nombre: "Cabeza 1.º metatarsiano",      x: 64, y: 85 },
-    { id: "pl_cabeza_mt5",       nombre: "Cabeza 5.º metatarsiano",      x: 36, y: 86 },
-    { id: "pl_centro_antepie",   nombre: "Centro plantar del antepié",   x: 50, y: 88 },
-  ],
+  frente: PIE_PUNTOS_FRENTE,
+  posterior: PIE_PUNTOS_POSTERIOR,
+  plantar: PIE_PUNTOS_PLANTAR,
 };
+
+// Lista plana (si te sirve)
+export const PIE_PUNTOS = [
+  ...PIE_PUNTOS_FRENTE,
+  ...PIE_PUNTOS_POSTERIOR,
+  ...PIE_PUNTOS_PLANTAR,
+];
+
+// Mapa rápido: key → label (para usar en resúmenes)
+export const PIE_LABELS = Object.fromEntries(
+  PIE_PUNTOS.map(({ key, label }) => [key, label])
+);
 
 export default PIE_PUNTOS_BY_VISTA;
