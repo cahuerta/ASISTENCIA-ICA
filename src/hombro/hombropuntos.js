@@ -33,7 +33,7 @@ export const HOMBRO_PUNTOS_ANTERIOR = [
    ========================== */
 export const HOMBRO_PUNTOS_POSTERIOR = [
   // 1) Línea articular glenohumeral posterior
-  { key: "gh_posterior_linea", x: 0.30, y: 0.38, label: "Gleno humeral" },
+  { key: "gh_posterior_linea", x: 0.40, y: 0.43, label: "Gleno humeral" },
 
   // 2) Supraespinoso (footprint)
   { key: "supraespinoso", x: 0.45, y: 0.27, label: "Supraespinoso" },
