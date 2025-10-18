@@ -4,11 +4,11 @@
 
 // ==== VISTA FRENTE (DORSAL) ====
 export const PIE_PUNTOS_FRENTE = [
-  { key: "fr_maleolo_medial",  x: 0.48, y: 0.39, label: "Maléolo medial" },
-  { key: "fr_maleolo_lateral", x: 0.57, y: 0.45, label: "Maléolo lateral" },
+  { key: "fr_maleolo_medial",  x: 0.28, y: 0.39, label: "Maléolo medial" },
+  { key: "fr_maleolo_lateral", x: 0.87, y: 0.45, label: "Maléolo lateral" },
   { key: "fr_tibial_ant",      x: 0.50, y: 0.34, label: "Tendón tibial anterior" },
-  { key: "fr_cabeza_mt1",      x: 0.50, y: 0.90, label: "Cabeza 1.º metatarsiano" },
-  { key: "fr_dorso_mt2",       x: 0.60, y: 0.90, label: "Dorso 2.º metatarsiano" },
+  { key: "fr_cabeza_mt1",      x: 0.45, y: 0.95, label: "Cabeza 1.º metatarsiano" },
+  { key: "fr_dorso_mt2",       x: 0.65, y: 0.95, label: "Dorso 2.º metatarsiano" },
 ];
 
 // ==== VISTA POSTERIOR ====
