@@ -3,9 +3,9 @@
 
 export const CADERA_PUNTOS_ANTERIOR = [
   { key: "eias",             x: 0.30, y: 0.25, label: "Espina ilíaca anterosuperior (EIAS)" },
-  { key: "region_inguinal",  x: 0.50, y: 0.55, label: "Región inguinal" },
+  { key: "region_inguinal",  x: 0.50, y: 0.65, label: "Región inguinal" },
   { key: "trocanter_mayor",  x: 0.15, y: 0.70, label: "Trocánter mayor" },
-  { key: "aductores_pubis",  x: 0.60, y: 0.68, label: "Aductores" },
+  { key: "aductores_pubis",  x: 0.70, y: 0.78, label: "Aductores" },
   { key: "sinfisis_pubica",  x: 0.83, y: 0.50, label: "Sínfisis púbica" },
 ];
 
