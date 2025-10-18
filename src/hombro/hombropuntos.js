@@ -35,11 +35,11 @@ export const HOMBRO_PUNTOS_POSTERIOR = [
   // 1) Línea articular glenohumeral posterior
   { key: "gh_posterior_linea", x: 0.30, y: 0.38, label: "Gleno humeral" },
 
-  // 2) Infraespinoso (vientre/footprint)
-  { key: "infraespinoso_footprint", x: 0.45, y: 0.27, label: "Infraespinoso" },
+  // 2) Supraespinoso (footprint)
+  { key: "supraespinoso", x: 0.45, y: 0.27, label: "Supraespinoso" },
 
-  // 3) Espinoglenoideo (notch)
-  { key: "espinoglenoideo", x: 0.44, y: 0.35, label: "Espinoglenoideo" },
+  // 3) Infraespinoso (vientre)
+  { key: "infraespinoso_footprint", x: 0.44, y: 0.35, label: "Infraespinoso" },
 
   // 4) Subacromial posterior
   { key: "subacromial_post", x: 0.35, y: 0.30, label: "Espacio subacromial" },
