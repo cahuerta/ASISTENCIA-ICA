@@ -36,10 +36,10 @@ export const HOMBRO_PUNTOS_POSTERIOR = [
   { key: "gh_posterior_linea", x: 0.40, y: 0.43, label: "Gleno humeral" },
 
   // 2) Supraespinoso (footprint)
-  { key: "supraespinoso", x: 0.40, y: 0.27, label: "Supraespinoso" },
+  { key: "supraespinoso", x: 0.60, y: 0.27, label: "Supraespinoso" },
 
   // 3) Infraespinoso (vientre)
-  { key: "infraespinoso_footprint", x: 0.39, y: 0.35, label: "Infraespinoso" },
+  { key: "infraespinoso_footprint", x: 0.59, y: 0.35, label: "Infraespinoso" },
 
   // 4) Subacromial posterior
   { key: "subacromial_post", x: 0.35, y: 0.30, label: "Espacio subacromial" },
