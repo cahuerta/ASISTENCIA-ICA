@@ -3,16 +3,16 @@
 
 export const CADERA_PUNTOS_ANTERIOR = [
   { key: "eias",             x: 0.30, y: 0.25, label: "Espina ilíaca anterosuperior (EIAS)" },
-  { key: "region_inguinal",  x: 0.40, y: 0.55, label: "Región inguinal" },
+  { key: "region_inguinal",  x: 0.50, y: 0.55, label: "Región inguinal" },
   { key: "trocanter_mayor",  x: 0.15, y: 0.70, label: "Trocánter mayor" },
-  { key: "aductores_pubis",  x: 0.40, y: 0.48, label: "Aductores" },
-  { key: "sinfisis_pubica",  x: 0.80, y: 0.50, label: "Sínfisis púbica" },
+  { key: "aductores_pubis",  x: 0.60, y: 0.68, label: "Aductores" },
+  { key: "sinfisis_pubica",  x: 0.83, y: 0.50, label: "Sínfisis púbica" },
 ];
 
 export const CADERA_PUNTOS_POSTERIOR = [
   { key: "sacroiliaca",          x: 0.37, y: 0.35, label: "Articulación sacroilíaca" },
   { key: "bursa_trocanterica",   x: 0.70, y: 0.58, label: "Bursa trocantérica" },
-  { key: "piriforme",            x: 0.52, y: 0.58, label: "Piriforme" },
+  { key: "piriforme",            x: 0.52, y: 0.68, label: "Piriforme" },
   { key: "isquiotibiales_prox",  x: 0.38, y: 0.79, label: "Tendones isquiotibiales proximales" },
 ];
 
