@@ -13,16 +13,15 @@ export const PIE_PUNTOS_FRENTE = [
 
 // ==== VISTA POSTERIOR ====
 export const PIE_PUNTOS_POSTERIOR = [
-  { key: "po_aquiles_medio", x: 0.55, y: 0.50, label: "Aquiles (porción media)" },
-  { key: "po_aquiles_ins",   x: 0.55, y: 0.85, label: "Inserción calcánea de Aquiles" },
+  { key: "po_aquiles_medio", x: 0.50, y: 0.55, label: "Aquiles (porción media)" },
+  { key: "po_aquiles_ins",   x: 0.50, y: 0.90, label: "Inserción calcánea de Aquiles" },
   { key: "po_maleolo_med",   x: 0.68, y: 0.48, label: "Maléolo medial (posterior)" },
-  { key: "po_maleolo_lat",   x: 0.32, y: 0.54, label: "Maléolo lateral (posterior)" },
-  { key: "po_centro_talon",  x: 0.45, y: 0.98, label: "Centro del talón" },
+  { key: "po_maleolo_lat",   x: 0.28, y: 0.54, label: "Maléolo lateral (posterior)" },
 ];
 
 // ==== VISTA PLANTAR ====
 export const PIE_PUNTOS_PLANTAR = [
-  { key: "pl_ins_fascia",     x: 0.40, y: 0.25, label: "Inserción fascia en calcáneo" },
+  { key: "pl_ins_fascia",     x: 0.43, y: 0.25, label: "Inserción fascia en calcáneo" },
   { key: "pl_arco_long_int",  x: 0.58, y: 0.60, label: "Arco longitudinal interno" },
   { key: "pl_cabeza_mt1",     x: 0.66, y: 0.82, label: "Cabeza 1.º metatarsiano" },
   { key: "pl_cabeza_mt5",     x: 0.26, y: 0.80, label: "Cabeza 5.º metatarsiano" },
