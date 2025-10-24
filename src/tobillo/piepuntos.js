@@ -13,8 +13,8 @@ export const PIE_PUNTOS_FRENTE = [
 
 // ==== VISTA POSTERIOR ====
 export const PIE_PUNTOS_POSTERIOR = [
-  { key: "po_aquiles_medio", x: 0.50, y: 0.55, label: "Aquiles (porción media)" },
-  { key: "po_aquiles_ins",   x: 0.50, y: 0.90, label: "Inserción calcánea de Aquiles" },
+  { key: "po_aquiles_medio", x: 0., y: 0.55, label: "Aquiles (porción media)" },
+  { key: "po_aquiles_ins",   x: 0., y: 0.90, label: "Inserción calcánea de Aquiles" },
   { key: "po_maleolo_med",   x: 0.68, y: 0.48, label: "Maléolo medial (posterior)" },
   { key: "po_maleolo_lat",   x: 0.28, y: 0.54, label: "Maléolo lateral (posterior)" },
 ];
