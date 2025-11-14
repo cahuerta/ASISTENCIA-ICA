@@ -5,12 +5,14 @@ import "./app.css";
 
 import PantallaUno from "./screens/PantallaUno.jsx";
 import PantallaDos from "./screens/PantallaDos.jsx";
+import PantallaTres from "./screens/PantallaTres.jsx"; // ⬅️ NUEVO
 import PagoOkBanner from "./components/PagoOkBanner.jsx";
 
 /**
- * APP con 2 pantallas:
+ * APP con 3 pantallas:
  * - PantallaUno: ingreso de datos básicos
  * - PantallaDos: módulos y previews (Preop / Generales / IA / Trauma)
+ * - PantallaTres: elección de medio de pago (Flow / Khipu)
  *
  * Reglas clave:
  * - Si volvemos del pago con ?pago=ok, vamos directo a PantallaDos y dejamos
@@ -93,7 +95,7 @@ export default function App() {
   };
 
   // ===== State =====
-  const [pantalla, setPantalla] = useState(initPantalla); // "uno" | "dos"
+  const [pantalla, setPantalla] = useState(initPantalla); // "uno" | "dos" | "tres"
   const [datosPaciente, setDatosPaciente] = useState(() => {
     try {
       const raw = sessionStorage.getItem("datosPacienteJSON");
@@ -230,8 +232,7 @@ export default function App() {
     setPantalla("dos");
   };
 
-  // Compatibilidad: algunas implementaciones antiguas llamaban a "irPantallaTres".
-  // Lo preservamos como NO-OP que deja todo en PantallaDos.
+  // Ahora SÍ usamos PantallaTres real.
   const irPantallaTres = (datos) => {
     if (datos) {
       setDatosPaciente(datos);
@@ -239,7 +240,7 @@ export default function App() {
         sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
       } catch {}
     }
-    setPantalla("dos");
+    setPantalla("tres");
   };
 
   // ===== Render =====
@@ -247,7 +248,16 @@ export default function App() {
     return <PantallaUno onIrPantallaDos={irPantallaDos} />;
   }
 
-  // Mostrar el banner SOLO en la misma pantalla (PantallaDos) y módulo del pago
+  if (pantalla === "tres") {
+    return (
+      <PantallaTres
+        datosPaciente={datosPaciente}
+        onVolver={() => setPantalla("dos")}
+      />
+    );
+  }
+
+  // pantalla === "dos"
   const moduloFromURL = (() => {
     try {
       return getQuery().get("modulo") || "";
@@ -260,7 +270,6 @@ export default function App() {
     Boolean(idPago) &&
     (moduloFromURL ? moduloFromURL === moduloActual : true);
 
-  // pantalla === "dos"
   return (
     <>
       {shouldShowBanner && <PagoOkBanner />}
@@ -270,7 +279,7 @@ export default function App() {
         pagoOk={pagoOk}
         idPago={idPago}
         moduloActual={moduloActual}
-        onIrPantallaTres={irPantallaTres} // compat
+        onIrPantallaTres={irPantallaTres}
         onReset={resetAppHard}
       />
     </>
