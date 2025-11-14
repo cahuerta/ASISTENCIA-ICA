@@ -74,7 +74,7 @@ function sexoPalabra(genero = "") {
 function resumenInicialGenerales(datos = {}, comorb = {}) {
   const sexo = sexoPalabra(datos.genero);
   const edad = datos.edad ? `${datos.edad} años` : "";
-  const lista = prettyComorb(comorb);
+  const lista = prettyComorb(comorbf);
   const antecedentes = lista.length
     ? `con antecedentes de: ${lista.join(", ")}`
     : "sin comorbilidades relevantes registradas";
@@ -247,7 +247,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
       // 🔁 NUEVO: ir a PantallaTres si el padre lo define
       if (typeof onIrPantallaTres === "function") {
-        onIrPantallaTres({ ...datos, edad: edadNum });
+        onIrPantallaTres({ ...datos, edad: edadNum, idPago });
       } else {
         // Fallback: comportamiento antiguo, pagar directo con Khipu
         await irAPagoKhipu({ ...datos, edad: edadNum }, { idPago, modulo: "generales" });
