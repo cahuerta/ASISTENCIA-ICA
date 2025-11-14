@@ -82,7 +82,7 @@ function resumenInicialGenerales(datos = {}, comorb = {}) {
 }
 
 /* ============================== Componente ============================== */
-export default function GeneralesModulo({ initialDatos }) {
+export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
   const T = getTheme();
   const styles = makeStyles(T);
 
@@ -223,7 +223,7 @@ export default function GeneralesModulo({ initialDatos }) {
       const idPago = ensureGeneralesIdPago();
       sessionStorage.setItem("modulo", "generales");
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
-      // (opcional) asegurar retorno a PantallaTres
+      // Dejar marcada la intención de ir a PantallaTres
       sessionStorage.setItem("pantalla", "tres");
 
       const examenPaciente = (examenLibre || "").trim();
@@ -245,7 +245,13 @@ export default function GeneralesModulo({ initialDatos }) {
         }),
       });
 
-      await irAPagoKhipu({ ...datos, edad: edadNum }, { idPago, modulo: "generales" });
+      // 🔁 NUEVO: ir a PantallaTres si el padre lo define
+      if (typeof onIrPantallaTres === "function") {
+        onIrPantallaTres({ ...datos, edad: edadNum });
+      } else {
+        // Fallback: comportamiento antiguo, pagar directo con Khipu
+        await irAPagoKhipu({ ...datos, edad: edadNum }, { idPago, modulo: "generales" });
+      }
     } catch (err) {
       console.error("No se pudo generar el link de pago (generales):", err);
       alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
