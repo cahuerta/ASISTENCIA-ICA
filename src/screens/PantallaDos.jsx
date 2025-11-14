@@ -25,6 +25,7 @@ export default function PantallaDos({
   pagoOk = false,
   idPago = "",
   moduloActual = null, // opcional, puede venir desde App
+  onIrPantallaTres,    // ⬅️ NUEVO: viene desde App.jsx
 }) {
   const T = getTheme();
 
@@ -156,7 +157,11 @@ export default function PantallaDos({
   }, [modulo, pagoOk, idPago, moduloActual]);
 
   // En cuanto hay selección, renderizamos SOLO el módulo
-  const mountProps = { initialDatos: datos || {} };
+  const mountProps = {
+    initialDatos: datos || {},
+    onIrPantallaTres, // ⬅️ PASAMOS EL CALLBACK A LOS MÓDULOS
+  };
+
   if (modulo === "trauma") return <TraumaModulo {...mountProps} />;
   if (modulo === "preop") return <PreopModulo {...mountProps} />;
   if (modulo === "generales") return <GeneralesModulo {...mountProps} />;
@@ -327,4 +332,4 @@ function styles(T) {
       fontSize: "clamp(12px,1.7vw,14px)",
     },
   };
-      }
+}
