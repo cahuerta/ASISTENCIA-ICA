@@ -31,7 +31,9 @@ async function fetchJSON(url, options = {}, { timeoutMs = 30000 } = {}) {
     });
     const raw = await r.text();
     let data = null;
-    try { data = JSON.parse(raw); } catch {}
+    try {
+      data = JSON.parse(raw);
+    } catch {}
     return { ok: r.ok, status: r.status, data, raw };
   } finally {
     clearTimeout(t);
@@ -63,7 +65,12 @@ export async function guardarDatos(idPago, datosPaciente, modulo = "trauma") {
   return true;
 }
 
-export async function crearPagoFlow({ idPago, datosPaciente, modulo = "trauma", modoGuest = false }) {
+export async function crearPagoFlow({
+  idPago,
+  datosPaciente,
+  modulo = "trauma",
+  modoGuest = false,
+}) {
   // ⬅️ Endpoint gemelo al de Khipu, pero para Flow
   const url = joinURL(BACKEND_BASE, "/crear-pago-flow");
   const { ok, status, data, raw } = await fetchJSON(url, {
@@ -89,11 +96,14 @@ const GUEST_PERFIL = {
   nombre: "Guest",
   rut: "11.111.111-1",
 };
+
 function normRut(str) {
   return String(str || "").replace(/[^0-9kK]/g, "").toUpperCase();
 }
+
 function esGuest(datos) {
-  const nombreOk = String(datos?.nombre || "").trim().toLowerCase() === "guest";
+  const nombreOk =
+    String(datos?.nombre || "").trim().toLowerCase() === "guest";
   const rutOk = normRut(datos?.rut) === normRut(GUEST_PERFIL.rut);
   return nombreOk && rutOk;
 }
@@ -104,11 +114,20 @@ async function obtenerDatosExistentes(idPago, modulo = "trauma") {
   try {
     let url;
     if (modulo === "preop") {
-      url = joinURL(BACKEND_BASE, `/obtener-datos-preop/${encodeURIComponent(idPago)}`);
+      url = joinURL(
+        BACKEND_BASE,
+        `/obtener-datos-preop/${encodeURIComponent(idPago)}`
+      );
     } else if (modulo === "generales") {
-      url = joinURL(BACKEND_BASE, `/obtener-datos-generales/${encodeURIComponent(idPago)}`);
+      url = joinURL(
+        BACKEND_BASE,
+        `/obtener-datos-generales/${encodeURIComponent(idPago)}`
+      );
     } else {
-      url = joinURL(BACKEND_BASE, `/obtener-datos/${encodeURIComponent(idPago)}`);
+      url = joinURL(
+        BACKEND_BASE,
+        `/obtener-datos/${encodeURIComponent(idPago)}`
+      );
     }
     const { ok, data } = await fetchJSON(url, { method: "GET" });
     if (!ok || !data?.ok) return null;
@@ -124,16 +143,33 @@ function esParcheDestructivo(server = {}, cliente = {}) {
     const vServer = server?.[k];
     if (vServer === undefined || vServer === null) continue;
 
-    if (typeof vCliente === "string" && vCliente.trim() === "" &&
-        typeof vServer === "string" && vServer.trim() !== "") return true;
+    if (
+      typeof vCliente === "string" &&
+      vCliente.trim() === "" &&
+      typeof vServer === "string" &&
+      vServer.trim() !== ""
+    )
+      return true;
 
-    if (Array.isArray(vCliente) && vCliente.length === 0 &&
-        Array.isArray(vServer) && vServer.length > 0) return true;
+    if (
+      Array.isArray(vCliente) &&
+      vCliente.length === 0 &&
+      Array.isArray(vServer) &&
+      vServer.length > 0
+    )
+      return true;
 
-    if (vCliente && typeof vCliente === "object" && !Array.isArray(vCliente) &&
-        Object.keys(vCliente).length === 0 &&
-        vServer && typeof vServer === "object" && !Array.isArray(vServer) &&
-        Object.keys(vServer).length > 0) return true;
+    if (
+      vCliente &&
+      typeof vCliente === "object" &&
+      !Array.isArray(vCliente) &&
+      Object.keys(vCliente).length === 0 &&
+      vServer &&
+      typeof vServer === "object" &&
+      !Array.isArray(vServer) &&
+      Object.keys(vServer).length > 0
+    )
+      return true;
   }
   return false;
 }
@@ -143,10 +179,27 @@ function soloCamposNoVacios(obj = {}) {
   const out = {};
   for (const [k, v] of Object.entries(obj)) {
     if (v === undefined) continue;
-    if (typeof v === "string") { if (v.trim() === "") continue; out[k] = v; continue; }
-    if (Array.isArray(v)) { if (v.length === 0) continue; out[k] = v; continue; }
-    if (v && typeof v === "object") { if (Object.keys(v).length === 0) continue; out[k] = v; continue; }
-    out[k] = v; // number, boolean, null explícito
+
+    if (typeof v === "string") {
+      if (v.trim() === "") continue;
+      out[k] = v;
+      continue;
+    }
+
+    if (Array.isArray(v)) {
+      if (v.length === 0) continue;
+      out[k] = v;
+      continue;
+    }
+
+    if (v && typeof v === "object") {
+      if (Object.keys(v).length === 0) continue;
+      out[k] = v;
+      continue;
+    }
+
+    // number, boolean, null explícito
+    out[k] = v;
   }
   return out;
 }
@@ -175,8 +228,11 @@ export async function irAPagoFlow(datosPaciente, opts = {}) {
     return;
   }
 
+  // ✅ IMPORTANTE: respetar idPago existente (PantallaTres / Generales) antes de generar uno nuevo
   const idPago =
     opts?.idPago ||
+    datosPaciente?.idPago ||
+    (typeof window !== "undefined" && sessionStorage.getItem("idPago")) ||
     generarIdPago(
       modulo === "preop" ? "preop" : modulo === "generales" ? "generales" : "pago"
     );
@@ -195,7 +251,9 @@ export async function irAPagoFlow(datosPaciente, opts = {}) {
 
   // 3) Validar que el cliente NO borre campos ya guardados (si existe server)
   if (server && esParcheDestructivo(server, cliente)) {
-    alert("Detectamos datos vacíos que borrarían información ya guardada. Corrige y vuelve a intentar.");
+    alert(
+      "Detectamos datos vacíos que borrarían información ya guardada. Corrige y vuelve a intentar."
+    );
     return;
   }
 
@@ -207,7 +265,9 @@ export async function irAPagoFlow(datosPaciente, opts = {}) {
 
   // 6) Cachear versión final
   if (typeof window !== "undefined") {
-    try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(payload)); } catch {}
+    try {
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(payload));
+    } catch {}
   }
 
   // 7) Guest
@@ -226,4 +286,4 @@ export async function irAPagoFlow(datosPaciente, opts = {}) {
   } else {
     return urlPago;
   }
-}
+                       }
