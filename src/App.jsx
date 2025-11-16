@@ -5,7 +5,7 @@ import "./app.css";
 
 import PantallaUno from "./screens/PantallaUno.jsx";
 import PantallaDos from "./screens/PantallaDos.jsx";
-import PantallaTres from "./screens/PantallaTres.jsx"; // ⬅️ NUEVO
+import PantallaTres from "./screens/PantallaTres.jsx";
 import PagoOkBanner from "./components/PagoOkBanner.jsx";
 
 /**
@@ -243,6 +243,17 @@ export default function App() {
     setPantalla("tres");
   };
 
+  // Volver desde PantallaTres: restaurar módulo actual desde sessionStorage y volver a PantallaDos
+  const handleVolverDesdePago = () => {
+    try {
+      const savedModulo = sessionStorage.getItem("modulo");
+      if (savedModulo) {
+        setModuloActual(savedModulo);
+      }
+    } catch {}
+    setPantalla("dos");
+  };
+
   // ===== Render =====
   if (pantalla === "uno") {
     return <PantallaUno onIrPantallaDos={irPantallaDos} />;
@@ -252,7 +263,7 @@ export default function App() {
     return (
       <PantallaTres
         datosPaciente={datosPaciente}
-        onVolver={() => setPantalla("dos")}
+        onVolver={handleVolverDesdePago}
       />
     );
   }
