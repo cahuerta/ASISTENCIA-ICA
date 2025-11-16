@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { irAPagoFlow } from "../PagoFlow.jsx";
+import logoICA from "../assets/ica.jpg";
 
 /**
  * Lee desde sessionStorage un pequeño resumen de la orden
@@ -31,11 +32,15 @@ function buildPreviewOrden() {
       if (raw) examenes = JSON.parse(raw);
     } catch {}
     const resumen = sessionStorage.getItem("generales_ia_resumen") || "";
+    const extraLibre = sessionStorage.getItem("generales_examen_libre") || "";
+
+    const lineas = Array.isArray(examenes) ? examenes : [];
+    if (extraLibre.trim()) lineas.push(extraLibre.trim());
 
     return {
       modulo,
       titulo: "Revisión general — exámenes sugeridos",
-      lineas: Array.isArray(examenes) ? examenes : [],
+      lineas,
       extra: resumen,
     };
   }
@@ -57,7 +62,24 @@ function buildPreviewOrden() {
     };
   }
 
-  // === TRAUMA / IA (orden de imagenología) ===
+  // === IA texto libre (si existiera) ===
+  if (modulo === "ia") {
+    const txt = sessionStorage.getItem("previewIA") || "";
+    const lineas = txt
+      ? txt
+          .split(/\r?\n/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+    return {
+      modulo,
+      titulo: "Orden generada por IA",
+      lineas,
+      extra: "",
+    };
+  }
+
+  // === TRAUMA (orden de imagenología) ===
   let examenes = [];
   try {
     const raw = sessionStorage.getItem("trauma_ia_examenes");
@@ -161,7 +183,7 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
         </section>
       )}
 
-      {/* MINI “IMAGEN” TIPO PDF BORROSO */}
+      {/* MINI “PDF” */}
       {preview && (
         <section
           style={{
@@ -169,12 +191,12 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
             padding: 12,
             border: "1px solid var(--border, #e0e0e0)",
             background: "#ffffff",
-            fontSize: 13,
+            fontSize: 11,
           }}
         >
           <div
             style={{
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: 600,
               marginBottom: 6,
               color: "var(--muted-foreground, #555)",
@@ -185,126 +207,127 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
               ? " (Revisión general)"
               : preview.modulo === "preop"
               ? " (Preoperatorio)"
-              : " (Trauma / IA)"}
+              : preview.modulo === "ia"
+              ? " (IA)"
+              : " (Trauma)"}
           </div>
 
-          {/* “Thumbnail” simulado del PDF */}
+          {/* Hoja tipo PDF, pequeña */}
           <div
             style={{
               position: "relative",
               borderRadius: 10,
               border: "1px solid rgba(0,0,0,0.08)",
               background: "#fdfdfd",
-              padding: 10,
+              padding: 8,
               boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
               overflow: "hidden",
-              minHeight: 140,
+              height: 190, // pequeño
             }}
           >
-            {/* Cabecera tipo PDF */}
+            {/* Header: logo + texto */}
             <div
               style={{
-                height: 16,
-                borderRadius: 4,
-                background: "rgba(0,0,0,0.06)",
-                marginBottom: 8,
-                width: "60%",
+                display: "flex",
+                alignItems: "center",
+                marginBottom: 6,
               }}
-            />
-            {/* Línea de datos paciente */}
-            <div
-              style={{
-                height: 10,
-                borderRadius: 4,
-                background: "rgba(0,0,0,0.04)",
-                marginBottom: 4,
-                width: "80%",
-              }}
-            />
-            {/* Línea de RUT */}
-            <div
-              style={{
-                height: 10,
-                borderRadius: 4,
-                background: "rgba(0,0,0,0.04)",
-                marginBottom: 10,
-                width: "70%",
-              }}
-            />
-
-            {/* Algunas líneas de texto simulando los exámenes */}
-            {preview.lineas && preview.lineas.length > 0 ? (
-              preview.lineas.slice(0, 4).map((line, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    height: 10,
-                    borderRadius: 4,
-                    background: "rgba(0,0,0,0.03)",
-                    marginBottom: 4,
-                    width: `${70 - idx * 8}%`,
-                    overflow: "hidden",
-                    whiteSpace: "nowrap",
-                    textOverflow: "ellipsis",
-                    fontSize: 9,
-                    paddingLeft: 4,
-                    color: "rgba(0,0,0,0.4)",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                >
-                  • {line}
-                </div>
-              ))
-            ) : preview.extra ? (
+            >
               <div
                 style={{
-                  height: 48,
-                  borderRadius: 4,
-                  background: "rgba(0,0,0,0.02)",
-                  fontSize: 9,
-                  padding: 4,
-                  color: "rgba(0,0,0,0.45)",
+                  width: 30,
+                  height: 30,
+                  borderRadius: 6,
+                  overflow: "hidden",
+                  marginRight: 6,
+                  flexShrink: 0,
+                }}
+              >
+                <img
+                  src={logoICA}
+                  alt="ICA"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              </div>
+              <div style={{ lineHeight: 1.1 }}>
+                <div style={{ fontSize: 9, fontWeight: 700 }}>
+                  INSTITUTO DE CIRUGÍA ARTICULAR
+                </div>
+                <div style={{ fontSize: 8, color: "#666" }}>
+                  {preview.titulo || "Orden médica"}
+                </div>
+              </div>
+            </div>
+
+            {/* Datos paciente, letra pequeña */}
+            <div style={{ fontSize: 8, marginBottom: 6, color: "#333" }}>
+              <div>
+                <strong>Paciente:</strong>{" "}
+                {datosPaciente?.nombre || "________________"}
+              </div>
+              <div>
+                <strong>RUT:</strong>{" "}
+                {datosPaciente?.rut || "________________"}
+              </div>
+              <div>
+                <strong>Edad:</strong>{" "}
+                {datosPaciente?.edad ? `${datosPaciente.edad} años` : "____"}
+              </div>
+            </div>
+
+            {/* Lista de exámenes */}
+            <div style={{ fontSize: 8 }}>
+              <strong>Exámenes solicitados:</strong>
+              <ul
+                style={{
+                  marginTop: 2,
+                  paddingLeft: 12,
+                  maxHeight: 90,
                   overflow: "hidden",
                 }}
               >
-                {preview.extra}
-              </div>
-            ) : (
-              <div
-                style={{
-                  height: 40,
-                  borderRadius: 4,
-                  background: "rgba(0,0,0,0.02)",
-                  fontSize: 9,
-                  padding: 4,
-                  color: "rgba(0,0,0,0.35)",
-                }}
-              >
-                Sin contenido aún. Complete la información en el módulo anterior.
-              </div>
-            )}
+                {preview.lineas && preview.lineas.length > 0 ? (
+                  preview.lineas.slice(0, 6).map((line, idx) => (
+                    <li key={`${idx}-${line.slice(0, 12)}`}>{line}</li>
+                  ))
+                ) : preview.extra ? (
+                  <li>{preview.extra}</li>
+                ) : (
+                  <li style={{ fontStyle: "italic", color: "#999" }}>
+                    Sin exámenes registrados aún.
+                  </li>
+                )}
+              </ul>
+            </div>
 
-            {/* Capa “borrosa”/velada encima */}
+            {/* Watermark PREVIEW */}
             <div
               style={{
                 position: "absolute",
                 inset: 0,
-                background: "linear-gradient(to bottom, rgba(255,255,255,0.6), rgba(255,255,255,0.9))",
-                backdropFilter: "blur(2px)", // algunos navegadores lo soportan
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 pointerEvents: "none",
+                opacity: 0.18,
+                transform: "rotate(-20deg)",
+                fontSize: 18,
+                fontWeight: 700,
+                color: "#999",
               }}
-            />
+            >
+              PREVIEW SIN VALOR
+            </div>
 
-            {/* Etiqueta en la esquina */}
+            {/* Etiqueta esquina */}
             <div
               style={{
                 position: "absolute",
-                bottom: 6,
-                right: 8,
-                fontSize: 10,
-                color: "rgba(0,0,0,0.55)",
-                background: "rgba(255,255,255,0.8)",
+                bottom: 4,
+                right: 6,
+                fontSize: 9,
+                color: "rgba(0,0,0,0.6)",
+                background: "rgba(255,255,255,0.9)",
                 padding: "2px 6px",
                 borderRadius: 6,
                 border: "1px solid rgba(0,0,0,0.05)",
@@ -391,4 +414,4 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
       )}
     </div>
   );
-              }
+}
