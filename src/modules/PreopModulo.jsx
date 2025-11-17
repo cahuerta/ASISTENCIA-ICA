@@ -84,7 +84,7 @@ function resumenInicialPreop({ datos = {}, comorb = {}, tipoCirugia = "" }) {
   return `${sujeto} ${edad}, ${antecedentes}. Solicita exámenes prequirúrgicos para operarse de ${cir}.`;
 }
 
-export default function PreopModulo({ initialDatos }) {
+export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
   /* Stepper: esquema → tipo → comorb → preview (orden) → [Aceptar y continuar] → IA (previewIA) */
   const [fase, setFase] = useState("esquema");
 
@@ -292,18 +292,27 @@ export default function PreopModulo({ initialDatos }) {
     }
   };
 
-  /* ===== Pago (guarda en backend y abre Khipu) ===== */
+  /* ===== Pago (guarda en backend y luego PantallaTres / Khipu) ===== */
   const handlePagarDesdePreview = async () => {
+    const edadNum = Number(datos.edad) || datos.edad;
+
     const idPago =
       sessionStorage.getItem("idPago") ||
       `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-    sessionStorage.setItem("idPago", idPago);
-    sessionStorage.setItem("modulo", "preop");
 
     try {
+      // Dejar todo seteado en sessionStorage para PantallaTres
+      sessionStorage.setItem("idPago", idPago);
+      sessionStorage.setItem("modulo", "preop");
+      sessionStorage.setItem("pantalla", "tres");
+      sessionStorage.setItem(
+        "datosPacienteJSON",
+        JSON.stringify({ ...datos, edad: edadNum })
+      );
+
       const payload = {
         idPago,
-        datosPaciente: { ...datos },
+        datosPaciente: { ...datos, edad: edadNum },
         comorbilidades,
         tipoCirugia,
         examenesIA: Array.isArray(examenesIA) ? examenesIA : [],
@@ -320,14 +329,24 @@ export default function PreopModulo({ initialDatos }) {
         r = await fetch(`${BACKEND_BASE}/guardar-datos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idPago, datosPaciente: { ...datos } }),
+          body: JSON.stringify({
+            idPago,
+            datosPaciente: { ...datos, edad: edadNum },
+          }),
         });
       }
 
-      await irAPagoKhipu({ ...datos }, { idPago, modulo: "preop" });
+      if (typeof onIrPantallaTres === "function") {
+        onIrPantallaTres({ ...datos, edad: edadNum, idPago });
+      } else {
+        await irAPagoKhipu(
+          { ...datos, edad: edadNum },
+          { idPago, modulo: "preop" }
+        );
+      }
     } catch (err) {
-      console.error("No se pudo generar el link de pago (preop):", err);
-      alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
+      console.error("No se pudo preparar el pago (preop):", err);
+      alert(`No se pudo preparar el pago.\n${err?.message || err}`);
     }
   };
 
