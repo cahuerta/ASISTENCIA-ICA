@@ -109,7 +109,11 @@ export default function PantallaUno({ onIrPantallaDos }) {
                 {/* ------------------------------------------------ */}
 
                 {/* Aviso informativo */}
-                <section role="note" aria-label="Orientación inicial" style={styles.infoBox}>
+                <section
+                  role="note"
+                  aria-label="Orientación inicial"
+                  style={styles.infoBox}
+                >
                   <span aria-hidden="true" style={styles.infoAccent} />
                   <div style={styles.infoRow}>
                     <div style={styles.infoIconWrap} aria-hidden="true">
@@ -136,11 +140,13 @@ export default function PantallaUno({ onIrPantallaDos }) {
                     <div style={styles.infoTextWrap}>
                       <div style={styles.infoKicker}>Orientación inicial</div>
                       <p style={styles.infoMain}>
-                        Te sugerimos la orden de exámenes precisa y la derivación al especialista adecuado
-                        para llegar con el estudio inicial realizado. ¡Ahorra tiempo y dinero!
+                        Te sugerimos la orden de exámenes precisa y la derivación al
+                        especialista adecuado para llegar con el estudio inicial
+                        realizado. ¡Ahorra tiempo y dinero!
                       </p>
                       <p style={styles.infoSub}>
-                        No guardamos tu información y esta orientación no sustituye la evaluación profesional.
+                        No guardamos tu información y esta orientación no sustituye la
+                        evaluación profesional.
                       </p>
                     </div>
                   </div>
@@ -332,5 +338,3 @@ const styles = {
     lineHeight: 1.05,
   },
 };
-
-export default PantallaUno;
