@@ -78,7 +78,8 @@ export async function crearPagoFlow({
     body: JSON.stringify({ idPago, datosPaciente, modulo, modoGuest }),
   });
 
-  if (!ok || !data?.ok || !data?.url || !data?.token) {
+  // 👇 OJO: ya NO exigimos data.ok; solo que el HTTP esté OK y haya url+token
+  if (!ok || !data?.url || !data?.token) {
     const det =
       data?.detail && typeof data.detail === "object"
         ? `\n${JSON.stringify(data.detail)}`
