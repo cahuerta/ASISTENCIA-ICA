@@ -8,10 +8,18 @@ import logoICA from "../assets/ica.jpg";
 
 const T = getTheme();
 const cssVars = {
-  "--bg": T.bg, "--surface": T.surface, "--border": T.border,
-  "--text": T.text, "--text-muted": T.textMuted, "--muted": T.muted,
-  "--primary": T.primary, "--primary-dark": T.primaryDark, "--onPrimary": T.onPrimary,
-  "--accent-alpha": T.accentAlpha, "--shadow-sm": T.shadowSm, "--shadow-md": T.shadowMd,
+  "--bg": T.bg,
+  "--surface": T.surface,
+  "--border": T.border,
+  "--text": T.text,
+  "--text-muted": T.textMuted,
+  "--muted": T.muted,
+  "--primary": T.primary,
+  "--primary-dark": T.primaryDark,
+  "--onPrimary": T.onPrimary,
+  "--accent-alpha": T.accentAlpha,
+  "--shadow-sm": T.shadowSm,
+  "--shadow-md": T.shadowMd,
   "--overlay": T.overlay,
 };
 
@@ -28,14 +36,10 @@ export default function PantallaUno({ onIrPantallaDos }) {
     if (typeof onIrPantallaDos === "function") onIrPantallaDos(datos);
   };
 
-  // INVITADO: abrir formulario con nombre/rut prellenados; edad y género vacíos
   const entrarComoInvitado = () => {
-    // No guardamos nada aún en sessionStorage para permitir edición en el form
     setInitialFormValues({
       nombre: "guest",
       rut: "11.111.111-1",
-      // edad: undefined,
-      // genero: undefined,
     });
     setMostrarFormulario(true);
   };
@@ -46,7 +50,11 @@ export default function PantallaUno({ onIrPantallaDos }) {
         <section style={styles.wrap}>
           {/* Header card */}
           <div style={styles.headerCard} aria-hidden="true">
-            <img src={logoICA} alt="Instituto de Cirugía Articular" style={styles.logoImg} />
+            <img
+              src={logoICA}
+              alt="Instituto de Cirugía Articular"
+              style={styles.logoImg}
+            />
           </div>
 
           <div className="card" style={styles.card}>
@@ -55,19 +63,22 @@ export default function PantallaUno({ onIrPantallaDos }) {
                 <h2 style={styles.title}>Bienvenido(a)</h2>
                 <p style={styles.subtitle}>Elige cómo deseas continuar.</p>
 
+                {/* ---------------- BOTONES ---------------- */}
                 <div style={styles.btnCol}>
+                  {/* Ingreso normal */}
                   <button
                     type="button"
                     className="btn"
                     style={{ ...styles.btn, ...styles.btnPrimary }}
                     onClick={() => {
-                      setInitialFormValues(null); // formulario vacío
+                      setInitialFormValues(null);
                       setMostrarFormulario(true);
                     }}
                   >
                     INGRESO PERSONA
                   </button>
 
+                  {/* Invitado */}
                   <button
                     type="button"
                     className="btn secondary"
@@ -76,7 +87,26 @@ export default function PantallaUno({ onIrPantallaDos }) {
                   >
                     INVITADO (GUEST)
                   </button>
+
+                  {/* 👉 NUEVO: Botón Estudio Clínico Trauma */}
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    style={{
+                      ...styles.btn,
+                      ...styles.btnSecondary,
+                      borderColor: T.primaryDark,
+                      color: T.primaryDark,
+                      fontWeight: 900,
+                    }}
+                    onClick={() => {
+                      window.location.href = "/estudio-clinico-trauma";
+                    }}
+                  >
+                    ESTUDIO CLÍNICO (TRAUMA)
+                  </button>
                 </div>
+                {/* ------------------------------------------------ */}
 
                 {/* Aviso informativo */}
                 <section role="note" aria-label="Orientación inicial" style={styles.infoBox}>
@@ -84,9 +114,23 @@ export default function PantallaUno({ onIrPantallaDos }) {
                   <div style={styles.infoRow}>
                     <div style={styles.infoIconWrap} aria-hidden="true">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                        <circle cx="12" cy="12" r="9.5" stroke={T.primary} strokeWidth="1.2" fill="none"/>
-                        <circle cx="12" cy="8.2" r="1" fill={T.primary}/>
-                        <rect x="11.2" y="10.5" width="1.6" height="5.8" rx="0.8" fill={T.primary}/>
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="9.5"
+                          stroke={T.primary}
+                          strokeWidth="1.2"
+                          fill="none"
+                        />
+                        <circle cx="12" cy="8.2" r="1" fill={T.primary} />
+                        <rect
+                          x="11.2"
+                          y="10.5"
+                          width="1.6"
+                          height="5.8"
+                          rx="0.8"
+                          fill={T.primary}
+                        />
                       </svg>
                     </div>
                     <div style={styles.infoTextWrap}>
@@ -101,7 +145,6 @@ export default function PantallaUno({ onIrPantallaDos }) {
                     </div>
                   </div>
                 </section>
-                {/* /Aviso informativo */}
               </div>
             ) : (
               <div style={styles.formWrap}>
@@ -117,10 +160,9 @@ export default function PantallaUno({ onIrPantallaDos }) {
                   </button>
                 </div>
 
-                {/* El formulario es autónomo; al enviar navega a PantallaDos */}
                 <div style={{ marginTop: 12 }}>
                   <FormularioPacienteBasico
-                    initialValues={initialFormValues /* ← NUEVO: precarga opcional */}
+                    initialValues={initialFormValues}
                     onSubmit={(e) => {
                       e.preventDefault();
                       continuar();
@@ -136,7 +178,7 @@ export default function PantallaUno({ onIrPantallaDos }) {
   );
 }
 
-/* ===== UI responsiva y alineada ===== */
+/* ================== ESTILOS ================== */
 const styles = {
   viewport: {
     minHeight: "100svh",
@@ -290,3 +332,5 @@ const styles = {
     lineHeight: 1.05,
   },
 };
+
+export default PantallaUno;
