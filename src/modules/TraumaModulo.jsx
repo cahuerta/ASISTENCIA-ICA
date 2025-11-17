@@ -138,6 +138,7 @@ export default function TraumaModulo({
   initialDatos,
   onDetectarResonancia, // (datos)-> boolean | Promise<boolean>
   resumenResoTexto, // (data)-> string (opcional para personalizar resumen)
+  onIrPantallaTres, // ← NUEVO
 }) {
   const T = getTheme();
   const S = makeStyles(T);
@@ -351,7 +352,8 @@ export default function TraumaModulo({
       "mapper:volver",
     ];
     evtsVolver.forEach((e) => window.addEventListener(e, handleBack));
-    return () => evtsVolver.forEach((e) => window.removeEventListener(e, handleBack));
+    return () =>
+      evtsVolver.forEach((e) => window.removeEventListener(e, handleBack));
   }, []);
 
   /* ===== onSave proveniente del mapper (GUARDAR → pasar a Preview) ===== */
@@ -548,7 +550,10 @@ export default function TraumaModulo({
 
     try {
       const idPago = ensureTraumaIdPago();
+
+      // Igual que en Generales: dejamos todo listo en sessionStorage
       sessionStorage.setItem("modulo", "trauma");
+      sessionStorage.setItem("pantalla", "tres"); // ← indicar que vamos a PantallaTres
       sessionStorage.setItem(
         "datosPacienteJSON",
         JSON.stringify({ ...datos, edad: edadNum })
@@ -598,10 +603,22 @@ export default function TraumaModulo({
         }),
       });
 
-      await irAPagoKhipu({ ...datos, edad: edadNum }, { idPago, modulo: "trauma" });
+      // Si el padre pasó onIrPantallaTres, subimos ahí para elegir método de pago
+      if (typeof onIrPantallaTres === "function") {
+        try {
+          sessionStorage.setItem("idPago", idPago);
+        } catch {}
+        onIrPantallaTres({ ...datos, edad: edadNum, idPago });
+      } else {
+        // Fallback viejo: si no hay PantallaTres, usamos Khipu directo
+        await irAPagoKhipu(
+          { ...datos, edad: edadNum },
+          { idPago, modulo: "trauma" }
+        );
+      }
     } catch (err) {
-      console.error("No se pudo generar el link de pago (trauma):", err);
-      alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
+      console.error("No se pudo preparar el pago (trauma):", err);
+      alert(`No se pudo preparar el pago.\n${err?.message || err}`);
     }
   };
 
@@ -615,7 +632,9 @@ export default function TraumaModulo({
     }
 
     const intentaDescarga = async () => {
-      const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
+      const res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, {
+        cache: "no-store",
+      });
       if (res.status === 404) return { ok: false, status: 404 };
       if (res.status === 402) return { ok: false, status: 402 };
       if (!res.ok) throw new Error("Error al obtener el PDF");
@@ -645,7 +664,8 @@ export default function TraumaModulo({
         if (r.status === 402) {
           setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
-          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente.");
+          if (i === maxIntentos)
+            alert("El pago aún no se confirma. Intenta nuevamente.");
           continue;
         }
 
@@ -798,7 +818,9 @@ export default function TraumaModulo({
             </div>
           </div>
 
-          <div style={{ ...S.mono, marginTop: 6 }}>{resumenInicialTrauma(datos)}</div>
+          <div style={{ ...S.mono, marginTop: 6 }}>
+            {resumenInicialTrauma(datos)}
+          </div>
 
           {/* Secciones de puntos de cualquier zona disponible (guardadas con “Guardar/Enviar” del mapper) */}
           {seccionesMarcadores.map((sec, idx) => (
@@ -828,7 +850,9 @@ export default function TraumaModulo({
         <>
           <div style={S.block}>
             <strong>Diagnóstico presuntivo:</strong>
-            <div style={{ ...S.mono, marginTop: 6 }}>{diagnosticoIA || "—"}</div>
+            <div style={{ ...S.mono, marginTop: 6 }}>
+              {diagnosticoIA || "—"}
+            </div>
           </div>
 
           <div style={S.block}>
@@ -854,27 +878,34 @@ export default function TraumaModulo({
           {/* Mensajes de estado RM */}
           {requiereRM && !resonanciaChecklist && !bloqueaRM && (
             <div style={S.hint}>
-              La IA sugiere Resonancia Magnética. Presiona “Continuar” para completar el checklist
-              de seguridad.
+              La IA sugiere Resonancia Magnética. Presiona “Continuar” para completar el
+              checklist de seguridad.
             </div>
           )}
           {bloqueaRM && (
             <div style={S.hint}>
-              RM contraindicada por checklist. {ordenAlternativa || "Se sugiere alternativa."}
+              RM contraindicada por checklist.{" "}
+              {ordenAlternativa || "Se sugiere alternativa."}
             </div>
           )}
 
           {!pagoRealizado ? (
             <>
               {requiereRM && !resonanciaChecklist && !bloqueaRM && (
-                <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={lanzarChecklistRM}>
+                <button
+                  style={{ ...S.btnPrimary, marginTop: 12 }}
+                  onClick={lanzarChecklistRM}
+                >
                   Continuar
                 </button>
               )}
 
               {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
                 <>
-                  <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={handlePagar}>
+                  <button
+                    style={{ ...S.btnPrimary, marginTop: 12 }}
+                    onClick={handlePagar}
+                  >
                     Pagar ahora (Trauma)
                   </button>
                 </>
