@@ -78,7 +78,7 @@ export async function crearPagoFlow({
     body: JSON.stringify({ idPago, datosPaciente, modulo, modoGuest }),
   });
 
-  if (!ok || !data?.ok || !data?.url) {
+  if (!ok || !data?.ok || !data?.url || !data?.token) {
     const det =
       data?.detail && typeof data.detail === "object"
         ? `\n${JSON.stringify(data.detail)}`
@@ -88,7 +88,13 @@ export async function crearPagoFlow({
     const msg = data?.error || `Fallo HTTP ${status}`;
     throw new Error(`${msg}${det}`);
   }
-  return data.url; // Flow checkout URL
+
+  // Devolvemos todo lo necesario para construir la URL final
+  return {
+    url: data.url,
+    token: data.token,
+    flowOrder: data.flowOrder ?? null,
+  };
 }
 
 /* ==================== Detección de GUEST ==================== */
@@ -274,16 +280,19 @@ export async function irAPagoFlow(datosPaciente, opts = {}) {
   const modoGuest = esGuest(payload);
 
   // 8) Crear pago (Flow) y redirigir
-  const urlPago = await crearPagoFlow({
+  const pagoFlow = await crearPagoFlow({
     idPago,
     datosPaciente: payload,
     modulo,
     modoGuest,
   });
 
+  const { url, token } = pagoFlow;
+
   if (typeof window !== "undefined") {
-    window.location.href = urlPago;
+    // Flow exige que la URL de pay.php reciba el token por querystring
+    window.location.href = `${url}?token=${encodeURIComponent(token)}`;
   } else {
-    return urlPago;
+    return `${url}?token=${encodeURIComponent(token)}`;
   }
-                       }
+}
