@@ -8,7 +8,7 @@ import FormularioResonancia from "../components/FormularioResonancia.jsx";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-export default function IAModulo({ initialDatos }) {
+export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const T = getTheme();
   const S = makeStyles(T);
 
@@ -422,7 +422,7 @@ export default function IAModulo({ initialDatos }) {
     setShowRM(false);
   };
 
-  // ===== Pagar (IA)
+  // ===== Pagar (IA) — misma lógica de ruta que Preop/Trauma
   const handlePagarIA = async () => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
     const base =
@@ -450,34 +450,59 @@ export default function IAModulo({ initialDatos }) {
     }
 
     try {
+      // Igual que en Preop: dejamos todo listo en sesión para PantallaTres
       sessionStorage.setItem("idPago", idPago);
       sessionStorage.setItem("modulo", "ia");
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(base));
+      sessionStorage.setItem("pantalla", "tres");
+      sessionStorage.setItem(
+        "datosPacienteJSON",
+        JSON.stringify({ ...base, edad: edadNum })
+      );
 
-      // 💾 Persistir marcadores también antes de ir a pago
+      // 💾 Persistir marcadores y RM antes de ir a pago
       try {
-        const { marcadores, rodillaMarcadores, manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores } =
-          construirMarcadores();
+        const {
+          marcadores,
+          rodillaMarcadores,
+          manoMarcadores,
+          hombroMarcadores,
+          codoMarcadores,
+          tobilloMarcadores,
+        } = construirMarcadores();
+
         await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             idPago,
-            datosPaciente: base,
+            datosPaciente: { ...base, edad: edadNum },
             marcadores,
             rodillaMarcadores,
             manoMarcadores,
             hombroMarcadores,
             codoMarcadores,
             tobilloMarcadores,
+            resonanciaChecklist,
+            resonanciaResumenTexto,
           }),
         });
-      } catch {}
+      } catch (e) {
+        console.warn("No se pudieron guardar marcadores antes de pago IA:", e);
+      }
 
-      await irAPagoKhipu({ ...base, edad: edadNum }, { idPago, modulo: "ia" });
+      // Si PantallaTres controla el pago, la llamamos
+      if (typeof onIrPantallaTres === "function") {
+        onIrPantallaTres({ ...base, edad: edadNum, idPago });
+      } else {
+        // Fallback al flujo antiguo: abrir Khipu directo
+        await irAPagoKhipu(
+          { ...base, edad: edadNum },
+          { idPago, modulo: "ia" }
+        );
+      }
     } catch (err) {
-      console.error("No se pudo generar el link de pago (IA):", err);
-      alert(`No se pudo generar el link de pago.\n${err?.message || err}`);
+      console.error("No se pudo preparar el pago (IA):", err);
+      alert(`No se pudo preparar el pago.\n${err?.message || err}`);
     }
   };
 
