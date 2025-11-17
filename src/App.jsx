@@ -7,7 +7,6 @@ import PantallaUno from "./screens/PantallaUno.jsx";
 import PantallaDos from "./screens/PantallaDos.jsx";
 import PantallaTres from "./screens/PantallaTres.jsx";
 import PagoOkBanner from "./components/PagoOkBanner.jsx";
-import TraumaEstudioClinicoModulo from "./modules/TraumaEstudioClinicoModulo.jsx";
 
 /**
  * APP con 3 pantallas:
@@ -254,19 +253,6 @@ export default function App() {
     } catch {}
     setPantalla("dos");
   };
-
-  // ===== Ruta especial: Estudio Clínico Trauma =====
-  const path = (() => {
-    try {
-      return window.location.pathname || "/";
-    } catch {
-      return "/";
-    }
-  })();
-
-  if (path === "/estudio-clinico-trauma") {
-    return <TraumaEstudioClinicoModulo />;
-  }
 
   // ===== Render =====
   if (pantalla === "uno") {
