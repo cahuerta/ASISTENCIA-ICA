@@ -216,6 +216,21 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
 
     const examenMedicoTrim = (examenMedico || "").trim();
 
+    // Modulo usado (trauma / preop / generales / ia)
+    const moduloUsado =
+      (typeof window !== "undefined" && sessionStorage.getItem("modulo")) ||
+      "trauma";
+
+    // Tipo cirugía (solo si se guardó en PREOP, si no queda vacío)
+    let tipoCirugia = "";
+    if (typeof window !== "undefined") {
+      try {
+        tipoCirugia = sessionStorage.getItem("preop_tipo_cirugia") || "";
+      } catch {
+        tipoCirugia = "";
+      }
+    }
+
     try {
       setLoading("estudio");
 
@@ -231,6 +246,8 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
         examenSolicitadoIA: examenIA,
         nombreMedico: medicoNombre,
         especialidad: medicoEspecialidad,
+        moduloUsado,
+        tipoCirugia,
       };
 
       const res = await fetch(urlReg, {
@@ -244,7 +261,17 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
         throw new Error(`Error /api/registrar: ${txt || res.status}`);
       }
 
+      // Borrar todo y volver a PantallaUno
+      try {
+        sessionStorage.clear();
+      } catch {}
+
       alert("Caso registrado en el estudio clínico correctamente.");
+
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
+
       setLoading(null);
     } catch (err) {
       console.error(err);
