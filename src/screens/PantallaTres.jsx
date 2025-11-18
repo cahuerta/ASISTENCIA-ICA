@@ -219,76 +219,29 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
     try {
       setLoading("estudio");
 
-      // 1) Registrar en /api/pacientes
-      const urlPac = joinURL(ESTUDIO_BACKEND_BASE, "/api/pacientes");
-      const resPac = await fetch(urlPac, {
+      // ÚNICO POST a /api/registrar (hoja LISTA)
+      const urlReg = joinURL(ESTUDIO_BACKEND_BASE, "/api/registrar");
+      const payload = {
+        pacienteNombre: nombre,
+        rut,
+        edad,
+        dolor,
+        lado,
+        examenSolicitadoMedico: examenMedicoTrim,
+        examenSolicitadoIA: examenIA,
+        nombreMedico: medicoNombre,
+        especialidad: medicoEspecialidad,
+      };
+
+      const res = await fetch(urlReg, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nombre,
-          rut,
-          edad,
-          dolor,
-          lado,
-          examenIA,
-          examenMedico: examenMedicoTrim,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      if (!resPac.ok) {
-        const txt = await resPac.text().catch(() => "");
-        throw new Error(`Error /api/pacientes: ${txt || resPac.status}`);
-      }
-
-      // 2) Registrar en pestaña según especialidad (dos columnas: examenIA y examenMedico)
-      const espLower = medicoEspecialidad.toLowerCase();
-
-      if (espLower.includes("trauma")) {
-        const payloadTrauma = {
-          pacienteNombre: nombre,
-          rut,
-          edad,
-          examenIA,
-          examenMedico: examenMedicoTrim,
-          nombreMedico: medicoNombre,
-        };
-
-        const urlTrauma = joinURL(ESTUDIO_BACKEND_BASE, "/api/traumatologo");
-        const resTrauma = await fetch(urlTrauma, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payloadTrauma),
-        });
-
-        if (!resTrauma.ok) {
-          const txt = await resTrauma.text().catch(() => "");
-          throw new Error(`Error /api/traumatologo: ${txt || resTrauma.status}`);
-        }
-      } else if (espLower.includes("general")) {
-        const payloadMG = {
-          pacienteNombre: nombre,
-          rut,
-          edad,
-          examenIA,
-          examenMedico: examenMedicoTrim,
-          nombreMedico: medicoNombre,
-        };
-
-        const urlMG = joinURL(ESTUDIO_BACKEND_BASE, "/api/medico-general");
-        const resMG = await fetch(urlMG, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payloadMG),
-        });
-
-        if (!resMG.ok) {
-          const txt = await resMG.text().catch(() => "");
-          throw new Error(`Error /api/medico-general: ${txt || resMG.status}`);
-        }
-      } else {
-        console.warn(
-          "Especialidad no mapeada a una hoja específica, solo se guardó en Pacientes."
-        );
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`Error /api/registrar: ${txt || res.status}`);
       }
 
       alert("Caso registrado en el estudio clínico correctamente.");
@@ -626,86 +579,90 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
         </section>
       )}
 
-      {/* Botones de pago / guest */}
-      {isGuest ? (
-        // MODO GUEST: usamos el mismo flujo de Khipu, que internamente respeta modoGuest
-        <button
-          type="button"
-          onClick={handleKhipu}
-          disabled={loading !== null}
-          style={{
-            width: "100%",
-            padding: "12px 16px",
-            borderRadius: 12,
-            border: "1px solid var(--border, #e0e0e0)",
-            boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
-            background:
-              loading === "khipu"
-                ? "var(--accent-soft, #f0f5ff)"
-                : "var(--accent, #00a39a)",
-            color: "#ffffff",
-            fontWeight: 600,
-            fontSize: 15,
-            cursor: "pointer",
-          }}
-        >
-          {loading === "khipu"
-            ? "Redirigiendo..."
-            : "Continuar (modo invitado)"}
-        </button>
-      ) : (
+      {/* Botones de pago / guest — solo si NO es modo estudio clínico */}
+      {!modoEstudioClinico && (
         <>
-          {/* Botón Flow */}
-          <button
-            type="button"
-            onClick={handleFlow}
-            disabled={loading !== null}
-            style={{
-              width: "100%",
-              padding: "12px 16px",
-              borderRadius: 12,
-              border: "1px solid var(--border, #e0e0e0)",
-              boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
-              background:
-                loading === "flow"
-                  ? "var(--primary-soft, #e0f0ff)"
-                  : "var(--primary, #0066ff)",
-              color: "var(--onPrimary, #ffffff)",
-              fontWeight: 600,
-              fontSize: 15,
-              cursor: "pointer",
-            }}
-          >
-            {loading === "flow"
-              ? "Redirigiendo a Flow..."
-              : "Pagar con Flow (tarjeta / débito)"}
-          </button>
+          {isGuest ? (
+            // MODO GUEST: usamos el mismo flujo de Khipu, que internamente respeta modoGuest
+            <button
+              type="button"
+              onClick={handleKhipu}
+              disabled={loading !== null}
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                borderRadius: 12,
+                border: "1px solid var(--border, #e0e0e0)",
+                boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
+                background:
+                  loading === "khipu"
+                    ? "var(--accent-soft, #f0f5ff)"
+                    : "var(--accent, #00a39a)",
+                color: "#ffffff",
+                fontWeight: 600,
+                fontSize: 15,
+                cursor: "pointer",
+              }}
+            >
+              {loading === "khipu"
+                ? "Redirigiendo..."
+                : "Continuar (modo invitado)"}
+            </button>
+          ) : (
+            <>
+              {/* Botón Flow */}
+              <button
+                type="button"
+                onClick={handleFlow}
+                disabled={loading !== null}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: 12,
+                  border: "1px solid var(--border, #e0e0e0)",
+                  boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
+                  background:
+                    loading === "flow"
+                      ? "var(--primary-soft, #e0f0ff)"
+                      : "var(--primary, #0066ff)",
+                  color: "var(--onPrimary, #ffffff)",
+                  fontWeight: 600,
+                  fontSize: 15,
+                  cursor: "pointer",
+                }}
+              >
+                {loading === "flow"
+                  ? "Redirigiendo a Flow..."
+                  : "Pagar con Flow (tarjeta / débito)"}
+              </button>
 
-          {/* Botón Khipu */}
-          <button
-            type="button"
-            onClick={handleKhipu}
-            disabled={loading !== null}
-            style={{
-              width: "100%",
-              padding: "12px 16px",
-              borderRadius: 12,
-              border: "1px solid var(--border, #e0e0e0)",
-              boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
-              background:
-                loading === "khipu"
-                  ? "var(--accent-soft, #f0f5ff)"
-                  : "var(--accent, #00a39a)",
-              color: "#ffffff",
-              fontWeight: 600,
-              fontSize: 15,
-              cursor: "pointer",
-            }}
-          >
-            {loading === "khipu"
-              ? "Redirigiendo a Khipu..."
-              : "Pagar con Khipu (transferencia)"}
-          </button>
+              {/* Botón Khipu */}
+              <button
+                type="button"
+                onClick={handleKhipu}
+                disabled={loading !== null}
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: 12,
+                  border: "1px solid var(--border, #e0e0e0)",
+                  boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
+                  background:
+                    loading === "khipu"
+                      ? "var(--accent-soft, #f0f5ff)"
+                      : "var(--accent, #00a39a)",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  fontSize: 15,
+                  cursor: "pointer",
+                }}
+              >
+                {loading === "khipu"
+                  ? "Redirigiendo a Khipu..."
+                  : "Pagar con Khipu (transferencia)"}
+              </button>
+            </>
+          )}
         </>
       )}
 
