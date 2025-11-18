@@ -27,7 +27,7 @@ const ESTUDIO_BACKEND_BASE =
   (typeof window !== "undefined" && window.__ENV__?.ESTUDIO_BACKEND_BASE) ||
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_ESTUDIO_BACKEND_BASE) ||
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_ESTUDIO_BACKEND_BASE) ||
-  "https://trabajo-schot-backend.onrender.com"; // cambia por tu URL real
+  "https://trabajo-schot-backend.onrender.com"; // ← URL real del backend de estudio
 
 function joinURL(base, path) {
   if (!base) return path;
@@ -87,7 +87,7 @@ function buildPreviewOrden() {
     return {
       modulo,
       titulo: "Exámenes prequirúrgicos — propuesta IA",
-      lineas: Array.isArray(examenes) ? examenes : [],
+      lineas: Array.isArray(examenes) ? examenes : [], // lista
       extra: resumen,
     };
   }
@@ -208,7 +208,7 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
       return;
     }
 
-    // Examen solicitado por IA (preview) → columna independiente
+    // Examen sugerido por IA (preview) → columna independiente
     const examenIA =
       Array.isArray(preview.lineas) && preview.lineas.length
         ? preview.lineas.join(" | ")
@@ -602,7 +602,7 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
           <button
             type="button"
             onClick={handleRegistrarEstudio}
-            disabled(loading !== null)}
+            disabled={loading !== null}
             style={{
               marginTop: 8,
               width: "100%",
