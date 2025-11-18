@@ -22,6 +22,20 @@ function esGuest(datos) {
   return nombreOk && rutOk;
 }
 
+/* ===== Backend ESTUDIO CLÍNICO (Google Sheets) ===== */
+const ESTUDIO_BACKEND_BASE =
+  (typeof window !== "undefined" && window.__ENV__?.ESTUDIO_BACKEND_BASE) ||
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_ESTUDIO_BACKEND_BASE) ||
+  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_ESTUDIO_BACKEND_BASE) ||
+  "https://tu-backend-estudio.onrender.com"; // cambia por tu URL real
+
+function joinURL(base, path) {
+  if (!base) return path;
+  const b = String(base).replace(/\/+$/, "");
+  const p = String(path || "").replace(/^\/+/, "");
+  return `${b}/${p}`;
+}
+
 /**
  * Lee desde sessionStorage un pequeño resumen de la orden
  * según el módulo actual (trauma / preop / generales / ia).
@@ -113,10 +127,16 @@ function buildPreviewOrden() {
 }
 
 export default function PantallaTres({ datosPaciente, onVolver }) {
-  const [loading, setLoading] = useState(null); // "flow" | "khipu" | null
+  const [loading, setLoading] = useState(null); // "flow" | "khipu" | "estudio" | null
   const [preview, setPreview] = useState(null);
 
-  // NUEVO: detectar si este paciente es "Guest"
+  // Modo estudio clínico
+  const [modoEstudioClinico, setModoEstudioClinico] = useState(false);
+  const [medicoNombre, setMedicoNombre] = useState("");
+  const [medicoEspecialidad, setMedicoEspecialidad] = useState("");
+  const [examenMedico, setExamenMedico] = useState("");
+
+  // GUEST
   const isGuest = esGuest(datosPaciente || {});
 
   // Cargar mini preview al montar la pantalla
@@ -126,6 +146,16 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
       setPreview(p);
     } catch {
       setPreview(null);
+    }
+  }, []);
+
+  // Leer modo estudio clínico desde sessionStorage (lo setea PantallaUno)
+  useEffect(() => {
+    try {
+      const m = sessionStorage.getItem("modoEstudioClinico");
+      setModoEstudioClinico(m === "1");
+    } catch {
+      setModoEstudioClinico(false);
     }
   }, []);
 
@@ -149,6 +179,123 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
     } catch (err) {
       console.error(err);
       alert("Ocurrió un error al iniciar el pago con Khipu");
+      setLoading(null);
+    }
+  };
+
+  // Registrar en estudio clínico (sin pago)
+  const handleRegistrarEstudio = async () => {
+    if (!preview) {
+      alert("No hay orden generada para registrar.");
+      return;
+    }
+
+    const nombre = datosPaciente?.nombre || "";
+    const rut = datosPaciente?.rut || "";
+    const edad = datosPaciente?.edad || "";
+    const dolor = datosPaciente?.dolor || "";
+    const lado = datosPaciente?.lado || "";
+
+    if (!nombre || !rut || !edad || !dolor || !lado) {
+      alert(
+        "Faltan datos del paciente para registrar en el estudio (nombre, RUT, edad, dolor, lado)."
+      );
+      return;
+    }
+
+    if (!medicoNombre?.trim() || !medicoEspecialidad?.trim()) {
+      alert("Completa el nombre del médico y la especialidad para el estudio clínico.");
+      return;
+    }
+
+    // Examen solicitado por IA (preview) → columna independiente
+    const examenIA =
+      Array.isArray(preview.lineas) && preview.lineas.length
+        ? preview.lineas.join(" | ")
+        : preview.extra || "";
+
+    const examenMedicoTrim = (examenMedico || "").trim();
+
+    try {
+      setLoading("estudio");
+
+      // 1) Registrar en /api/pacientes
+      const urlPac = joinURL(ESTUDIO_BACKEND_BASE, "/api/pacientes");
+      const resPac = await fetch(urlPac, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre,
+          rut,
+          edad,
+          dolor,
+          lado,
+          examenIA,
+          examenMedico: examenMedicoTrim,
+        }),
+      });
+
+      if (!resPac.ok) {
+        const txt = await resPac.text().catch(() => "");
+        throw new Error(`Error /api/pacientes: ${txt || resPac.status}`);
+      }
+
+      // 2) Registrar en pestaña según especialidad (dos columnas: examenIA y examenMedico)
+      const espLower = medicoEspecialidad.toLowerCase();
+
+      if (espLower.includes("trauma")) {
+        const payloadTrauma = {
+          pacienteNombre: nombre,
+          rut,
+          edad,
+          examenIA,
+          examenMedico: examenMedicoTrim,
+          nombreMedico: medicoNombre,
+        };
+
+        const urlTrauma = joinURL(ESTUDIO_BACKEND_BASE, "/api/traumatologo");
+        const resTrauma = await fetch(urlTrauma, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payloadTrauma),
+        });
+
+        if (!resTrauma.ok) {
+          const txt = await resTrauma.text().catch(() => "");
+          throw new Error(`Error /api/traumatologo: ${txt || resTrauma.status}`);
+        }
+      } else if (espLower.includes("general")) {
+        const payloadMG = {
+          pacienteNombre: nombre,
+          rut,
+          edad,
+          examenIA,
+          examenMedico: examenMedicoTrim,
+          nombreMedico: medicoNombre,
+        };
+
+        const urlMG = joinURL(ESTUDIO_BACKEND_BASE, "/api/medico-general");
+        const resMG = await fetch(urlMG, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payloadMG),
+        });
+
+        if (!resMG.ok) {
+          const txt = await resMG.text().catch(() => "");
+          throw new Error(`Error /api/medico-general: ${txt || resMG.status}`);
+        }
+      } else {
+        console.warn(
+          "Especialidad no mapeada a una hoja específica, solo se guardó en Pacientes."
+        );
+      }
+
+      alert("Caso registrado en el estudio clínico correctamente.");
+      setLoading(null);
+    } catch (err) {
+      console.error(err);
+      alert("Ocurrió un error al registrar el caso en el estudio clínico.");
       setLoading(null);
     }
   };
@@ -355,6 +502,127 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
               Vista referencial del PDF
             </div>
           </div>
+        </section>
+      )}
+
+      {/* Bloque extra SOLO para modo estudio clínico */}
+      {modoEstudioClinico && (
+        <section
+          style={{
+            borderRadius: 12,
+            padding: 12,
+            border: "1px solid var(--border, #e0e0e0)",
+            background: "#f7fbff",
+            fontSize: 13,
+          }}
+        >
+          <div
+            style={{
+              fontWeight: 600,
+              marginBottom: 8,
+              color: "var(--primary, #0057b7)",
+            }}
+          >
+            Datos del médico (Estudio clínico)
+          </div>
+
+          <label style={{ display: "block", marginBottom: 8 }}>
+            <span style={{ display: "block", marginBottom: 4 }}>
+              Nombre del médico
+            </span>
+            <input
+              type="text"
+              value={medicoNombre}
+              onChange={(e) => setMedicoNombre(e.target.value)}
+              placeholder="Ej: Dr. Cristóbal Huerta"
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: 8,
+                border: "1px solid #ddd",
+                fontSize: 13,
+              }}
+            />
+          </label>
+
+          <label style={{ display: "block", marginBottom: 8 }}>
+            <span style={{ display: "block", marginBottom: 4 }}>
+              Especialidad
+            </span>
+            <select
+              value={medicoEspecialidad}
+              onChange={(e) => setMedicoEspecialidad(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: 8,
+                border: "1px solid #ddd",
+                fontSize: 13,
+              }}
+            >
+              <option value="">Seleccione...</option>
+              <option value="Traumatólogo">Traumatólogo</option>
+              <option value="Medicina general">Medicina general</option>
+              <option value="Otra">Otra</option>
+            </select>
+          </label>
+
+          <label style={{ display: "block", marginBottom: 4 }}>
+            <span style={{ display: "block", marginBottom: 4 }}>
+              Examen solicitado por el médico
+            </span>
+            <textarea
+              rows={3}
+              value={examenMedico}
+              onChange={(e) => setExamenMedico(e.target.value)}
+              placeholder="Ej: RM de rodilla derecha con contraste..."
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: 8,
+                border: "1px solid #ddd",
+                fontSize: 13,
+                resize: "vertical",
+              }}
+            />
+          </label>
+
+          <p
+            style={{
+              fontSize: 12,
+              color: "#555",
+              marginTop: 6,
+              fontStyle: "italic",
+            }}
+          >
+            Se guardará en columnas separadas: lo sugerido por la IA y lo que usted indicó
+            manualmente.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleRegistrarEstudio}
+            disabled(loading !== null)}
+            style={{
+              marginTop: 8,
+              width: "100%",
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "none",
+              background:
+                loading === "estudio"
+                  ? "#cfe3ff"
+                  : "var(--primary, #0057b7)",
+              color: "#fff",
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: "pointer",
+            }}
+          >
+            {loading === "estudio"
+              ? "Registrando en estudio clínico..."
+              : "Registrar en estudio clínico (sin pago)"}
+          </button>
         </section>
       )}
 
