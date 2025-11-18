@@ -30,13 +30,35 @@ export default function PantallaUno({ onIrPantallaDos }) {
 
   // INVITADO: abrir formulario con nombre/rut prellenados; edad y género vacíos
   const entrarComoInvitado = () => {
-    // No guardamos nada aún en sessionStorage para permitir edición en el form
+    try {
+      // Guest NO es estudio clínico
+      sessionStorage.setItem("modoEstudioClinico", "0");
+    } catch {}
     setInitialFormValues({
       nombre: "guest",
       rut: "11.111.111-1",
       // edad: undefined,
       // genero: undefined,
     });
+    setMostrarFormulario(true);
+  };
+
+  // ESTUDIO CLÍNICO: misma ruta que INGRESO PERSONA, pero marcando flag
+  const entrarEstudioClinico = () => {
+    try {
+      sessionStorage.setItem("modoEstudioClinico", "1");
+    } catch {}
+    // Formulario normal, sin valores pre-cargados especiales
+    setInitialFormValues(null);
+    setMostrarFormulario(true);
+  };
+
+  // INGRESO PERSONA normal: aseguramos que NO sea estudio clínico
+  const entrarPersonaNormal = () => {
+    try {
+      sessionStorage.setItem("modoEstudioClinico", "0");
+    } catch {}
+    setInitialFormValues(null); // formulario vacío
     setMostrarFormulario(true);
   };
 
@@ -56,18 +78,27 @@ export default function PantallaUno({ onIrPantallaDos }) {
                 <p style={styles.subtitle}>Elige cómo deseas continuar.</p>
 
                 <div style={styles.btnCol}>
+                  {/* Ingreso persona normal */}
                   <button
                     type="button"
                     className="btn"
                     style={{ ...styles.btn, ...styles.btnPrimary }}
-                    onClick={() => {
-                      setInitialFormValues(null); // formulario vacío
-                      setMostrarFormulario(true);
-                    }}
+                    onClick={entrarPersonaNormal}
                   >
                     INGRESO PERSONA
                   </button>
 
+                  {/* Modo estudio clínico (misma ruta que ingreso persona, pero flag) */}
+                  <button
+                    type="button"
+                    className="btn secondary"
+                    style={{ ...styles.btn, ...styles.btnSecondary }}
+                    onClick={entrarEstudioClinico}
+                  >
+                    MODO ESTUDIO CLÍNICO
+                  </button>
+
+                  {/* Invitado / Guest */}
                   <button
                     type="button"
                     className="btn secondary"
@@ -120,7 +151,7 @@ export default function PantallaUno({ onIrPantallaDos }) {
                 {/* El formulario es autónomo; al enviar navega a PantallaDos */}
                 <div style={{ marginTop: 12 }}>
                   <FormularioPacienteBasico
-                    initialValues={initialFormValues /* ← NUEVO: precarga opcional */}
+                    initialValues={initialFormValues /* ← precarga opcional */}
                     onSubmit={(e) => {
                       e.preventDefault();
                       continuar();
