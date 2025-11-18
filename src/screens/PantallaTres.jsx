@@ -6,6 +6,22 @@ import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { irAPagoFlow } from "../PagoFlow.jsx";
 import logoICA from "../assets/ica.jpg";
 
+/* ====== GUEST (misma lógica que en PagoKhipu.jsx) ====== */
+const GUEST_PERFIL = {
+  nombre: "Guest",
+  rut: "11.111.111-1",
+};
+
+function normRut(str) {
+  return String(str || "").replace(/[^0-9kK]/g, "").toUpperCase();
+}
+
+function esGuest(datos) {
+  const nombreOk = String(datos?.nombre || "").trim().toLowerCase() === "guest";
+  const rutOk = normRut(datos?.rut) === normRut(GUEST_PERFIL.rut);
+  return nombreOk && rutOk;
+}
+
 /**
  * Lee desde sessionStorage un pequeño resumen de la orden
  * según el módulo actual (trauma / preop / generales / ia).
@@ -100,6 +116,9 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
   const [loading, setLoading] = useState(null); // "flow" | "khipu" | null
   const [preview, setPreview] = useState(null);
 
+  // NUEVO: detectar si este paciente es "Guest"
+  const isGuest = esGuest(datosPaciente || {});
+
   // Cargar mini preview al montar la pantalla
   useEffect(() => {
     try {
@@ -126,7 +145,7 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
     try {
       setLoading("khipu");
       await irAPagoKhipu(datosPaciente);
-      // irAPagoKhipu también redirige
+      // irAPagoKhipu también redirige (y ya maneja modoGuest internamente)
     } catch (err) {
       console.error(err);
       alert("Ocurrió un error al iniciar el pago con Khipu");
@@ -339,57 +358,88 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
         </section>
       )}
 
-      {/* Botón Flow */}
-      <button
-        type="button"
-        onClick={handleFlow}
-        disabled={loading !== null}
-        style={{
-          width: "100%",
-          padding: "12px 16px",
-          borderRadius: 12,
-          border: "1px solid var(--border, #e0e0e0)",
-          boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
-          background:
-            loading === "flow"
-              ? "var(--primary-soft, #e0f0ff)"
-              : "var(--primary, #0066ff)",
-          color: "var(--onPrimary, #ffffff)",
-          fontWeight: 600,
-          fontSize: 15,
-          cursor: "pointer",
-        }}
-      >
-        {loading === "flow"
-          ? "Redirigiendo a Flow..."
-          : "Pagar con Flow (tarjeta / débito)"}
-      </button>
+      {/* Botones de pago / guest */}
+      {isGuest ? (
+        // MODO GUEST: usamos el mismo flujo de Khipu, que internamente respeta modoGuest
+        <button
+          type="button"
+          onClick={handleKhipu}
+          disabled={loading !== null}
+          style={{
+            width: "100%",
+            padding: "12px 16px",
+            borderRadius: 12,
+            border: "1px solid var(--border, #e0e0e0)",
+            boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
+            background:
+              loading === "khipu"
+                ? "var(--accent-soft, #f0f5ff)"
+                : "var(--accent, #00a39a)",
+            color: "#ffffff",
+            fontWeight: 600,
+            fontSize: 15,
+            cursor: "pointer",
+          }}
+        >
+          {loading === "khipu"
+            ? "Redirigiendo..."
+            : "Continuar (modo invitado)"}
+        </button>
+      ) : (
+        <>
+          {/* Botón Flow */}
+          <button
+            type="button"
+            onClick={handleFlow}
+            disabled={loading !== null}
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              borderRadius: 12,
+              border: "1px solid var(--border, #e0e0e0)",
+              boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
+              background:
+                loading === "flow"
+                  ? "var(--primary-soft, #e0f0ff)"
+                  : "var(--primary, #0066ff)",
+              color: "var(--onPrimary, #ffffff)",
+              fontWeight: 600,
+              fontSize: 15,
+              cursor: "pointer",
+            }}
+          >
+            {loading === "flow"
+              ? "Redirigiendo a Flow..."
+              : "Pagar con Flow (tarjeta / débito)"}
+          </button>
 
-      {/* Botón Khipu */}
-      <button
-        type="button"
-        onClick={handleKhipu}
-        disabled={loading !== null}
-        style={{
-          width: "100%",
-          padding: "12px 16px",
-          borderRadius: 12,
-          border: "1px solid var(--border, #e0e0e0)",
-          boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
-          background:
-            loading === "khipu"
-              ? "var(--accent-soft, #f0f5ff)"
-              : "var(--accent, #00a39a)",
-          color: "#ffffff",
-          fontWeight: 600,
-          fontSize: 15,
-          cursor: "pointer",
-        }}
-      >
-        {loading === "khipu"
-          ? "Redirigiendo a Khipu..."
-          : "Pagar con Khipu (transferencia)"}
-      </button>
+          {/* Botón Khipu */}
+          <button
+            type="button"
+            onClick={handleKhipu}
+            disabled={loading !== null}
+            style={{
+              width: "100%",
+              padding: "12px 16px",
+              borderRadius: 12,
+              border: "1px solid var(--border, #e0e0e0)",
+              boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
+              background:
+                loading === "khipu"
+                  ? "var(--accent-soft, #f0f5ff)"
+                  : "var(--accent, #00a39a)",
+              color: "#ffffff",
+              fontWeight: 600,
+              fontSize: 15,
+              cursor: "pointer",
+            }}
+          >
+            {loading === "khipu"
+              ? "Redirigiendo a Khipu..."
+              : "Pagar con Khipu (transferencia)"}
+          </button>
+        </>
+      )}
 
       {/* Botón volver */}
       {typeof onVolver === "function" && (
