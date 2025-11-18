@@ -27,7 +27,7 @@ const ESTUDIO_BACKEND_BASE =
   (typeof window !== "undefined" && window.__ENV__?.ESTUDIO_BACKEND_BASE) ||
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_ESTUDIO_BACKEND_BASE) ||
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_ESTUDIO_BACKEND_BASE) ||
-  "https://tu-backend-estudio.onrender.com"; // cambia por tu URL real
+  "https://trabajo-schot-backend.onrender.com"; // cambia por tu URL real
 
 function joinURL(base, path) {
   if (!base) return path;
