@@ -551,7 +551,8 @@ export default function TraumaModulo({
     try {
       const idPago = ensureTraumaIdPago();
 
-      // Igual que en Generales: dejamos todo listo en sessionStorage
+      // Igual que en otros módulos: dejamos todo listo en sessionStorage
+      sessionStorage.setItem("idPago", idPago);
       sessionStorage.setItem("modulo", "trauma");
       sessionStorage.setItem("pantalla", "tres"); // ← indicar que vamos a PantallaTres
       sessionStorage.setItem(
