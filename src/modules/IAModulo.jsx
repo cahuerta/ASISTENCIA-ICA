@@ -49,46 +49,59 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /* ========= Helpers de mapeadores ========= */
+  /* ========= Helpers de marcadores ========= */
+
   const zonasSoportadas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
   const capitalizar = (s = "") => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
 
-  const leerResumenZona = useCallback((zona) => {
-    try {
-      const data = JSON.parse(sessionStorage.getItem(`${zona}_data`) || "null");
-      const lado = data?.lado || datos?.lado || "";
-      const extra = JSON.parse(sessionStorage.getItem(`${zona}_seccionesExtra`) || "null");
-      let lines = [];
+  const leerResumenZona = useCallback(
+    (zona) => {
+      try {
+        const data = JSON.parse(sessionStorage.getItem(`${zona}_data`) || "null");
+        const lado = data?.lado || datos?.lado || "";
+        const extra = JSON.parse(sessionStorage.getItem(`${zona}_seccionesExtra`) || "null");
+        let lines = [];
 
-      if (Array.isArray(extra)) {
-        for (const sec of extra) {
-          if (Array.isArray(sec?.lines)) lines.push(...sec.lines);
-        }
-      }
-      if (!lines.length && Array.isArray(data?.puntosSeleccionados)) {
-        lines = data.puntosSeleccionados;
-      }
-      if (!lines.length) {
-        const ladoLow = (lado || "").toLowerCase();
-        const ladoKey = ladoLow.includes("izq") ? "izquierda" : ladoLow.includes("der") ? "derecha" : "";
-        if (ladoKey) {
-          const resumen = JSON.parse(sessionStorage.getItem(`${zona}_resumen_${ladoKey}`) || "null");
-          if (resumen && typeof resumen === "object") {
-            Object.values(resumen).forEach((arr) => {
-              if (Array.isArray(arr)) lines.push(...arr);
-            });
+        if (Array.isArray(extra)) {
+          for (const sec of extra) {
+            if (Array.isArray(sec?.lines)) lines.push(...sec.lines);
           }
         }
-      }
 
-      lines = Array.from(new Set(lines));
-      if (!lines.length) return null;
-      const ladoTxt = lado ? ` — ${capitalizar(lado)}` : "";
-      return { zona, title: `${capitalizar(zona)}${ladoTxt} — puntos marcados`, lines, lado };
-    } catch {
-      return null;
-    }
-  }, [datos?.lado]);
+        if (!lines.length && Array.isArray(data?.puntosSeleccionados)) {
+          lines = data.puntosSeleccionados;
+        }
+
+        if (!lines.length) {
+          const ladoLow = (lado || "").toLowerCase();
+          const ladoKey = ladoLow.includes("izq")
+            ? "izquierda"
+            : ladoLow.includes("der")
+            ? "derecha"
+            : "";
+          if (ladoKey) {
+            const resumen = JSON.parse(
+              sessionStorage.getItem(`${zona}_resumen_${ladoKey}`) || "null"
+            );
+            if (resumen && typeof resumen === "object") {
+              Object.values(resumen).forEach((arr) => {
+                if (Array.isArray(arr)) lines.push(...arr);
+              });
+            }
+          }
+        }
+
+        lines = Array.from(new Set(lines));
+        if (!lines.length) return null;
+
+        const ladoTxt = lado ? ` — ${capitalizar(lado)}` : "";
+        return { zona, title: `${capitalizar(zona)}${ladoTxt} — puntos marcados`, lines, lado };
+      } catch {
+        return null;
+      }
+    },
+    [datos?.lado]
+  );
 
   const construirMarcadores = useCallback(() => {
     const marcadores = {};
@@ -110,9 +123,15 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           };
         } else {
           const ladoLow = (lado || datos?.lado || "").toLowerCase();
-          const ladoKey = ladoLow.includes("izq") ? "izquierda" : ladoLow.includes("der") ? "derecha" : "";
+          const ladoKey = ladoLow.includes("izq")
+            ? "izquierda"
+            : ladoLow.includes("der")
+            ? "derecha"
+            : "";
           if (ladoKey) {
-            const resumen = JSON.parse(sessionStorage.getItem(`${z}_resumen_${ladoKey}`) || "null");
+            const resumen = JSON.parse(
+              sessionStorage.getItem(`${z}_resumen_${ladoKey}`) || "null"
+            );
             if (resumen && typeof resumen === "object") {
               marcadores[z] = { lado: ladoKey, porVista: resumen };
             }
@@ -151,7 +170,11 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     } catch {}
 
     const avisoOk = (() => {
-      try { return sessionStorage.getItem("ia_aviso_ok") === "1"; } catch { return false; }
+      try {
+        return sessionStorage.getItem("ia_aviso_ok") === "1";
+      } catch {
+        return false;
+      }
     })();
 
     if (!avisoOk) {
@@ -197,7 +220,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
-    try { sessionStorage.setItem("ia_aviso_ok", "1"); } catch {}
+    try {
+      sessionStorage.setItem("ia_aviso_ok", "1");
+    } catch {}
   };
 
   const rechazarAviso = () => {
@@ -205,10 +230,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     alert("Debes aceptar el aviso legal para continuar.");
   };
 
-  const fraseActual = useMemo(() => {
-    if (!previewIA) return "Describe los síntomas para generar el informe con IA.";
-    return "Informe IA generado — revisa el contenido antes de continuar.";
-  }, [previewIA]);
+  /* ========== PREVIEW IA ========== */
 
   const normaliza = (t = "") =>
     String(t || "")
@@ -220,11 +242,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     const s = normaliza(texto);
     if (!s) return false;
 
-    const frases = [
-      "resonancia magnetica",
-      "resonancia nuclear",
-      "magnetic resonance",
-    ];
+    const frases = ["resonancia magnetica", "resonancia nuclear", "magnetic resonance"];
     if (frases.some((p) => s.includes(p))) return true;
 
     const re = [/\brm\b/i, /\brmn\b/i, /\brnm\b/i, /\bmri\b/i, /\birm\b/i];
@@ -271,6 +289,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       return;
     }
 
+    // Guardar base
     sessionStorage.setItem("idPago", idPago);
     sessionStorage.setItem("modulo", "ia");
     sessionStorage.setItem(
@@ -307,15 +326,15 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
       window.scrollTo({ top: 0, behavior: "smooth" });
 
-      try {
-        const pide = await detectarRM(resp);
-        setRequiereRM(!!pide);
-        setBloqueaRM(false);
-        setResonanciaChecklist(null);
-        setResonanciaResumenTexto("");
-        setOrdenAlternativa("");
-      } catch {}
+      // RM detect
+      const pideRM = await detectarRM(resp);
+      setRequiereRM(!!pideRM);
+      setBloqueaRM(false);
+      setResonanciaChecklist(null);
+      setResonanciaResumenTexto("");
+      setOrdenAlternativa("");
 
+      // Guardar marcadores
       try {
         const {
           marcadores,
@@ -348,6 +367,8 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       setGenerando(false);
     }
   };
+
+  /* ============ CHECKLIST RM =========== */
 
   const construirResumenRM = (f = {}) => {
     const labels = {
@@ -420,11 +441,11 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     setShowRM(false);
   };
 
-  // ===== Pagar IA — SIN fallback (CORREGIDO)
+  /* ============ PAGAR IA — SECUENCIA CORRECTA =========== */
+
   const handlePagarIA = async () => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
-    const base =
-      saved ? JSON.parse(saved) : { ...datos, edad: Number(datos.edad) };
+    const base = saved ? JSON.parse(saved) : { ...datos, edad: Number(datos.edad) };
 
     const edadNum = Number(base.edad);
 
@@ -446,14 +467,16 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     }
 
     try {
+      /* 1️⃣ Guardar todo ANTES de navegar */
       sessionStorage.setItem("idPago", idPago);
       sessionStorage.setItem("modulo", "ia");
-      sessionStorage.setItem("pantalla", "tres");
+      sessionStorage.setItem("pantalla", "tres"); // ← no se elimina (tu pedido)
       sessionStorage.setItem(
         "datosPacienteJSON",
         JSON.stringify({ ...base, edad: edadNum })
       );
 
+      /* 2️⃣ Guardar marcadores + RM + IA */
       try {
         const {
           marcadores,
@@ -482,8 +505,12 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         });
       } catch {}
 
-      // ✔ NAVEGACIÓN UNIFICADA → SIEMPRE PantallaTres
-      onIrPantallaTres({ ...base, edad: edadNum, idPago });
+      /* 3️⃣ Navegación correcta — igual a Generales */
+      onIrPantallaTres({
+        ...base,
+        edad: edadNum,
+        idPago,
+      });
 
     } catch (err) {
       console.error("No se pudo preparar el pago (IA):", err);
@@ -776,7 +803,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       />
 
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
-        {fraseActual}
+        {previewIA ? "Informe IA generado — revisa antes de continuar." : "Describe los síntomas para generar el informe."}
       </h3>
 
       {/* Datos paciente */}
@@ -787,9 +814,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             <input
               type="text"
               value={datos.nombre || ""}
-              onChange={(e) =>
-                setDatos((p) => ({ ...p, nombre: e.target.value }))
-              }
+              onChange={(e) => setDatos((p) => ({ ...p, nombre: e.target.value }))}
               placeholder="Nombre del paciente"
               style={S.input}
             />
@@ -800,9 +825,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             <input
               type="text"
               value={datos.rut || ""}
-              onChange={(e) =>
-                setDatos((p) => ({ ...p, rut: e.target.value }))
-              }
+              onChange={(e) => setDatos((p) => ({ ...p, rut: e.target.value }))}
               placeholder="11.111.111-1"
               style={S.input}
             />
@@ -813,9 +836,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             <input
               type="number"
               value={datos.edad || ""}
-              onChange={(e) =>
-                setDatos((p) => ({ ...p, edad: e.target.value }))
-              }
+              onChange={(e) => setDatos((p) => ({ ...p, edad: e.target.value }))}
               placeholder="Edad"
               style={S.input}
             />
@@ -845,9 +866,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         <textarea
           rows={6}
           value={datos.consulta || ""}
-          onChange={(e) =>
-            setDatos((p) => ({ ...p, consulta: e.target.value }))
-          }
+          onChange={(e) => setDatos((p) => ({ ...p, consulta: e.target.value }))}
           placeholder="Escribe aquí tus síntomas."
           style={S.textarea}
         />
@@ -873,19 +892,17 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       {/* Checklist RM info */}
       {previewIA && requiereRM && !resonanciaChecklist && !bloqueaRM && (
         <div style={S.hint}>
-          La IA sugiere Resonancia Magnética. Presione “Continuar” para completar
-          el checklist de seguridad.
+          La IA sugiere Resonancia Magnética. Presione “Continuar” para completar el checklist.
         </div>
       )}
 
       {previewIA && bloqueaRM && (
         <div style={S.hint}>
-          RM contraindicada por checklist.{" "}
-          {ordenAlternativa || "Se sugiere alternativa."}
+          RM contraindicada. {ordenAlternativa || "Se sugiere alternativa."}
         </div>
       )}
 
-      {/* Controles de pago */}
+      {/* Pago */}
       {!pagoRealizado && previewIA && (
         <>
           {requiereRM && !resonanciaChecklist && !bloqueaRM && (
@@ -918,9 +935,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             aria-busy={descargando}
             title={mensajeDescarga || "Verificar y descargar"}
           >
-            {descargando
-              ? mensajeDescarga || "Verificando…"
-              : "Descargar Informe IA"}
+            {descargando ? mensajeDescarga : "Descargar Informe IA"}
           </button>
 
           <button
@@ -930,25 +945,16 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             aria-busy={descargandoOrden}
             title={mensajeDescargaOrden || "Verificar y descargar"}
           >
-            {descargandoOrden
-              ? mensajeDescargaOrden || "Verificando…"
-              : "Descargar Orden de Exámenes (IA)"}
+            {descargandoOrden ? mensajeDescargaOrden : "Descargar Orden de Exámenes (IA)"}
           </button>
         </>
       )}
 
       {/* Modal RM */}
       {showRM && (
-        <div
-          style={S.modalBackdrop}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="rm-title"
-        >
+        <div style={S.modalBackdrop} role="dialog" aria-modal="true">
           <div style={S.modalCard}>
-            <h4 id="rm-title" style={{ margin: 8, color: T.primary }}>
-              Checklist de Resonancia
-            </h4>
+            <h4 style={{ margin: 8, color: T.primary }}>Checklist de Resonancia</h4>
             <FormularioResonancia
               initial={resonanciaChecklist || {}}
               onSave={handleSaveRM}
@@ -1023,12 +1029,16 @@ function makeStyles(T) {
       padding: 12,
       lineHeight: 1.4,
       border: `1px solid ${T.border ?? "#e8e8e8"}`,
-      color: T.text ?? "#1b1b1b",
+      color: T.text ?? "#1b1b1b`,
     },
 
     block: { marginTop: 12 },
 
-    hint: { marginTop: 10, fontStyle: "italic", color: T.textMuted ?? "#666" },
+    hint: {
+      marginTop: 10,
+      fontStyle: "italic",
+      color: T.textMuted ?? "#666",
+    },
 
     modalBackdrop: {
       position: "fixed",
