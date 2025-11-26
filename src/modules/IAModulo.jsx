@@ -12,20 +12,27 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const T = getTheme();
   const S = makeStyles(T);
 
-  // ===== Estado base
+  // ===== Estado base =====
   const [datos, setDatos] = useState(
-    initialDatos || { nombre: "", rut: "", edad: "", consulta: "", genero: "", dolor: "", lado: "" }
+    initialDatos || {
+      nombre: "",
+      rut: "",
+      edad: "",
+      consulta: "",
+      genero: "",
+      dolor: "",
+      lado: "",
+    }
   );
   const [previewIA, setPreviewIA] = useState("");
   const [generando, setGenerando] = useState(false);
 
-  // ===== Estados RM
+  // ===== RM =====
   const [requiereRM, setRequiereRM] = useState(false);
   const [bloqueaRM, setBloqueaRM] = useState(false);
   const [resonanciaChecklist, setResonanciaChecklist] = useState(null);
   const [resonanciaResumenTexto, setResonanciaResumenTexto] = useState("");
   const [ordenAlternativa, setOrdenAlternativa] = useState("");
-
   const [showRM, setShowRM] = useState(false);
 
   // Aviso legal
@@ -39,7 +46,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const [mensajeDescargaOrden, setMensajeDescargaOrden] = useState("");
   const pollerRef = useRef(null);
 
-  // ID de pago
+  // ID PAGO
   const [idPago, setIdPago] = useState(() => {
     return (
       sessionStorage.getItem("idPago") ||
@@ -49,17 +56,23 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /* ========= Helpers de marcadores ========= */
+  // ===============================================================
+  //   MARCADORES
+  // ===============================================================
 
   const zonasSoportadas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
-  const capitalizar = (s = "") => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
+  const capitalizar = (s = "") =>
+    s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
 
   const leerResumenZona = useCallback(
     (zona) => {
       try {
         const data = JSON.parse(sessionStorage.getItem(`${zona}_data`) || "null");
         const lado = data?.lado || datos?.lado || "";
-        const extra = JSON.parse(sessionStorage.getItem(`${zona}_seccionesExtra`) || "null");
+        const extra = JSON.parse(
+          sessionStorage.getItem(`${zona}_seccionesExtra`) || "null"
+        );
+
         let lines = [];
 
         if (Array.isArray(extra)) {
@@ -95,7 +108,12 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         if (!lines.length) return null;
 
         const ladoTxt = lado ? ` — ${capitalizar(lado)}` : "";
-        return { zona, title: `${capitalizar(zona)}${ladoTxt} — puntos marcados`, lines, lado };
+        return {
+          zona,
+          title: `${capitalizar(zona)}${ladoTxt} — puntos marcados`,
+          lines,
+          lado,
+        };
       } catch {
         return null;
       }
@@ -110,7 +128,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     zonasSoportadas.forEach((z) => {
       try {
         const data = JSON.parse(sessionStorage.getItem(`${z}_data`) || "null");
-        const extra = JSON.parse(sessionStorage.getItem(`${z}_seccionesExtra`) || "null");
+        const extra = JSON.parse(
+          sessionStorage.getItem(`${z}_seccionesExtra`) || "null"
+        );
         const lado = data?.lado || "";
 
         if (data && (Array.isArray(data.puntosSeleccionados) || data.porVista)) {
@@ -148,23 +168,29 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   }, [datos?.lado]);
 
   const seccionesZonas = useMemo(() => {
-    const out = [];
-    for (const z of zonasSoportadas) {
+    const list = [];
+    zonasSoportadas.forEach((z) => {
       const sec = leerResumenZona(z);
-      if (sec && Array.isArray(sec.lines) && sec.lines.length) out.push(sec);
-    }
-    return out;
+      if (sec?.lines?.length) list.push(sec);
+    });
+    return list;
   }, [leerResumenZona, previewIA, resonanciaChecklist, showRM]);
 
-  // ===== Montaje inicial =====
+  // ===============================================================
+  //   MONTAJE
+  // ===============================================================
+
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
-      if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      if (saved) setDatos((p) => ({ ...p, ...JSON.parse(saved) }));
+
       const savedIA = sessionStorage.getItem("consultaIA");
-      if (savedIA) setDatos((prev) => ({ ...prev, consulta: savedIA }));
+      if (savedIA) setDatos((p) => ({ ...p, consulta: savedIA }));
+
       const savedPrev = sessionStorage.getItem("previewIA");
       if (savedPrev) setPreviewIA(savedPrev);
+
       const savedId = sessionStorage.getItem("idPago");
       if (savedId) setIdPago(savedId);
     } catch {}
@@ -182,9 +208,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       return;
     }
 
-    const params = new URLSearchParams(window.location.search);
-    const pago = params.get("pago");
-    const idFromURL = params.get("idPago") || sessionStorage.getItem("idPago");
+    const sp = new URLSearchParams(window.location.search);
+    const pago = sp.get("pago");
+    const idFromURL = sp.get("idPago") || sessionStorage.getItem("idPago");
 
     if (pago === "ok" && idFromURL) {
       setPagoRealizado(true);
@@ -196,11 +222,14 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       }).catch(() => {});
 
       if (pollerRef.current) clearInterval(pollerRef.current);
+
       let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
-          await fetch(`${BACKEND_BASE}/api/obtener-datos-ia/${idFromURL}`);
+          await fetch(
+            `${BACKEND_BASE}/api/obtener-datos-ia/${idFromURL}`
+          );
         } catch {}
 
         if (intentos >= 30) {
@@ -230,22 +259,25 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     alert("Debes aceptar el aviso legal para continuar.");
   };
 
-  /* ========== PREVIEW IA ========== */
+  // ===============================================================
+  //   PREVIEW
+  // ===============================================================
 
   const normaliza = (t = "") =>
-    String(t || "")
-      .normalize("NFD")
-      .replace(/\p{Diacritic}/gu, "")
-      .toLowerCase();
+    String(t).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
   const contieneRMlocal = (texto = "") => {
     const s = normaliza(texto);
     if (!s) return false;
 
-    const frases = ["resonancia magnetica", "resonancia nuclear", "magnetic resonance"];
+    const frases = [
+      "resonancia magnetica",
+      "resonancia nuclear",
+      "magnetic resonance",
+    ];
     if (frases.some((p) => s.includes(p))) return true;
 
-    const re = [/\brm\b/i, /\brmn\b/i, /\brnm\b/i, /\bmri\b/i, /\birm\b/i];
+    const re = [/\brm\b/i, /\bmri\b/i, /\birm\b/i];
     return re.some((rx) => rx.test(texto));
   };
 
@@ -264,7 +296,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
       if (r.ok) {
         const j = await r.json();
-        if (typeof j?.resonancia === "boolean") return j.resonancia;
+        if (typeof j.resonancia === "boolean") return j.resonancia;
         return contieneRMlocal(j?.texto || examenTexto);
       }
     } catch {}
@@ -285,11 +317,10 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       return;
     }
     if (!datos.consulta?.trim()) {
-      alert("Escribe tus síntomas/indicaciones en el cuadro de texto.");
+      alert("Escribe tus síntomas.");
       return;
     }
 
-    // Guardar base
     sessionStorage.setItem("idPago", idPago);
     sessionStorage.setItem("modulo", "ia");
     sessionStorage.setItem(
@@ -318,7 +349,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       });
 
       const j = await res.json();
-      if (!j.ok) throw new Error(j.error || "No se pudo generar el preview");
+      if (!j.ok) throw new Error(j.error || "Error en IA");
 
       const resp = j.respuesta || "";
       setPreviewIA(resp);
@@ -326,7 +357,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
       window.scrollTo({ top: 0, behavior: "smooth" });
 
-      // RM detect
       const pideRM = await detectarRM(resp);
       setRequiereRM(!!pideRM);
       setBloqueaRM(false);
@@ -334,41 +364,40 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       setResonanciaResumenTexto("");
       setOrdenAlternativa("");
 
-      // Guardar marcadores
-      try {
-        const {
+      const {
+        marcadores,
+        rodillaMarcadores,
+        manoMarcadores,
+        hombroMarcadores,
+        codoMarcadores,
+        tobilloMarcadores,
+      } = construirMarcadores();
+
+      await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idPago,
+          datosPaciente: { ...datos, edad: edadNum },
           marcadores,
           rodillaMarcadores,
           manoMarcadores,
           hombroMarcadores,
           codoMarcadores,
           tobilloMarcadores,
-        } = construirMarcadores();
-
-        await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            idPago,
-            datosPaciente: { ...datos, edad: edadNum },
-            marcadores,
-            rodillaMarcadores,
-            manoMarcadores,
-            hombroMarcadores,
-            codoMarcadores,
-            tobilloMarcadores,
-          }),
-        });
-      } catch {}
+        }),
+      });
     } catch (err) {
-      console.error("Preview IA error:", err);
-      alert("Error al generar el preview de IA.");
+      console.error(err);
+      alert("Error al generar el informe.");
     } finally {
       setGenerando(false);
     }
   };
 
-  /* ============ CHECKLIST RM =========== */
+  // ===============================================================
+  //   RM
+  // ===============================================================
 
   const construirResumenRM = (f = {}) => {
     const labels = {
@@ -378,37 +407,34 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       valvula_cardiaca_metal: "Implante metálico intracraneal",
       fragmentos_metalicos: "Fragmentos metálicos/balas",
       protesis_placas_tornillos: "Prótesis/placas/tornillos",
-      cirugia_reciente_3m: "Cirugía reciente (<3m) con implante",
-      embarazo: "Embarazo o sospecha",
-      claustrofobia: "Claustrofobia importante",
-      peso_mayor_150: "Peso > 150 kg",
-      no_permanece_inmovil: "Dificultad para inmovilidad",
+      cirugia_reciente_3m: "Cirugía reciente (<3m)",
+      embarazo: "Embarazo/sospecha",
+      claustrofobia: "Claustrofobia",
+      peso_mayor_150: "Peso >150 kg",
+      no_permanece_inmovil: "Dificultad inmovilidad",
       tatuajes_recientes: "Tatuajes/PMU < 6 semanas",
       piercings_no_removibles: "Piercings no removibles",
       bomba_insulina_u_otro: "Dispositivo externo activo",
       requiere_contraste: "Requiere contraste",
-      erc_o_egfr_bajo: "Insuficiencia renal / eGFR < 30",
+      erc_o_egfr_bajo: "eGFR < 30",
       alergia_gadolinio: "Alergia a gadolinio",
-      reaccion_contrastes: "Reacción a contrastes previos",
+      reaccion_contrastes: "Reacción previa a contrastes",
       requiere_sedacion: "Requiere sedación",
-      ayuno_6h: "Ayuno 6h (si sedación)",
+      ayuno_6h: "Ayuno 6h",
     };
 
     const marcadas = Object.keys(labels)
-      .filter((k) => f[k] === true)
+      .filter((k) => f[k])
       .map((k) => `• ${labels[k]}`);
 
     const obs = (f.observaciones || "").trim();
 
-    const partes = [];
-    if (marcadas.length) {
-      partes.push(marcadas.join("\n"));
-    } else {
-      partes.push("• Sin alertas marcadas en checklist.");
-    }
-    if (obs) partes.push(`Observaciones: ${obs}`);
-
-    return partes.join("\n");
+    return [
+      marcadas.length ? marcadas.join("\n") : "• Ninguna alerta marcada.",
+      obs ? `Observaciones: ${obs}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
   };
 
   const lanzarChecklistRM = () => {
@@ -418,15 +444,12 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
   const handleSaveRM = (form) => {
     setBloqueaRM(false);
-
     const resumen = construirResumenRM(form);
     setResonanciaChecklist(form);
     setResonanciaResumenTexto(resumen);
 
-    try {
-      sessionStorage.setItem("resonanciaChecklist", JSON.stringify(form));
-      sessionStorage.setItem("resonanciaResumenTexto", resumen);
-    } catch {}
+    sessionStorage.setItem("resonanciaChecklist", JSON.stringify(form));
+    sessionStorage.setItem("resonanciaResumenTexto", resumen);
 
     fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
       method: "POST",
@@ -441,11 +464,15 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     setShowRM(false);
   };
 
-  /* ============ PAGAR IA — SECUENCIA CORRECTA =========== */
+  // ===============================================================
+  //   PAGO (SECUENCIA CORRECTA)
+  // ===============================================================
 
   const handlePagarIA = async () => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
-    const base = saved ? JSON.parse(saved) : { ...datos, edad: Number(datos.edad) };
+    const base = saved
+      ? JSON.parse(saved)
+      : { ...datos, edad: Number(datos.edad) };
 
     const edadNum = Number(base.edad);
 
@@ -457,69 +484,67 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       !datos.consulta?.trim() ||
       !previewIA?.trim()
     ) {
-      alert("Completa todos los datos y genera el PREVIEW IA antes de pagar.");
+      alert("Completa todos los datos.");
       return;
     }
 
     if (requiereRM && !resonanciaChecklist && !bloqueaRM) {
-      alert("Antes de pagar, complete el checklist de RM (presione Continuar).");
+      alert("Completa el checklist de RM.");
       return;
     }
 
     try {
-      /* 1️⃣ Guardar todo ANTES de navegar */
       sessionStorage.setItem("idPago", idPago);
       sessionStorage.setItem("modulo", "ia");
-      sessionStorage.setItem("pantalla", "tres"); // ← no se elimina (tu pedido)
+
+      // *** LÍNEA QUE PEDISTE NO ELIMINAR ***
+      sessionStorage.setItem("pantalla", "tres");
+
       sessionStorage.setItem(
         "datosPacienteJSON",
         JSON.stringify({ ...base, edad: edadNum })
       );
 
-      /* 2️⃣ Guardar marcadores + RM + IA */
-      try {
-        const {
+      const {
+        marcadores,
+        rodillaMarcadores,
+        manoMarcadores,
+        hombroMarcadores,
+        codoMarcadores,
+        tobilloMarcadores,
+      } = construirMarcadores();
+
+      await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idPago,
+          datosPaciente: { ...base, edad: edadNum },
           marcadores,
           rodillaMarcadores,
           manoMarcadores,
           hombroMarcadores,
           codoMarcadores,
           tobilloMarcadores,
-        } = construirMarcadores();
+          resonanciaChecklist,
+          resonanciaResumenTexto,
+        }),
+      });
 
-        await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            idPago,
-            datosPaciente: { ...base, edad: edadNum },
-            marcadores,
-            rodillaMarcadores,
-            manoMarcadores,
-            hombroMarcadores,
-            codoMarcadores,
-            tobilloMarcadores,
-            resonanciaChecklist,
-            resonanciaResumenTexto,
-          }),
-        });
-      } catch {}
-
-      /* 3️⃣ Navegación correcta — igual a Generales */
       onIrPantallaTres({
         ...base,
         edad: edadNum,
         idPago,
       });
-
     } catch (err) {
-      console.error("No se pudo preparar el pago (IA):", err);
-      alert(`No se pudo preparar el pago.\n${err?.message || err}`);
+      console.error("No se pudo preparar el pago:", err);
+      alert("No se pudo preparar el pago.");
     }
   };
 
-  /* ======================= Descargar PDFs ======================= */
-  /* SIN CAMBIOS — SIGUEN FUNCIONANDO IGUAL */
+  // ===============================================================
+  //   DESCARGAR PDFs
+  // ===============================================================
 
   const handleDescargarIA = async () => {
     const id = sessionStorage.getItem("idPago") || idPago;
@@ -528,25 +553,27 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       return;
     }
 
-    const intentaDescarga = async () => {
-      const res = await fetch(`${BACKEND_BASE}/api/pdf-ia/${id}`, {
+    const intenta = async () => {
+      const r = await fetch(`${BACKEND_BASE}/api/pdf-ia/${id}`, {
         cache: "no-store",
       });
 
-      if (res.status === 404) return { ok: false, status: 404 };
-      if (res.status === 402) return { ok: false, status: 402 };
-      if (!res.ok) throw new Error("Error al obtener el PDF");
+      if (r.status === 404) return { ok: false, status: 404 };
+      if (r.status === 402) return { ok: false, status: 402 };
+      if (!r.ok) throw new Error();
 
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+
       const a = document.createElement("a");
       a.href = url;
-      const baseName = (datos?.nombre || "paciente").replace(/ /g, "_");
-      a.download = `informeIA_${baseName}.pdf`;
-      document.body.appendChild(a);
+      a.download = `informeIA_${(datos?.nombre || "paciente").replace(
+        / /g,
+        "_"
+      )}.pdf`;
       a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      URL.revokeObjectURL(url);
+
       return { ok: true };
     };
 
@@ -555,108 +582,48 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
     let reinyectado = false;
 
-    try {
-      const maxIntentos = 30;
+    for (let i = 1; i <= 30; i++) {
+      const r = await intenta();
+      if (r.ok) break;
 
-      for (let i = 1; i <= maxIntentos; i++) {
-        const r = await intentaDescarga();
-        if (r.ok) break;
+      if (r.status === 402) {
+        setMensajeDescarga(`Verificando pago… (${i}/30)`);
+        await sleep(1500);
+        continue;
+      }
 
-        if (r.status === 402) {
-          setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
-          fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+      if (r.status === 404) {
+        if (!reinyectado) {
+          setMensajeDescarga("Restaurando datos…");
+
+          const respaldo = sessionStorage.getItem("datosPacienteJSON");
+          const datosReinyectar = respaldo
+            ? JSON.parse(respaldo)
+            : datos;
+
+          await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idPago: id }),
-          }).catch(() => {});
-          await sleep(1500);
+            body: JSON.stringify({
+              id,
+              datosPaciente: datosReinyectar,
+            }),
+          });
 
-          if (i === maxIntentos)
-            alert("El pago aún no se confirma. Intenta nuevamente.");
+          reinyectado = true;
+          await sleep(600);
           continue;
+        } else {
+          alert("No fue posible generar el PDF.");
+          break;
         }
-
-        if (r.status === 404) {
-          if (!reinyectado) {
-            setMensajeDescarga("Restaurando datos del informe…");
-
-            const respaldo = sessionStorage.getItem("datosPacienteJSON");
-            const datosReinyectar = respaldo
-              ? JSON.parse(respaldo)
-              : { ...datos, edad: Number(datos.edad) || undefined };
-
-            const consultaGuardada =
-              sessionStorage.getItem("consultaIA") || datos.consulta || "";
-
-            await fetch(`${BACKEND_BASE}/api/preview-informe`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                idPago: id,
-                consulta: consultaGuardada,
-                nombre: datosReinyectar?.nombre,
-                edad: Number(datosReinyectar?.edad) || undefined,
-                rut: datosReinyectar?.rut,
-                genero: datosReinyectar?.genero,
-                dolor: datosReinyectar?.dolor,
-                lado: datosReinyectar?.lado,
-              }),
-            });
-
-            try {
-              const {
-                marcadores,
-                rodillaMarcadores,
-                manoMarcadores,
-                hombroMarcadores,
-                codoMarcadores,
-                tobilloMarcadores,
-              } = construirMarcadores();
-
-              await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  idPago: id,
-                  datosPaciente: datosReinyectar,
-                  marcadores,
-                  rodillaMarcadores,
-                  manoMarcadores,
-                  hombroMarcadores,
-                  codoMarcadores,
-                  tobilloMarcadores,
-                }),
-              });
-            } catch {}
-
-            await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ idPago: id }),
-            });
-
-            reinyectado = true;
-            await sleep(600);
-            continue;
-          } else {
-            alert("No fue posible descargar el PDF después de reintentar.");
-            break;
-          }
-        }
-
-        alert("No se pudo descargar el PDF.");
-        break;
       }
-    } catch (err) {
-      console.error(err);
-      alert("No se pudo descargar el PDF.");
-    } finally {
-      setDescargando(false);
-      setMensajeDescarga("");
     }
+
+    setDescargando(false);
+    setMensajeDescarga("");
   };
 
-  /* ===== Descargar Orden IA ===== */
   const handleDescargarOrdenIA = async () => {
     const id = sessionStorage.getItem("idPago") || idPago;
     if (!id) {
@@ -664,25 +631,27 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       return;
     }
 
-    const intentaDescarga = async () => {
-      const res = await fetch(`${BACKEND_BASE}/api/pdf-ia-orden/${id}`, {
+    const intenta = async () => {
+      const r = await fetch(`${BACKEND_BASE}/api/pdf-ia-orden/${id}`, {
         cache: "no-store",
       });
 
-      if (res.status === 404) return { ok: false, status: 404 };
-      if (res.status === 402) return { ok: false, status: 402 };
-      if (!res.ok) throw new Error("Error al obtener el PDF");
+      if (r.status === 404) return { ok: false, status: 404 };
+      if (r.status === 402) return { ok: false, status: 402 };
+      if (!r.ok) throw new Error();
 
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+
       const a = document.createElement("a");
       a.href = url;
-      const baseName = (datos?.nombre || "paciente").replace(/ /g, "_");
-      a.download = `ordenIA_${baseName}.pdf`;
-      document.body.appendChild(a);
+      a.download = `ordenIA_${(datos?.nombre || "paciente").replace(
+        / /g,
+        "_"
+      )}.pdf`;
       a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      URL.revokeObjectURL(url);
+
       return { ok: true };
     };
 
@@ -691,110 +660,54 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
     let reinyectado = false;
 
-    try {
-      const maxIntentos = 30;
+    for (let i = 1; i <= 30; i++) {
+      const r = await intenta();
+      if (r.ok) break;
 
-      for (let i = 1; i <= maxIntentos; i++) {
-        const r = await intentaDescarga();
-        if (r.ok) break;
+      if (r.status === 402) {
+        setMensajeDescargaOrden(`Verificando pago… (${i}/30)`);
+        await sleep(1500);
+        continue;
+      }
 
-        if (r.status === 402) {
-          setMensajeDescargaOrden(`Verificando pago… (${i}/${maxIntentos})`);
-          fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+      if (r.status === 404) {
+        if (!reinyectado) {
+          setMensajeDescargaOrden("Restaurando datos…");
+
+          const respaldo = sessionStorage.getItem("datosPacienteJSON");
+          const datosReinyectar = respaldo
+            ? JSON.parse(respaldo)
+            : datos;
+
+          await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idPago: id }),
-          }).catch(() => {});
-          await sleep(1500);
+            body: JSON.stringify({
+              id,
+              datosPaciente: datosReinyectar,
+            }),
+          });
 
-          if (i === maxIntentos)
-            alert("El pago aún no se confirma. Intenta nuevamente.");
+          reinyectado = true;
+          await sleep(600);
           continue;
+        } else {
+          alert("No fue posible generar el PDF.");
+          break;
         }
-
-        if (r.status === 404) {
-          if (!reinyectado) {
-            setMensajeDescargaOrden("Restaurando datos…");
-
-            const respaldo = sessionStorage.getItem("datosPacienteJSON");
-            const datosReinyectar = respaldo
-              ? JSON.parse(respaldo)
-              : { ...datos, edad: Number(datos.edad) || undefined };
-
-            const consultaGuardada =
-              sessionStorage.getItem("consultaIA") || datos.consulta || "";
-
-            await fetch(`${BACKEND_BASE}/api/preview-informe`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                idPago: id,
-                consulta: consultaGuardada,
-                nombre: datosReinyectar?.nombre,
-                edad: Number(datosReinyectar?.edad) || undefined,
-                rut: datosReinyectar?.rut,
-                genero: datosReinyectar?.genero,
-                dolor: datosReinyectar?.dolor,
-                lado: datosReinyectar?.lado,
-              }),
-            });
-
-            try {
-              const {
-                marcadores,
-                rodillaMarcadores,
-                manoMarcadores,
-                hombroMarcadores,
-                codoMarcadores,
-                tobilloMarcadores,
-              } = construirMarcadores();
-
-              await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  idPago: id,
-                  datosPaciente: datosReinyectar,
-                  marcadores,
-                  rodillaMarcadores,
-                  manoMarcadores,
-                  hombroMarcadores,
-                  codoMarcadores,
-                  tobilloMarcadores,
-                }),
-              });
-            } catch {}
-
-            await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ idPago: id }),
-            });
-
-            reinyectado = true;
-            await sleep(600);
-            continue;
-          } else {
-            alert("No se pudo descargar la orden después de reintentar.");
-            break;
-          }
-        }
-
-        alert("No se pudo descargar la orden.");
-        break;
       }
-    } catch (err) {
-      console.error(err);
-      alert("No se pudo descargar la orden.");
-    } finally {
-      setDescargandoOrden(false);
-      setMensajeDescargaOrden("");
     }
+
+    setDescargandoOrden(false);
+    setMensajeDescargaOrden("");
   };
+
+  // ===============================================================
+  //   RENDER
+  // ===============================================================
 
   return (
     <div style={S.card}>
-      {/* Gating legal */}
       <AvisoLegal
         visible={mostrarAviso}
         persist={false}
@@ -803,10 +716,12 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       />
 
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
-        {previewIA ? "Informe IA generado — revisa antes de continuar." : "Describe los síntomas para generar el informe."}
+        {previewIA
+          ? "Informe IA generado — revisa antes de continuar."
+          : "Describe los síntomas para generar el informe."}
       </h3>
 
-      {/* Datos paciente */}
+      {/* DATOS PACIENTE */}
       <div style={{ marginBottom: 10 }}>
         <div style={S.grid1}>
           <label style={S.label}>
@@ -814,7 +729,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             <input
               type="text"
               value={datos.nombre || ""}
-              onChange={(e) => setDatos((p) => ({ ...p, nombre: e.target.value }))}
+              onChange={(e) =>
+                setDatos((p) => ({ ...p, nombre: e.target.value }))
+              }
               placeholder="Nombre del paciente"
               style={S.input}
             />
@@ -825,7 +742,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             <input
               type="text"
               value={datos.rut || ""}
-              onChange={(e) => setDatos((p) => ({ ...p, rut: e.target.value }))}
+              onChange={(e) =>
+                setDatos((p) => ({ ...p, rut: e.target.value }))
+              }
               placeholder="11.111.111-1"
               style={S.input}
             />
@@ -836,7 +755,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             <input
               type="number"
               value={datos.edad || ""}
-              onChange={(e) => setDatos((p) => ({ ...p, edad: e.target.value }))}
+              onChange={(e) =>
+                setDatos((p) => ({ ...p, edad: e.target.value }))
+              }
               placeholder="Edad"
               style={S.input}
             />
@@ -844,7 +765,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         </div>
       </div>
 
-      {/* Marcadores */}
+      {/* MARCADORES */}
       {seccionesZonas.length > 0 && (
         <div style={S.block}>
           {seccionesZonas.map((sec, idx) => (
@@ -860,13 +781,15 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         </div>
       )}
 
-      {/* Consulta */}
+      {/* CONSULTA */}
       <div>
         <strong>Consulta / Indicaciones:</strong>
         <textarea
           rows={6}
           value={datos.consulta || ""}
-          onChange={(e) => setDatos((p) => ({ ...p, consulta: e.target.value }))}
+          onChange={(e) =>
+            setDatos((p) => ({ ...p, consulta: e.target.value }))
+          }
           placeholder="Escribe aquí tus síntomas."
           style={S.textarea}
         />
@@ -881,7 +804,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         </button>
       </div>
 
-      {/* Preview */}
+      {/* PREVIEW */}
       {previewIA && (
         <div style={{ marginTop: 14 }}>
           <strong>Preview generado:</strong>
@@ -889,20 +812,21 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         </div>
       )}
 
-      {/* Checklist RM info */}
+      {/* CHECKLIST RM INFO */}
       {previewIA && requiereRM && !resonanciaChecklist && !bloqueaRM && (
         <div style={S.hint}>
-          La IA sugiere Resonancia Magnética. Presione “Continuar” para completar el checklist.
+          La IA sugiere Resonancia Magnética. Presione “Continuar”.
         </div>
       )}
 
       {previewIA && bloqueaRM && (
         <div style={S.hint}>
-          RM contraindicada. {ordenAlternativa || "Se sugiere alternativa."}
+          RM contraindicada.{" "}
+          {ordenAlternativa || "Se sugiere alternativa."}
         </div>
       )}
 
-      {/* Pago */}
+      {/* PAGO */}
       {!pagoRealizado && previewIA && (
         <>
           {requiereRM && !resonanciaChecklist && !bloqueaRM && (
@@ -925,7 +849,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         </>
       )}
 
-      {/* Descargas */}
+      {/* DESCARGAS */}
       {pagoRealizado && (
         <>
           <button
@@ -945,16 +869,20 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             aria-busy={descargandoOrden}
             title={mensajeDescargaOrden || "Verificar y descargar"}
           >
-            {descargandoOrden ? mensajeDescargaOrden : "Descargar Orden de Exámenes (IA)"}
+            {descargandoOrden
+              ? mensajeDescargaOrden
+              : "Descargar Orden de Exámenes (IA)"}
           </button>
         </>
       )}
 
-      {/* Modal RM */}
+      {/* MODAL RM */}
       {showRM && (
         <div style={S.modalBackdrop} role="dialog" aria-modal="true">
           <div style={S.modalCard}>
-            <h4 style={{ margin: 8, color: T.primary }}>Checklist de Resonancia</h4>
+            <h4 style={{ margin: 8, color: T.primary }}>
+              Checklist de Resonancia
+            </h4>
             <FormularioResonancia
               initial={resonanciaChecklist || {}}
               onSave={handleSaveRM}
@@ -1029,7 +957,7 @@ function makeStyles(T) {
       padding: 12,
       lineHeight: 1.4,
       border: `1px solid ${T.border ?? "#e8e8e8"}`,
-      color: T.text ?? "#1b1b1b`,
+      color: T.text ?? "#1b1b1b",
     },
 
     block: { marginTop: 12 },
