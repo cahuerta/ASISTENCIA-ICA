@@ -227,9 +227,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
-          await fetch(
-            `${BACKEND_BASE}/api/obtener-datos-ia/${idFromURL}`
-          );
+          await fetch(`${BACKEND_BASE}/api/obtener-datos-ia/${idFromURL}`);
         } catch {}
 
         if (intentos >= 30) {
@@ -497,7 +495,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       sessionStorage.setItem("idPago", idPago);
       sessionStorage.setItem("modulo", "ia");
 
-      // *** LÍNEA QUE PEDISTE NO ELIMINAR ***
+      // *** Línea que NO querías eliminar ***
       sessionStorage.setItem("pantalla", "tres");
 
       sessionStorage.setItem(
