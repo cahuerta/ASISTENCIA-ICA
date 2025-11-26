@@ -1029,7 +1029,7 @@ function makeStyles(T) {
       padding: 12,
       lineHeight: 1.4,
       border: `1px solid ${T.border ?? "#e8e8e8"}`,
-      color: T.text ?? "#1b1b1b`,
+      color: T.text ?? "#1b1b1b",
     },
 
     block: { marginTop: 12 },
