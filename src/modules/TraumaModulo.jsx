@@ -7,7 +7,6 @@ import React, {
   useMemo,
   useCallback,
 } from "react";
-import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 import FormularioResonancia from "../components/FormularioResonancia.jsx";
 import AvisoLegal from "../components/AvisoLegal.jsx";
@@ -186,7 +185,7 @@ export default function TraumaModulo({
   initialDatos,
   onDetectarResonancia, // (datos)-> boolean | Promise<boolean>
   resumenResoTexto, // (data)-> string (opcional para personalizar resumen)
-  onIrPantallaTres, // ← NUEVO
+  onIrPantallaTres, // PantallaTres maneja TODOS los pagos
 }) {
   const T = getTheme();
   const S = makeStyles(T);
@@ -605,6 +604,8 @@ export default function TraumaModulo({
   /* -------- Pago -------- */
   const handlePagar = async () => {
     const edadNum = Number(datos.edad);
+
+    // Validación fuerte de datos básicos
     if (
       !datos.nombre?.trim() ||
       !datos.rut?.trim() ||
@@ -612,7 +613,34 @@ export default function TraumaModulo({
       edadNum <= 0 ||
       !datos.dolor?.trim()
     ) {
-      alert("Complete nombre, RUT, edad (>0) y dolor antes de pagar.");
+      alert(
+        "Complete correctamente: nombre, RUT, edad (>0) y motivo/dolor antes de continuar al pago."
+      );
+      return;
+    }
+
+    // Validación fuerte de EXÁMENES IA: no se puede pagar sin examen grabado
+    if (!Array.isArray(examenesIA) || examenesIA.length === 0) {
+      alert(
+        "Aún no hay exámenes sugeridos por IA. Debe ejecutar el análisis y revisar los exámenes antes de continuar al pago."
+      );
+      return;
+    }
+
+    // Validar que los exámenes están efectivamente guardados en sessionStorage
+    try {
+      const rawEx = sessionStorage.getItem("trauma_ia_examenes");
+      const exPersist = rawEx ? JSON.parse(rawEx) : null;
+      if (!Array.isArray(exPersist) || exPersist.length === 0) {
+        alert(
+          "Los exámenes sugeridos no se han guardado correctamente. Vuelva a ejecutar el análisis de IA antes de pagar."
+        );
+        return;
+      }
+    } catch {
+      alert(
+        "Error al leer los exámenes guardados. Vuelva a ejecutar el análisis de IA antes de pagar."
+      );
       return;
     }
 
@@ -646,7 +674,7 @@ export default function TraumaModulo({
       } catch {}
 
       // Guardar datos + IA + checklist para que el PDF quede consistente
-      await fetch(`${BACKEND_BASE}/guardar-datos`, {
+      const resp = await fetch(`${BACKEND_BASE}/guardar-datos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -655,17 +683,32 @@ export default function TraumaModulo({
         }),
       });
 
-      // Si el padre pasó onIrPantallaTres, subimos ahí para elegir método de pago
+      if (!resp.ok) {
+        const txt = await resp.text().catch(() => "");
+        throw new Error(
+          `Error al guardar datos en el servidor: ${txt || resp.status}`
+        );
+      }
+
+      // SIN Fallback: PantallaTres maneja TODOS los pagos
       if (typeof onIrPantallaTres === "function") {
         try {
           sessionStorage.setItem("idPago", idPago);
         } catch {}
-        onIrPantallaTres({ ...datos, edad: edadNum, idPago });
+        onIrPantallaTres({
+          ...datos,
+          edad: edadNum,
+          idPago,
+          examenesIA,
+          diagnosticoIA,
+          justificacionIA,
+        });
       } else {
-        // Fallback viejo: si no hay PantallaTres, usamos Khipu directo
-        await irAPagoKhipu(
-          { ...datos, edad: edadNum },
-          { idPago, modulo: "trauma" }
+        console.error(
+          "[TraumaModulo] onIrPantallaTres no está definido; PantallaTres debe manejar todos los pagos."
+        );
+        alert(
+          "No se puede continuar al pago: falta configuración interna (PantallaTres)."
         );
       }
     } catch (err) {
