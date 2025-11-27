@@ -133,6 +133,53 @@ function loadMarcadoresPorZona(zonaKey, ladoTexto = "") {
   }
 }
 
+/* === NUEVO: construye objeto marcadores coherente para todas las zonas === */
+function buildMarcadores(datos = {}) {
+  const lado = datos?.lado || "";
+  return {
+    rodilla: loadMarcadoresPorZona("rodilla", lado),
+    mano: loadMarcadoresPorZona("mano", lado),
+    hombro: loadMarcadoresPorZona("hombro", lado),
+    codo: loadMarcadoresPorZona("codo", lado),
+    tobillo: loadMarcadoresPorZona("tobillo", lado),
+  };
+}
+
+/* === NUEVO: un solo JSON para toda la comunicación front–backend (traumaJSON) === */
+function buildTraumaJSON(datos = {}, opciones = {}) {
+  const edadNum = Number(datos.edad);
+  const paciente = {
+    ...datos,
+    edad: Number.isFinite(edadNum) && edadNum > 0 ? edadNum : datos.edad,
+  };
+
+  const marcadores = buildMarcadores(datos);
+
+  const {
+    examenesIA = [],
+    diagnosticoIA = "",
+    justificacionIA = "",
+    resonanciaChecklist = null,
+    resonanciaResumenTexto = "",
+    ordenAlternativa = "",
+  } = opciones;
+
+  return {
+    paciente,
+    marcadores, // { rodilla, mano, hombro, codo, tobillo }
+    ia: {
+      examenes: examenesIA,
+      diagnostico: diagnosticoIA,
+      justificacion: justificacionIA,
+    },
+    resonancia: {
+      checklist: resonanciaChecklist,
+      resumenTexto: resonanciaResumenTexto,
+      ordenAlternativa,
+    },
+  };
+}
+
 /* ================= Componente ================= */
 export default function TraumaModulo({
   initialDatos,
@@ -369,7 +416,7 @@ export default function TraumaModulo({
     try {
       setLoadingIA(true);
 
-      // refresco defensivo
+      // refresco defensivo de datosPacienteJSON
       try {
         const saved = sessionStorage.getItem("datosPacienteJSON");
         if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
@@ -380,41 +427,27 @@ export default function TraumaModulo({
 
       const edadNum = Number(datos.edad) || datos.edad;
 
-      // Marcadores por zona (se envían a la IA como objeto + compat individual)
-      const lado = datos?.lado || "";
-      const rodillaMarcadores = loadMarcadoresPorZona("rodilla", lado);
-      const manoMarcadores = loadMarcadoresPorZona("mano", lado);
-      const hombroMarcadores = loadMarcadoresPorZona("hombro", lado);
-      const codoMarcadores = loadMarcadoresPorZona("codo", lado);
-      const tobilloMarcadores = loadMarcadoresPorZona("tobillo", lado);
+      // Un solo JSON coherente que viaja al backend
+      const traumaJSON = buildTraumaJSON(
+        { ...datos, edad: edadNum },
+        {
+          examenesIA: [], // todavía no hay IA
+          diagnosticoIA: "",
+          justificacionIA: "",
+          resonanciaChecklist,
+          resonanciaResumenTexto,
+          ordenAlternativa,
+        }
+      );
 
-      const body = {
-        idPago,
-        paciente: {
-          ...datos,
-          edad: edadNum,
-        },
-        // Compatibilidad previa:
-        rodillaMarcadores,
-        // Nuevo agregado genérico:
-        marcadores: {
-          rodilla: rodillaMarcadores,
-          mano: manoMarcadores,
-          hombro: hombroMarcadores,
-          codo: codoMarcadores,
-          tobillo: tobilloMarcadores,
-        },
-        // Campos sueltos opcionales:
-        manoMarcadores,
-        hombroMarcadores,
-        codoMarcadores,
-        tobilloMarcadores,
-      };
+      try {
+        sessionStorage.setItem("traumaJSON", JSON.stringify(traumaJSON));
+      } catch {}
 
       const resp = await fetch(`${BACKEND_BASE}/ia-trauma`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ idPago, traumaJSON }),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
@@ -436,6 +469,22 @@ export default function TraumaModulo({
       setExamenesIA(ex);
       setDiagnosticoIA(dx);
       setJustificacionIA(just);
+
+      // Actualizamos traumaJSON en sessionStorage con la IA ya resuelta
+      try {
+        const actualizado = buildTraumaJSON(
+          { ...datos, edad: edadNum },
+          {
+            examenesIA: ex,
+            diagnosticoIA: dx,
+            justificacionIA: just,
+            resonanciaChecklist,
+            resonanciaResumenTexto,
+            ordenAlternativa,
+          }
+        );
+        sessionStorage.setItem("traumaJSON", JSON.stringify(actualizado));
+      } catch {}
 
       // ===== Detección de RM en la lista sugerida por IA =====
       const textoEx = ex.join("\n");
@@ -488,6 +537,23 @@ export default function TraumaModulo({
     try {
       sessionStorage.setItem("resonanciaChecklist", JSON.stringify(form));
       sessionStorage.setItem("resonanciaResumenTexto", resumen);
+
+      // Actualizar también traumaJSON central
+      const idPago = sessionStorage.getItem("idPago") || ensureTraumaIdPago();
+      const edadNum = Number(datos.edad) || datos.edad;
+      const traumaJSON = buildTraumaJSON(
+        { ...datos, edad: edadNum },
+        {
+          examenesIA,
+          diagnosticoIA,
+          justificacionIA,
+          resonanciaChecklist: form,
+          resonanciaResumenTexto: resumen,
+          ordenAlternativa,
+        }
+      );
+      sessionStorage.setItem("traumaJSON", JSON.stringify(traumaJSON));
+      sessionStorage.setItem("idPago", idPago);
     } catch {}
 
     setShowRM(false);
@@ -560,13 +626,22 @@ export default function TraumaModulo({
         JSON.stringify({ ...datos, edad: edadNum })
       );
 
-      // Marcadores por zona para persistir en backend (no IA)
-      const lado = datos?.lado || "";
-      const rodillaMarcadores = loadMarcadoresPorZona("rodilla", lado);
-      const manoMarcadores = loadMarcadoresPorZona("mano", lado);
-      const hombroMarcadores = loadMarcadoresPorZona("hombro", lado);
-      const codoMarcadores = loadMarcadoresPorZona("codo", lado);
-      const tobilloMarcadores = loadMarcadoresPorZona("tobillo", lado);
+      // Un solo JSON central para guardar en backend
+      const traumaJSON = buildTraumaJSON(
+        { ...datos, edad: edadNum },
+        {
+          examenesIA,
+          diagnosticoIA,
+          justificacionIA,
+          resonanciaChecklist,
+          resonanciaResumenTexto,
+          ordenAlternativa,
+        }
+      );
+
+      try {
+        sessionStorage.setItem("traumaJSON", JSON.stringify(traumaJSON));
+      } catch {}
 
       // Guardar datos + IA + checklist para que el PDF quede consistente
       await fetch(`${BACKEND_BASE}/guardar-datos`, {
@@ -574,33 +649,7 @@ export default function TraumaModulo({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           idPago,
-          datosPaciente: {
-            ...datos,
-            edad: edadNum,
-            examenesIA,
-            diagnosticoIA,
-            justificacionIA,
-            rmForm: resonanciaChecklist,
-            rmObservaciones: resonanciaChecklist?.observaciones || "",
-            // Compatibilidad:
-            rodillaMarcadores,
-            // Nuevo agregado genérico:
-            marcadores: {
-              rodilla: rodillaMarcadores,
-              mano: manoMarcadores,
-              hombro: hombroMarcadores,
-              codo: codoMarcadores,
-              tobillo: tobilloMarcadores,
-            },
-            // Campos sueltos opcionales:
-            manoMarcadores,
-            hombroMarcadores,
-            codoMarcadores,
-            tobilloMarcadores,
-          },
-          resonanciaChecklist,
-          resonanciaResumenTexto,
-          ordenAlternativa,
+          traumaJSON, // ← UN SOLO JSON como línea de comunicación
         }),
       });
 
@@ -673,44 +722,45 @@ export default function TraumaModulo({
         if (r.status === 404) {
           if (!reinyectado) {
             setMensajeDescarga("Restaurando datos…");
-            const respaldo = sessionStorage.getItem("datosPacienteJSON");
-            const datosReinyectar = respaldo ? JSON.parse(respaldo) : datos;
 
-            const lado = datosReinyectar?.lado || "";
-            const rodillaMarcadores = loadMarcadoresPorZona("rodilla", lado);
-            const manoMarcadores = loadMarcadoresPorZona("mano", lado);
-            const hombroMarcadores = loadMarcadoresPorZona("hombro", lado);
-            const codoMarcadores = loadMarcadoresPorZona("codo", lado);
-            const tobilloMarcadores = loadMarcadoresPorZona("tobillo", lado);
+            // Preferimos usar el traumaJSON central si existe
+            let traumaJSON = null;
+            try {
+              const respaldoJSON = sessionStorage.getItem("traumaJSON");
+              if (respaldoJSON) traumaJSON = JSON.parse(respaldoJSON);
+            } catch {}
+
+            // Si no existe traumaJSON, lo reconstruimos mínimo desde datosPacienteJSON
+            if (!traumaJSON) {
+              const respaldoPaciente =
+                sessionStorage.getItem("datosPacienteJSON");
+              const datosReinyectar = respaldoPaciente
+                ? JSON.parse(respaldoPaciente)
+                : datos;
+
+              traumaJSON = buildTraumaJSON(datosReinyectar, {
+                examenesIA,
+                diagnosticoIA,
+                justificacionIA,
+                resonanciaChecklist,
+                resonanciaResumenTexto,
+                ordenAlternativa,
+              });
+
+              try {
+                sessionStorage.setItem(
+                  "traumaJSON",
+                  JSON.stringify(traumaJSON)
+                );
+              } catch {}
+            }
 
             await fetch(`${BACKEND_BASE}/guardar-datos`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 idPago,
-                datosPaciente: {
-                  ...datosReinyectar,
-                  examenesIA,
-                  diagnosticoIA,
-                  justificacionIA,
-                  rmForm: resonanciaChecklist,
-                  rmObservaciones: resonanciaChecklist?.observaciones || "",
-                  rodillaMarcadores,
-                  marcadores: {
-                    rodilla: rodillaMarcadores,
-                    mano: manoMarcadores,
-                    hombro: hombroMarcadores,
-                    codo: codoMarcadores,
-                    tobillo: tobilloMarcadores,
-                  },
-                  manoMarcadores,
-                  hombroMarcadores,
-                  codoMarcadores,
-                  tobilloMarcadores,
-                },
-                resonanciaChecklist,
-                resonanciaResumenTexto,
-                ordenAlternativa,
+                traumaJSON,
               }),
             });
 
@@ -788,7 +838,9 @@ export default function TraumaModulo({
             style={{ ...S.btnPrimary, marginTop: 12 }}
             onClick={() => setFase("preview")}
             disabled={!datos?.dolor}
-            title={datos?.dolor ? "Ir a vista previa" : "Seleccione una zona primero"}
+            title={
+              datos?.dolor ? "Ir a vista previa" : "Seleccione una zona primero"
+            }
           >
             Continuar → Vista previa
           </button>
@@ -839,7 +891,9 @@ export default function TraumaModulo({
             style={{ ...S.btnPrimary, marginTop: 12 }}
             onClick={handleContinuarIA}
             disabled={loadingIA || !datos?.dolor}
-            title={!datos?.dolor ? "Seleccione zona en el esquema" : "Analizar con IA"}
+            title={
+              !datos?.dolor ? "Seleccione zona en el esquema" : "Analizar con IA"
+            }
           >
             {loadingIA ? "Analizando con IA…" : "Continuar"}
           </button>
@@ -879,8 +933,8 @@ export default function TraumaModulo({
           {/* Mensajes de estado RM */}
           {requiereRM && !resonanciaChecklist && !bloqueaRM && (
             <div style={S.hint}>
-              La IA sugiere Resonancia Magnética. Presiona “Continuar” para completar el
-              checklist de seguridad.
+              La IA sugiere Resonancia Magnética. Presiona “Continuar” para
+              completar el checklist de seguridad.
             </div>
           )}
           {bloqueaRM && (
@@ -919,7 +973,9 @@ export default function TraumaModulo({
               disabled={descargando}
               title={mensajeDescarga || "Verificar y descargar"}
             >
-              {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
+              {descargando
+                ? mensajeDescarga || "Verificando…"
+                : "Descargar Documento"}
             </button>
           )}
 
