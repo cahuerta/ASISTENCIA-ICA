@@ -142,6 +142,7 @@ function buildMarcadores(datos = {}) {
     hombro: loadMarcadoresPorZona("hombro", lado),
     codo: loadMarcadoresPorZona("codo", lado),
     tobillo: loadMarcadoresPorZona("tobillo", lado),
+    cadera: loadMarcadoresPorZona("cadera", lado), // ← AGREGADO
   };
 }
 
@@ -166,7 +167,7 @@ function buildTraumaJSON(datos = {}, opciones = {}) {
 
   return {
     paciente,
-    marcadores, // { rodilla, mano, hombro, codo, tobillo }
+    marcadores, // { rodilla, mano, hombro, codo, tobillo, cadera }
     ia: {
       examenes: examenesIA,
       diagnostico: diagnosticoIA,
@@ -322,7 +323,7 @@ export default function TraumaModulo({
   /* -------- Secciones de puntos (todas las zonas soportadas) -------- */
   const seccionesMarcadores = useMemo(() => {
     const lado = datos?.lado || "";
-    const zonas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
+    const zonas = ["rodilla", "mano", "hombro", "codo", "tobillo", "cadera"]; // ← AGREGADO cadera
     const out = [];
     for (const z of zonas) {
       const secs = leerSecciones(z, lado);
@@ -396,6 +397,7 @@ export default function TraumaModulo({
       "hombro:volver",
       "codo:volver",
       "tobillo:volver",
+      "cadera:volver", // ← AGREGADO
       "mapper:volver",
     ];
     evtsVolver.forEach((e) => window.addEventListener(e, handleBack));
@@ -405,7 +407,7 @@ export default function TraumaModulo({
 
   /* ===== onSave proveniente del mapper (GUARDAR → pasar a Preview) ===== */
   const handleMapperSave = useCallback(() => {
-    // Los mappers ya persistieron en sessionStorage (ej: rodilla_*).
+    // Los mappers ya persistieron en sessionStorage (ej: rodilla_*, cadera_*, etc.)
     setMostrarMapper(false);
     setMapperRefresh((v) => v + 1);
     setFase("preview"); // “al apretar guardar, continuamos y pasamos… al preview”
@@ -1036,7 +1038,7 @@ function makeStyles(T) {
       background: T.surface ?? "#fff",
       borderRadius: 12,
       padding: 16,
-      boxShadow: T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)",
+      boxShadow: T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)`,
       border: `1px solid ${T.border ?? "#e8e8e8"}`,
       color: T.text ?? "#1b1b1b",
     },
