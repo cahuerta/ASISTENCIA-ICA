@@ -1038,7 +1038,7 @@ function makeStyles(T) {
       background: T.surface ?? "#fff",
       borderRadius: 12,
       padding: 16,
-      boxShadow: T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)`,
+      boxShadow: T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)",
       border: `1px solid ${T.border ?? "#e8e8e8"}`,
       color: T.text ?? "#1b1b1b",
     },
