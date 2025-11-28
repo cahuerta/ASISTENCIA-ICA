@@ -8,6 +8,33 @@ import FormularioResonancia from "../components/FormularioResonancia.jsx";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
+/** JSON centralizado (similar a traumaJSON) */
+function buildIAJSON(datos = {}, informeIA = "", opciones = {}, marcadoresStruct = null) {
+  const edadNum = Number(datos.edad);
+  const paciente = {
+    ...datos,
+    edad: Number.isFinite(edadNum) && edadNum > 0 ? edadNum : datos.edad,
+  };
+
+  const {
+    resonanciaChecklist = null,
+    resonanciaResumenTexto = "",
+    ordenAlternativa = "",
+  } = opciones || {};
+
+  return {
+    paciente,
+    consulta: datos.consulta || "",
+    informeIA: informeIA || "",
+    marcadores: marcadoresStruct || null, // lo que devuelve construirMarcadores()
+    resonancia: {
+      checklist: resonanciaChecklist,
+      resumenTexto: resonanciaResumenTexto,
+      ordenAlternativa,
+    },
+  };
+}
+
 export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const T = getTheme();
   const S = makeStyles(T);
@@ -138,6 +165,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       } catch {}
     });
 
+    // Devolvemos TODO el paquete para guardarlo como JSON grande
     return { marcadores, ...porCompat };
   }, [datos?.lado]);
 
@@ -235,7 +263,10 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   // RM helpers
   // ======================================================
   const normaliza = (t = "") =>
-    String(t || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+    String(t || "")
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase();
 
   const contieneRMlocal = (texto = "") => {
     const s = normaliza(texto);
@@ -276,7 +307,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   };
 
   // ======================================================
-  // ⚡ GENERAR PREVIEW IA — AQUÍ APLICO EL FIX
+  // ⚡ GENERAR PREVIEW IA — ahora con iaJSON grande
   // ======================================================
   const handleGenerarPreview = async () => {
     const edadNum = Number(datos.edad);
@@ -332,6 +363,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       setOrdenAlternativa("");
 
       try {
+        const marcadoresStruct = construirMarcadores();
         const {
           marcadores,
           rodillaMarcadores,
@@ -339,16 +371,33 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           hombroMarcadores,
           codoMarcadores,
           tobilloMarcadores,
-        } = construirMarcadores();
+        } = marcadoresStruct;
 
-        // === FIX APLICADO ===
+        // JSON grande central (similar a traumaJSON)
+        const iaJSON = buildIAJSON(
+          { ...datos, edad: edadNum },
+          resp || datos.consulta || "",
+          {
+            resonanciaChecklist,
+            resonanciaResumenTexto,
+            ordenAlternativa,
+          },
+          marcadoresStruct
+        );
+
+        try {
+          sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
+        } catch {}
+
+        // Compatibilidad: seguimos enviando campos planos + JSON grande
         await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             idPago,
-            datosPaciente: { ...datos, edad: edadNum },
-            examen: resp || datos.consulta || "",
+            iaJSON, // ← NUEVO Bloque grande
+            datosPaciente: iaJSON.paciente,
+            examen: iaJSON.informeIA || iaJSON.consulta || "",
             marcadores,
             rodillaMarcadores,
             manoMarcadores,
@@ -367,7 +416,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   };
 
   // ======================================================
-  // ⚡ PAGAR IA — AQUÍ TAMBIÉN APLIQUÉ EL FIX
+  // ⚡ PAGAR IA — también con iaJSON grande
   // ======================================================
   const handlePagarIA = async () => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
@@ -391,6 +440,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...base, edad: edadNum }));
 
       try {
+        const marcadoresStruct = construirMarcadores();
         const {
           marcadores,
           rodillaMarcadores,
@@ -398,16 +448,35 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           hombroMarcadores,
           codoMarcadores,
           tobilloMarcadores,
-        } = construirMarcadores();
+        } = marcadoresStruct;
 
-        // === FIX APLICADO ===
+        const textoInforme = previewIA || datos.consulta || "";
+
+        // JSON central iaJSON
+        const iaJSON = buildIAJSON(
+          { ...base, edad: edadNum },
+          textoInforme,
+          {
+            resonanciaChecklist,
+            resonanciaResumenTexto,
+            ordenAlternativa,
+          },
+          marcadoresStruct
+        );
+
+        try {
+          sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
+        } catch {}
+
+        // Compatibilidad: enviamos JSON grande + campos planos
         await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             idPago,
-            datosPaciente: { ...base, edad: edadNum },
-            examen: previewIA || datos.consulta || "",
+            iaJSON, // ← NUEVO
+            datosPaciente: iaJSON.paciente,
+            examen: iaJSON.informeIA || iaJSON.consulta || "",
             marcadores,
             rodillaMarcadores,
             manoMarcadores,
@@ -434,7 +503,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   };
 
   // ======================================================
-  // DESCARGAS (sin cambios)
+  // DESCARGAS (sin cambios de lógica, solo usando datos existentes)
   // ======================================================
   const handleDescargarIA = async () => {
     const id = sessionStorage.getItem("idPago") || idPago;
@@ -519,6 +588,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             });
 
             try {
+              const marcadoresStruct = construirMarcadores();
               const {
                 marcadores,
                 rodillaMarcadores,
@@ -526,14 +596,27 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
                 hombroMarcadores,
                 codoMarcadores,
                 tobilloMarcadores,
-              } = construirMarcadores();
+              } = marcadoresStruct;
+
+              // JSON central aún en caso de reinyectar mínimo
+              const iaJSON = buildIAJSON(
+                datosReinyectar,
+                "", // aquí no tenemos texto nuevo del informe
+                {},
+                marcadoresStruct
+              );
+
+              try {
+                sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
+              } catch {}
 
               await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   idPago: id,
-                  datosPaciente: datosReinyectar,
+                  iaJSON,
+                  datosPaciente: iaJSON.paciente,
                   marcadores,
                   rodillaMarcadores,
                   manoMarcadores,
@@ -654,6 +737,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             });
 
             try {
+              const marcadoresStruct = construirMarcadores();
               const {
                 marcadores,
                 rodillaMarcadores,
@@ -661,14 +745,26 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
                 hombroMarcadores,
                 codoMarcadores,
                 tobilloMarcadores,
-              } = construirMarcadores();
+              } = marcadoresStruct;
+
+              const iaJSON = buildIAJSON(
+                datosReinyectar,
+                "", // sin texto informe aquí tampoco
+                {},
+                marcadoresStruct
+              );
+
+              try {
+                sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
+              } catch {}
 
               await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   idPago: id,
-                  datosPaciente: datosReinyectar,
+                  iaJSON,
+                  datosPaciente: iaJSON.paciente,
                   marcadores,
                   rodillaMarcadores,
                   manoMarcadores,
@@ -719,7 +815,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       />
 
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
-        {previewIA ? "Informe IA generado — revisa antes de continuar." : "Describe los síntomas para generar el informe."}
+        {previewIA
+          ? "Informe IA generado — revisa antes de continuar."
+          : "Describe los síntomas para generar el informe."}
       </h3>
 
       <div style={{ marginBottom: 10 }}>
