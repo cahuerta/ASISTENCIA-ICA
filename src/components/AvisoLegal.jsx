@@ -95,8 +95,24 @@ export default function AvisoLegal({
   };
 
   const handleReject = () => {
-    // No cerramos automáticamente al rechazar: deja la decisión al padre
-    onReject?.();
+    // 1) Si el padre definió un onReject, lo respetamos
+    if (typeof onReject === "function") {
+      onReject();
+      return;
+    }
+
+    // 2) Comportamiento por defecto global: no acepta → volver atrás
+    try {
+      if (persist) window.localStorage.removeItem(persistKey);
+    } catch {}
+
+    if (typeof window !== "undefined") {
+      if (window.history.length > 1) {
+        window.history.back(); // vuelve a la página anterior
+      } else {
+        window.location.href = "/"; // fallback: ir a inicio
+      }
+    }
   };
 
   const handleBackdrop = () => {
