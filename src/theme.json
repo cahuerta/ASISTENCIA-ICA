@@ -4,36 +4,43 @@
   "navBorder": "#1A2028",
   "navText": "#FFFFFF",
 
-  "/* --- Paleta metálica (acero) --- */": "",
-  "primary": "#2F3A45",
-  "primaryDark": "#1E262E",
-  "onPrimary": "#F1F5F9",
+  "/* --- Paleta principal TRAUMA (azul clínico + acero) --- */": "",
+  "primary": "#1E3A5F",
+  "primaryDark": "#14263C",
+  "onPrimary": "#F9FAFB",
 
-  "accentAlpha": "rgba(47,58,69,0.28)",
+  "accent": "#3F7FBF",
+  "accentAlpha": "rgba(30, 64, 175, 0.20)",
 
   "/* --- Fondo y superficies --- */": "",
-  "bg": "#F2F4F7",
+  "bg": "#F4F7FB",
   "surface": "#FFFFFF",
-  "border": "#D1D6DE",
+  "border": "#D1D8E5",
 
   "/* --- Texto --- */": "",
   "text": "#111827",
-  "textMuted": "#4B5563",
+  "textMuted": "#6B7280",
 
   "/* --- Controles secundarios / contornos --- */": "",
   "muted": "#3B4754",
 
   "/* --- Sombras y overlay --- */": "",
-  "shadowSm": "0 2px 10px rgba(0,0,0,0.08)",
-  "shadowMd": "0 6px 18px rgba(0,0,0,0.12)",
-  "overlay": "rgba(0,0,0,0.50)",
+  "shadowSm": "0 2px 8px rgba(15, 23, 42, 0.06)",
+  "shadowMd": "0 10px 30px rgba(15, 23, 42, 0.12)",
+  "overlay": "rgba(15, 23, 42, 0.45)",
 
-  "/* --- Botones metálicos (opcional, si mapeas en theme.js) --- */": "",
-  "btnBg": "#2F3A45",
-  "btnBgHover": "#27323C",
-  "btnBgActive": "#212B34",
-  "btnText": "#F1F5F9",
-  "btnBorder": "#1E262E",
-  "btnGloss": "rgba(255,255,255,0.06)",
-  "btnShadowStrong": "0 2px 10px rgba(0,0,0,0.18)"
+  "/* --- Botones metálicos (usan primary como base) --- */": "",
+  "btnBg": "#1E3A5F",
+  "btnBgHover": "#182D47",
+  "btnBgActive": "#122337",
+  "btnText": "#F9FAFB",
+  "btnBorder": "#0B1724",
+  "btnGloss": "rgba(255,255,255,0.08)",
+  "btnShadowStrong": "0 2px 10px rgba(15, 23, 42, 0.24)",
+
+  "/* --- Colores por módulo (por si los necesitas) --- */": "",
+  "trauma": "#1E3A5F",
+  "preop": "#2AA78C",
+  "generales": "#3F7FBF",
+  "ia": "#F59E0B"
 }
