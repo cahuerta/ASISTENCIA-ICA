@@ -306,6 +306,94 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     return contieneRMlocal(examenTexto);
   };
 
+  // === NUEVO: abrir modal RM (igual idea que en TraumaModulo) ===
+  const lanzarChecklistRM = () => {
+    if (!requiereRM) return;
+    setShowRM(true);
+  };
+
+  // === NUEVO: construir resumen texto RM (copiado de TraumaModulo) ===
+  const construirResumenRM = (f = {}) => {
+    const labels = {
+      marcapasos: "Marcapasos/DAI",
+      coclear_o_neuro: "Implante coclear/neuroestimulador",
+      clips_aneurisma: "Clips de aneurisma",
+      valvula_cardiaca_metal: "Implante metálico intracraneal",
+      fragmentos_metalicos: "Fragmentos metálicos/balas",
+      protesis_placas_tornillos: "Prótesis/placas/tornillos",
+      cirugia_reciente_3m: "Cirugía reciente (<3m) con implante",
+      embarazo: "Embarazo o sospecha",
+      claustrofobia: "Claustrofobia importante",
+      peso_mayor_150: "Peso > 150 kg",
+      no_permanece_inmovil: "Dificultad para inmovilidad",
+      tatuajes_recientes: "Tatuajes/PMU < 6 semanas",
+      piercings_no_removibles: "Piercings no removibles",
+      bomba_insulina_u_otro: "Dispositivo externo activo",
+      requiere_contraste: "Requiere contraste",
+      erc_o_egfr_bajo: "Insuficiencia renal / eGFR < 30",
+      alergia_gadolinio: "Alergia a gadolinio",
+      reaccion_contrastes: "Reacción a contrastes previos",
+      requiere_sedacion: "Requiere sedación",
+      ayuno_6h: "Ayuno 6h (si sedación)",
+    };
+
+    const marcadas = Object.keys(labels)
+      .filter((k) => f[k] === true)
+      .map((k) => `• ${labels[k]}`);
+
+    const obs = (f.observaciones || "").trim();
+
+    const partes = [];
+    if (marcadas.length) {
+      partes.push(marcadas.join("\n"));
+    } else {
+      partes.push("• Sin alertas marcadas en checklist.");
+    }
+    if (obs) partes.push(`Observaciones: ${obs}`);
+
+    return partes.join("\n");
+  };
+
+  // === NUEVO: guardar checklist RM en estado + sessionStorage + iaJSON ===
+  const handleSaveRM = (form) => {
+    setBloqueaRM(false);
+
+    const resumen = construirResumenRM(form);
+
+    setResonanciaChecklist(form);
+    setResonanciaResumenTexto(resumen);
+
+    try {
+      // mismo nombre de claves que en trauma, para mantener compatibilidad
+      sessionStorage.setItem("resonanciaChecklist", JSON.stringify(form));
+      sessionStorage.setItem("resonanciaResumenTexto", resumen);
+
+      // reconstruimos iaJSON central actualizado
+      const respaldo = sessionStorage.getItem("datosPacienteJSON");
+      const base = respaldo
+        ? JSON.parse(respaldo)
+        : { ...datos, edad: Number(datos.edad) || datos.edad };
+
+      const edadNum = Number(base.edad) || base.edad;
+      const marcadoresStruct = construirMarcadores();
+
+      const iaJSON = buildIAJSON(
+        { ...base, edad: edadNum },
+        previewIA || datos.consulta || "",
+        {
+          resonanciaChecklist: form,
+          resonanciaResumenTexto: resumen,
+          ordenAlternativa,
+        },
+        marcadoresStruct
+      );
+
+      sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
+    } catch {}
+
+    setShowRM(false);
+  };
+
   // ======================================================
   // ⚡ GENERAR PREVIEW IA — ahora con iaJSON grande
   // ======================================================
