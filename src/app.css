@@ -5,22 +5,26 @@
 /* Fallbacks: si el wrapper no define vars, usa estos valores por defecto
    (theme.js inyecta tokens desde theme.json a estas CSS vars en :root) */
 :root{
-  --bg:#F3F5F8;
+  /* === Paleta TRAUMA / ICA (fallback) === */
+  --bg:#F4F7FB;
   --surface:#FFFFFF;
-  --border:#D5DBE3;
-  --text:#1F2937;
+  --border:#D1D8E5;
+  --text:#111827;
   --text-muted:#6B7280;
-  --muted:#4B5563;
+  --muted:#3B4754;
 
-  /* PRIMARIO → Gris metálico (todo el acento del sistema) */
-  --primary:#3A4753;
-  --primary-dark:#2B333C;
-  --onPrimary:#FFFFFF;
-  --accent-alpha: rgba(58,71,83,0.25);
+  /* PRIMARIO → Azul clínico + acero (acento del sistema) */
+  --primary:#1E3A5F;
+  --primary-dark:#14263C;
+  --onPrimary:#F9FAFB;
 
-  --shadow-sm: 0 2px 10px rgba(0,0,0,0.08);
-  --shadow-md: 0 6px 18px rgba(0,0,0,0.12);
-  --overlay: rgba(0,0,0,0.35);
+  /* Acento azul para detalles secundarios (tabs, chips, etc.) */
+  --accent:#3F7FBF;
+  --accent-alpha: rgba(30,64,175,0.20);
+
+  --shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 10px 30px rgba(15, 23, 42, 0.12);
+  --overlay: rgba(15,23,42,0.45);
 
   --gap:16px;
   --radius:16px;
@@ -37,8 +41,8 @@
   --btn-bg-active: color-mix(in oklab, var(--primary) 75%, black 25%);
   --btn-text: var(--onPrimary);
   --btn-border: color-mix(in oklab, var(--primary) 60%, black 40%);
-  --btn-gloss: rgba(255,255,255,0.06);
-  --btn-shadow-strong: 0 2px 10px rgba(0,0,0,0.18);
+  --btn-gloss: rgba(255,255,255,0.08);
+  --btn-shadow-strong: 0 2px 10px rgba(15,23,42,0.24);
 }
 
 *{ box-sizing:border-box }
@@ -106,7 +110,7 @@ label{
 }
 input,select,textarea{
   width:100%;
-  background: #fbfbfd;
+  background: #F9FAFB;
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -125,7 +129,7 @@ input:focus,select:focus,textarea:focus{
 .input-ok{ border-color:#16a34a !important }
 
 /* =======================
-   Botones (gris metálico)
+   Botones (clínico metálico)
    ======================= */
 .btn{
   display:inline-flex; align-items:center; justify-content:center; gap:8px;
@@ -202,9 +206,9 @@ input:focus,select:focus,textarea:focus{
 .chips{ display:flex; gap:8px; flex-wrap:wrap }
 .chip{
   padding:6px 10px; border-radius:999px;
-  background: color-mix(in oklab, var(--primary) 10%, transparent);
-  color: var(--primary);
-  border:1px solid color-mix(in oklab, var(--primary) 25%, transparent);
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  color: var(--accent);
+  border:1px solid color-mix(in oklab, var(--accent) 25%, transparent);
   font-size: var(--fs-small);
 }
 .chip.active{
