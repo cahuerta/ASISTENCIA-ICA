@@ -8,7 +8,7 @@ import FormularioResonancia from "../components/FormularioResonancia.jsx";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/** JSON centralizado */
+/** JSON centralizado (similar a traumaJSON) */
 function buildIAJSON(datos = {}, informeIA = "", opciones = {}, marcadoresStruct = null) {
   const edadNum = Number(datos.edad);
   const paciente = {
@@ -26,7 +26,7 @@ function buildIAJSON(datos = {}, informeIA = "", opciones = {}, marcadoresStruct
     paciente,
     consulta: datos.consulta || "",
     informeIA: informeIA || "",
-    marcadores: marcadoresStruct || null,
+    marcadores: marcadoresStruct || null, // lo que devuelve construirMarcadores()
     resonancia: {
       checklist: resonanciaChecklist,
       resumenTexto: resonanciaResumenTexto,
@@ -42,7 +42,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const [datos, setDatos] = useState(
     initialDatos || { nombre: "", rut: "", edad: "", consulta: "", genero: "", dolor: "", lado: "" }
   );
-
   const [previewIA, setPreviewIA] = useState("");
   const [generando, setGenerando] = useState(false);
 
@@ -60,10 +59,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const [descargandoOrden, setDescargandoOrden] = useState(false);
   const [mensajeDescargaOrden, setMensajeDescargaOrden] = useState("");
-
   const pollerRef = useRef(null);
 
-  // ==== IDPAGO ====
+  // ==== IDPAGO UNIFICADO PARA IA ====
   const [idPago, setIdPago] = useState(() => {
     try {
       let saved = sessionStorage.getItem("idPago");
@@ -167,6 +165,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       } catch {}
     });
 
+    // Devolvemos TODO el paquete para guardarlo como JSON grande
     return { marcadores, ...porCompat };
   }, [datos?.lado]);
 
@@ -186,10 +185,8 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
-
       const savedIA = sessionStorage.getItem("consultaIA");
       if (savedIA) setDatos((prev) => ({ ...prev, consulta: savedIA }));
-
       const savedPrev = sessionStorage.getItem("previewIA");
       if (savedPrev) setPreviewIA(savedPrev);
 
@@ -309,23 +306,96 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     return contieneRMlocal(examenTexto);
   };
 
-  // ======================================================
-  // 🎯 ***FUNCIONES QUE FALTABAN*** — IGUAL QUE TraumaModulo
-  // ======================================================
-
+  // === NUEVO: abrir modal RM (igual idea que en TraumaModulo) ===
   const lanzarChecklistRM = () => {
+    if (!requiereRM) return;
     setShowRM(true);
   };
 
-  const handleSaveRM = ({ checklist, resumen, alternativa }) => {
-    setResonanciaChecklist(checklist || null);
-    setResonanciaResumenTexto(resumen || "");
-    setOrdenAlternativa(alternativa || "");
+  // === NUEVO: construir resumen texto RM (copiado de TraumaModulo) ===
+  const construirResumenRM = (f = {}) => {
+    const labels = {
+      marcapasos: "Marcapasos/DAI",
+      coclear_o_neuro: "Implante coclear/neuroestimulador",
+      clips_aneurisma: "Clips de aneurisma",
+      valvula_cardiaca_metal: "Implante metálico intracraneal",
+      fragmentos_metalicos: "Fragmentos metálicos/balas",
+      protesis_placas_tornillos: "Prótesis/placas/tornillos",
+      cirugia_reciente_3m: "Cirugía reciente (<3m) con implante",
+      embarazo: "Embarazo o sospecha",
+      claustrofobia: "Claustrofobia importante",
+      peso_mayor_150: "Peso > 150 kg",
+      no_permanece_inmovil: "Dificultad para inmovilidad",
+      tatuajes_recientes: "Tatuajes/PMU < 6 semanas",
+      piercings_no_removibles: "Piercings no removibles",
+      bomba_insulina_u_otro: "Dispositivo externo activo",
+      requiere_contraste: "Requiere contraste",
+      erc_o_egfr_bajo: "Insuficiencia renal / eGFR < 30",
+      alergia_gadolinio: "Alergia a gadolinio",
+      reaccion_contrastes: "Reacción a contrastes previos",
+      requiere_sedacion: "Requiere sedación",
+      ayuno_6h: "Ayuno 6h (si sedación)",
+    };
+
+    const marcadas = Object.keys(labels)
+      .filter((k) => f[k] === true)
+      .map((k) => `• ${labels[k]}`);
+
+    const obs = (f.observaciones || "").trim();
+
+    const partes = [];
+    if (marcadas.length) {
+      partes.push(marcadas.join("\n"));
+    } else {
+      partes.push("• Sin alertas marcadas en checklist.");
+    }
+    if (obs) partes.push(`Observaciones: ${obs}`);
+
+    return partes.join("\n");
+  };
+
+  // === NUEVO: guardar checklist RM en estado + sessionStorage + iaJSON ===
+  const handleSaveRM = (form) => {
+    setBloqueaRM(false);
+
+    const resumen = construirResumenRM(form);
+
+    setResonanciaChecklist(form);
+    setResonanciaResumenTexto(resumen);
+
+    try {
+      // mismo nombre de claves que en trauma, para mantener compatibilidad
+      sessionStorage.setItem("resonanciaChecklist", JSON.stringify(form));
+      sessionStorage.setItem("resonanciaResumenTexto", resumen);
+
+      // reconstruimos iaJSON central actualizado
+      const respaldo = sessionStorage.getItem("datosPacienteJSON");
+      const base = respaldo
+        ? JSON.parse(respaldo)
+        : { ...datos, edad: Number(datos.edad) || datos.edad };
+
+      const edadNum = Number(base.edad) || base.edad;
+      const marcadoresStruct = construirMarcadores();
+
+      const iaJSON = buildIAJSON(
+        { ...base, edad: edadNum },
+        previewIA || datos.consulta || "",
+        {
+          resonanciaChecklist: form,
+          resonanciaResumenTexto: resumen,
+          ordenAlternativa,
+        },
+        marcadoresStruct
+      );
+
+      sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
+    } catch {}
+
     setShowRM(false);
   };
 
   // ======================================================
-  // ⚡ GENERAR PREVIEW IA
+  // ⚡ GENERAR PREVIEW IA — ahora con iaJSON grande
   // ======================================================
   const handleGenerarPreview = async () => {
     const edadNum = Number(datos.edad);
@@ -391,6 +461,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           tobilloMarcadores,
         } = marcadoresStruct;
 
+        // JSON grande central (similar a traumaJSON)
         const iaJSON = buildIAJSON(
           { ...datos, edad: edadNum },
           resp || datos.consulta || "",
@@ -406,12 +477,13 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
         } catch {}
 
+        // Compatibilidad: seguimos enviando campos planos + JSON grande
         await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             idPago,
-            iaJSON,
+            iaJSON, // ← NUEVO Bloque grande
             datosPaciente: iaJSON.paciente,
             examen: iaJSON.informeIA || iaJSON.consulta || "",
             marcadores,
@@ -432,7 +504,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   };
 
   // ======================================================
-  // ⚡ PAGAR IA
+  // ⚡ PAGAR IA — también con iaJSON grande
   // ======================================================
   const handlePagarIA = async () => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
@@ -468,6 +540,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
         const textoInforme = previewIA || datos.consulta || "";
 
+        // JSON central iaJSON
         const iaJSON = buildIAJSON(
           { ...base, edad: edadNum },
           textoInforme,
@@ -483,12 +556,13 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
         } catch {}
 
+        // Compatibilidad: enviamos JSON grande + campos planos
         await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             idPago,
-            iaJSON,
+            iaJSON, // ← NUEVO
             datosPaciente: iaJSON.paciente,
             examen: iaJSON.informeIA || iaJSON.consulta || "",
             marcadores,
@@ -517,7 +591,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   };
 
   // ======================================================
-  // 📝 DESCARGAS — NO TOCADO
+  // DESCARGAS (misma lógica, pero reinyectando iaJSON guardado)
   // ======================================================
   const handleDescargarIA = async () => {
     const id = sessionStorage.getItem("idPago") || idPago;
@@ -612,16 +686,31 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
                 tobilloMarcadores,
               } = marcadoresStruct;
 
-              const iaJSON = buildIAJSON(
-                datosReinyectar,
-                "",
-                {},
-                marcadoresStruct
-              );
-
+              // Usar iaJSON real guardado si existe
+              let iaJSON = null;
               try {
-                sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
-              } catch {}
+                iaJSON = JSON.parse(sessionStorage.getItem("iaJSON") || "null");
+              } catch {
+                iaJSON = null;
+              }
+
+              if (!iaJSON) {
+                // fallback: reconstruimos usando la mejor info disponible
+                const texto = sessionStorage.getItem("previewIA") || consultaGuardada || "";
+                iaJSON = buildIAJSON(
+                  { ...datosReinyectar },
+                  texto,
+                  {
+                    resonanciaChecklist,
+                    resonanciaResumenTexto,
+                    ordenAlternativa,
+                  },
+                  marcadoresStruct
+                );
+                try {
+                  sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
+                } catch {}
+              }
 
               await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
                 method: "POST",
@@ -630,6 +719,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
                   idPago: id,
                   iaJSON,
                   datosPaciente: iaJSON.paciente,
+                  examen: iaJSON.informeIA || iaJSON.consulta || "",
                   marcadores,
                   rodillaMarcadores,
                   manoMarcadores,
@@ -667,7 +757,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
-  // DESCARGA ORDEN — NO TOCADO
   const handleDescargarOrdenIA = async () => {
     const id = sessionStorage.getItem("idPago") || idPago;
     if (!id) {
@@ -761,16 +850,30 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
                 tobilloMarcadores,
               } = marcadoresStruct;
 
-              const iaJSON = buildIAJSON(
-                datosReinyectar,
-                "",
-                {},
-                marcadoresStruct
-              );
-
+              // Usar iaJSON real guardado si existe
+              let iaJSON = null;
               try {
-                sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
-              } catch {}
+                iaJSON = JSON.parse(sessionStorage.getItem("iaJSON") || "null");
+              } catch {
+                iaJSON = null;
+              }
+
+              if (!iaJSON) {
+                const texto = sessionStorage.getItem("previewIA") || consultaGuardada || "";
+                iaJSON = buildIAJSON(
+                  { ...datosReinyectar },
+                  texto,
+                  {
+                    resonanciaChecklist,
+                    resonanciaResumenTexto,
+                    ordenAlternativa,
+                  },
+                  marcadoresStruct
+                );
+                try {
+                  sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
+                } catch {}
+              }
 
               await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
                 method: "POST",
@@ -779,6 +882,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
                   idPago: id,
                   iaJSON,
                   datosPaciente: iaJSON.paciente,
+                  examen: iaJSON.informeIA || iaJSON.consulta || "",
                   marcadores,
                   rodillaMarcadores,
                   manoMarcadores,
