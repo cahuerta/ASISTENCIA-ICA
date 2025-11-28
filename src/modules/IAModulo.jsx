@@ -35,11 +35,19 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const [mensajeDescargaOrden, setMensajeDescargaOrden] = useState("");
   const pollerRef = useRef(null);
 
+  // ==== IDPAGO UNIFICADO PARA IA (similar a TraumaModulo) ====
   const [idPago, setIdPago] = useState(() => {
-    return (
-      sessionStorage.getItem("idPago") ||
-      "ia_" + Date.now() + "_" + Math.floor(Math.random() * 10000)
-    );
+    try {
+      let saved = sessionStorage.getItem("idPago");
+      // Reusar solo si ya es de IA
+      if (saved && saved.startsWith("ia_")) return saved;
+
+      const nuevo = "ia_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+      sessionStorage.setItem("idPago", nuevo);
+      return nuevo;
+    } catch {
+      return "ia_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+    }
   });
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -157,8 +165,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       if (savedIA) setDatos((prev) => ({ ...prev, consulta: savedIA }));
       const savedPrev = sessionStorage.getItem("previewIA");
       if (savedPrev) setPreviewIA(savedPrev);
+      // Solo reusar idPago si es de IA
       const savedId = sessionStorage.getItem("idPago");
-      if (savedId) setIdPago(savedId);
+      if (savedId && savedId.startsWith("ia_")) setIdPago(savedId);
     } catch {}
 
     const avisoOk = (() => {
@@ -427,7 +436,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   };
 
   /* ======================================================
-     ⚡⚡⚡ PAGAR IA — AHORA IGUAL QUE GENERALES ⚡⚡⚡
+     ⚡ PAGAR IA — SOLO PREPARA Y PASA A PANTALLA TRES ⚡
      ====================================================== */
 
   const handlePagarIA = async () => {
@@ -482,12 +491,13 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         });
       } catch {}
 
-      onIrPantallaTres({
-        ...base,
-        edad: edadNum,
-        idPago,
-      });
-
+      if (typeof onIrPantallaTres === "function") {
+        onIrPantallaTres({
+          ...base,
+          edad: edadNum,
+          idPago,
+        });
+      }
     } catch (err) {
       console.error("No se pudo preparar el pago (IA):", err);
       alert(`No se pudo preparar el pago.\n${err?.message || err}`);
