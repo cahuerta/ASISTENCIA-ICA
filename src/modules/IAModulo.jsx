@@ -13,7 +13,15 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const S = makeStyles(T);
 
   const [datos, setDatos] = useState(
-    initialDatos || { nombre: "", rut: "", edad: "", consulta: "", genero: "", dolor: "", lado: "" }
+    initialDatos || {
+      nombre: "",
+      rut: "",
+      edad: "",
+      consulta: "",
+      genero: "",
+      dolor: "",
+      lado: "",
+    }
   );
   const [previewIA, setPreviewIA] = useState("");
   const [generando, setGenerando] = useState(false);
@@ -35,20 +43,31 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const [mensajeDescargaOrden, setMensajeDescargaOrden] = useState("");
   const pollerRef = useRef(null);
 
-  // ==== IDPAGO UNIFICADO PARA IA (similar a TraumaModulo) ====
-  const [idPago, setIdPago] = useState(() => {
+  /* ============================================================
+     ⚡ IDPAGO — MISMA LÓGICA QUE TRAUMAMODULO ⚡
+     ============================================================ */
+  function ensureIAIdPago() {
     try {
-      let saved = sessionStorage.getItem("idPago");
-      // Reusar solo si ya es de IA
-      if (saved && saved.startsWith("ia_")) return saved;
+      let id = sessionStorage.getItem("idPago");
 
-      const nuevo = "ia_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-      sessionStorage.setItem("idPago", nuevo);
-      return nuevo;
+      // Reusar solo si ya corresponde a IA o viene de pago
+      if (id && (/^ia_/.test(id) || /^pago_/.test(id))) return id;
+
+      // Si no existe o es de otro módulo, crear uno nuevo IA
+      id = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+      sessionStorage.setItem("idPago", id);
+      return id;
     } catch {
-      return "ia_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+      const fallback = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+      sessionStorage.setItem("idPago", fallback);
+      return fallback;
     }
-  });
+  }
+
+  const idPago = ensureIAIdPago();
+  /* ============================================================
+     ⚡ FIN IDPAGO ⚡
+     ============================================================ */
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -75,15 +94,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
         if (!lines.length) {
           const ladoLow = (lado || "").toLowerCase();
-          const ladoKey = ladoLow.includes("izq")
-            ? "izquierda"
-            : ladoLow.includes("der")
-            ? "derecha"
-            : "";
+          const ladoKey = ladoLow.includes("izq") ? "izquierda" : ladoLow.includes("der") ? "derecha" : "";
           if (ladoKey) {
-            const resumen = JSON.parse(
-              sessionStorage.getItem(`${zona}_resumen_${ladoKey}`) || "null"
-            );
+            const resumen = JSON.parse(sessionStorage.getItem(`${zona}_resumen_${ladoKey}`) || "null");
             if (resumen && typeof resumen === "object") {
               Object.values(resumen).forEach((arr) => {
                 if (Array.isArray(arr)) lines.push(...arr);
@@ -124,15 +137,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           };
         } else {
           const ladoLow = (lado || datos?.lado || "").toLowerCase();
-          const ladoKey = ladoLow.includes("izq")
-            ? "izquierda"
-            : ladoLow.includes("der")
-            ? "derecha"
-            : "";
+          const ladoKey = ladoLow.includes("izq") ? "izquierda" : ladoLow.includes("der") ? "derecha" : "";
           if (ladoKey) {
-            const resumen = JSON.parse(
-              sessionStorage.getItem(`${z}_resumen_${ladoKey}`) || "null"
-            );
+            const resumen = JSON.parse(sessionStorage.getItem(`${z}_resumen_${ladoKey}`) || "null");
             if (resumen && typeof resumen === "object") {
               marcadores[z] = { lado: ladoKey, porVista: resumen };
             }
@@ -165,9 +172,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       if (savedIA) setDatos((prev) => ({ ...prev, consulta: savedIA }));
       const savedPrev = sessionStorage.getItem("previewIA");
       if (savedPrev) setPreviewIA(savedPrev);
-      // Solo reusar idPago si es de IA
-      const savedId = sessionStorage.getItem("idPago");
-      if (savedId && savedId.startsWith("ia_")) setIdPago(savedId);
     } catch {}
 
     const avisoOk = (() => {
@@ -290,10 +294,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
     sessionStorage.setItem("idPago", idPago);
     sessionStorage.setItem("modulo", "ia");
-    sessionStorage.setItem(
-      "datosPacienteJSON",
-      JSON.stringify({ ...datos, edad: edadNum })
-    );
+    sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
     sessionStorage.setItem("consultaIA", datos.consulta);
 
     setGenerando(true);
@@ -458,10 +459,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       sessionStorage.setItem("idPago", idPago);
       sessionStorage.setItem("modulo", "ia");
       sessionStorage.setItem("pantalla", "tres");
-      sessionStorage.setItem(
-        "datosPacienteJSON",
-        JSON.stringify({ ...base, edad: edadNum })
-      );
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...base, edad: edadNum }));
 
       try {
         const {
@@ -554,8 +552,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           }).catch(() => {});
           await sleep(1500);
 
-          if (i === maxIntentos)
-            alert("El pago aún no se confirma. Intenta nuevamente.");
+          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente.");
           continue;
         }
 
@@ -689,8 +686,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           }).catch(() => {});
           await sleep(1500);
 
-          if (i === maxIntentos)
-            alert("El pago aún no se confirma. Intenta nuevamente.");
+          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente.");
           continue;
         }
 
@@ -776,12 +772,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
   return (
     <div style={S.card}>
-      <AvisoLegal
-        visible={mostrarAviso}
-        persist={false}
-        onAccept={continuarTrasAviso}
-        onReject={rechazarAviso}
-      />
+      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
 
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
         {previewIA ? "Informe IA generado — revisa antes de continuar." : "Describe los síntomas para generar el informe."}
@@ -867,33 +858,23 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       )}
 
       {previewIA && requiereRM && !resonanciaChecklist && !bloqueaRM && (
-        <div style={S.hint}>
-          La IA sugiere Resonancia Magnética. Presione “Continuar” para completar el checklist.
-        </div>
+        <div style={S.hint}>La IA sugiere Resonancia Magnética. Presione “Continuar” para completar el checklist.</div>
       )}
 
       {previewIA && bloqueaRM && (
-        <div style={S.hint}>
-          RM contraindicada. {ordenAlternativa || "Se sugiere alternativa."}
-        </div>
+        <div style={S.hint}>RM contraindicada. {ordenAlternativa || "Se sugiere alternativa."}</div>
       )}
 
       {!pagoRealizado && previewIA && (
         <>
           {requiereRM && !resonanciaChecklist && !bloqueaRM && (
-            <button
-              style={{ ...S.btnPrimary, marginTop: 12 }}
-              onClick={lanzarChecklistRM}
-            >
+            <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={lanzarChecklistRM}>
               Continuar
             </button>
           )}
 
           {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
-            <button
-              style={{ ...S.btnPrimary, marginTop: 12 }}
-              onClick={handlePagarIA}
-            >
+            <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={handlePagarIA}>
               Pagar ahora (Informe IA)
             </button>
           )}
@@ -928,11 +909,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         <div style={S.modalBackdrop} role="dialog" aria-modal="true">
           <div style={S.modalCard}>
             <h4 style={{ margin: 8, color: T.primary }}>Checklist de Resonancia</h4>
-            <FormularioResonancia
-              initial={resonanciaChecklist || {}}
-              onSave={handleSaveRM}
-              onCancel={() => setShowRM(false)}
-            />
+            <FormularioResonancia initial={resonanciaChecklist || {}} onSave={handleSaveRM} onCancel={() => setShowRM(false)} />
           </div>
         </div>
       )}
