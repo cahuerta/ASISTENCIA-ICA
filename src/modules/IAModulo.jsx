@@ -13,15 +13,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const S = makeStyles(T);
 
   const [datos, setDatos] = useState(
-    initialDatos || {
-      nombre: "",
-      rut: "",
-      edad: "",
-      consulta: "",
-      genero: "",
-      dolor: "",
-      lado: "",
-    }
+    initialDatos || { nombre: "", rut: "", edad: "", consulta: "", genero: "", dolor: "", lado: "" }
   );
   const [previewIA, setPreviewIA] = useState("");
   const [generando, setGenerando] = useState(false);
@@ -33,7 +25,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const [ordenAlternativa, setOrdenAlternativa] = useState("");
 
   const [showRM, setShowRM] = useState(false);
-
   const [mostrarAviso, setMostrarAviso] = useState(false);
 
   const [pagoRealizado, setPagoRealizado] = useState(false);
@@ -43,37 +34,26 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const [mensajeDescargaOrden, setMensajeDescargaOrden] = useState("");
   const pollerRef = useRef(null);
 
-  /* ============================================================
-     ⚡ IDPAGO — MISMA LÓGICA QUE TRAUMAMODULO ⚡
-     ============================================================ */
-  function ensureIAIdPago() {
+  // ==== IDPAGO UNIFICADO PARA IA ====
+  const [idPago, setIdPago] = useState(() => {
     try {
-      let id = sessionStorage.getItem("idPago");
+      let saved = sessionStorage.getItem("idPago");
+      if (saved && saved.startsWith("ia_")) return saved;
 
-      // Reusar solo si ya corresponde a IA o viene de pago
-      if (id && (/^ia_/.test(id) || /^pago_/.test(id))) return id;
-
-      // Si no existe o es de otro módulo, crear uno nuevo IA
-      id = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-      sessionStorage.setItem("idPago", id);
-      return id;
+      const nuevo = "ia_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+      sessionStorage.setItem("idPago", nuevo);
+      return nuevo;
     } catch {
-      const fallback = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-      sessionStorage.setItem("idPago", fallback);
-      return fallback;
+      return "ia_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
     }
-  }
-
-  const idPago = ensureIAIdPago();
-  /* ============================================================
-     ⚡ FIN IDPAGO ⚡
-     ============================================================ */
+  });
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const zonasSoportadas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
   const capitalizar = (s = "") => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
 
+  // ==== RESUMEN MARCADORES ====
   const leerResumenZona = useCallback(
     (zona) => {
       try {
@@ -94,7 +74,10 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
         if (!lines.length) {
           const ladoLow = (lado || "").toLowerCase();
-          const ladoKey = ladoLow.includes("izq") ? "izquierda" : ladoLow.includes("der") ? "derecha" : "";
+          const ladoKey =
+            ladoLow.includes("izq") ? "izquierda" :
+            ladoLow.includes("der") ? "derecha" : "";
+
           if (ladoKey) {
             const resumen = JSON.parse(sessionStorage.getItem(`${zona}_resumen_${ladoKey}`) || "null");
             if (resumen && typeof resumen === "object") {
@@ -137,7 +120,10 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           };
         } else {
           const ladoLow = (lado || datos?.lado || "").toLowerCase();
-          const ladoKey = ladoLow.includes("izq") ? "izquierda" : ladoLow.includes("der") ? "derecha" : "";
+          const ladoKey =
+            ladoLow.includes("izq") ? "izquierda" :
+            ladoLow.includes("der") ? "derecha" : "";
+
           if (ladoKey) {
             const resumen = JSON.parse(sessionStorage.getItem(`${z}_resumen_${ladoKey}`) || "null");
             if (resumen && typeof resumen === "object") {
@@ -164,6 +150,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     return out;
   }, [leerResumenZona, previewIA, resonanciaChecklist, showRM]);
 
+  // ======================================================
+  // Cargar data previa
+  // ======================================================
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
@@ -172,6 +161,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       if (savedIA) setDatos((prev) => ({ ...prev, consulta: savedIA }));
       const savedPrev = sessionStorage.getItem("previewIA");
       if (savedPrev) setPreviewIA(savedPrev);
+
+      const savedId = sessionStorage.getItem("idPago");
+      if (savedId && savedId.startsWith("ia_")) setIdPago(savedId);
     } catch {}
 
     const avisoOk = (() => {
@@ -202,6 +194,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
       if (pollerRef.current) clearInterval(pollerRef.current);
       let intentos = 0;
+
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
@@ -223,6 +216,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     };
   }, []);
 
+  // ======================================================
+  // Aviso Legal
+  // ======================================================
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
     try {
@@ -235,17 +231,21 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     alert("Debes aceptar el aviso legal para continuar.");
   };
 
+  // ======================================================
+  // RM helpers
+  // ======================================================
   const normaliza = (t = "") =>
-    String(t || "")
-      .normalize("NFD")
-      .replace(/\p{Diacritic}/gu, "")
-      .toLowerCase();
+    String(t || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
   const contieneRMlocal = (texto = "") => {
     const s = normaliza(texto);
     if (!s) return false;
 
-    const frases = ["resonancia magnetica", "resonancia nuclear", "magnetic resonance"];
+    const frases = [
+      "resonancia magnetica",
+      "resonancia nuclear",
+      "magnetic resonance",
+    ];
     if (frases.some((p) => s.includes(p))) return true;
 
     const re = [/\brm\b/i, /\brmn\b/i, /\brnm\b/i, /\bmri\b/i, /\birm\b/i];
@@ -275,18 +275,17 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     return contieneRMlocal(examenTexto);
   };
 
+  // ======================================================
+  // ⚡ GENERAR PREVIEW IA — AQUÍ APLICO EL FIX
+  // ======================================================
   const handleGenerarPreview = async () => {
     const edadNum = Number(datos.edad);
 
-    if (
-      !datos.nombre?.trim() ||
-      !datos.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0
-    ) {
+    if (!datos.nombre?.trim() || !datos.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
       alert("Completa nombre, RUT y edad (>0).");
       return;
     }
+
     if (!datos.consulta?.trim()) {
       alert("Escribe tus síntomas/indicaciones en el cuadro de texto.");
       return;
@@ -342,12 +341,14 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           tobilloMarcadores,
         } = construirMarcadores();
 
+        // === FIX APLICADO ===
         await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             idPago,
             datosPaciente: { ...datos, edad: edadNum },
+            examen: resp || datos.consulta || "",
             marcadores,
             rodillaMarcadores,
             manoMarcadores,
@@ -365,81 +366,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
-  const construirResumenRM = (f = {}) => {
-    const labels = {
-      marcapasos: "Marcapasos/DAI",
-      coclear_o_neuro: "Implante coclear/neuroestimulador",
-      clips_aneurisma: "Clips de aneurisma",
-      valvula_cardiaca_metal: "Implante metálico intracraneal",
-      fragmentos_metalicos: "Fragmentos metálicos/balas",
-      protesis_placas_tornillos: "Prótesis/placas/tornillos",
-      cirugia_reciente_3m: "Cirugía reciente (<3m) con implante",
-      embarazo: "Embarazo o sospecha",
-      claustrofobia: "Claustrofobia importante",
-      peso_mayor_150: "Peso > 150 kg",
-      no_permanece_inmovil: "Dificultad para inmovilidad",
-      tatuajes_recientes: "Tatuajes/PMU < 6 semanas",
-      piercings_no_removibles: "Piercings no removibles",
-      bomba_insulina_u_otro: "Dispositivo externo activo",
-      requiere_contraste: "Requiere contraste",
-      erc_o_egfr_bajo: "Insuficiencia renal / eGFR < 30",
-      alergia_gadolinio: "Alergia a gadolinio",
-      reaccion_contrastes: "Reacción a contrastes previos",
-      requiere_sedacion: "Requiere sedación",
-      ayuno_6h: "Ayuno 6h (si sedación)",
-    };
-
-    const marcadas = Object.keys(labels)
-      .filter((k) => f[k] === true)
-      .map((k) => `• ${labels[k]}`);
-
-    const obs = (f.observaciones || "").trim();
-
-    const partes = [];
-    if (marcadas.length) {
-      partes.push(marcadas.join("\n"));
-    } else {
-      partes.push("• Sin alertas marcadas en checklist.");
-    }
-    if (obs) partes.push(`Observaciones: ${obs}`);
-
-    return partes.join("\n");
-  };
-
-  const lanzarChecklistRM = () => {
-    if (!requiereRM) return;
-    setShowRM(true);
-  };
-
-  const handleSaveRM = (form) => {
-    setBloqueaRM(false);
-
-    const resumen = construirResumenRM(form);
-    setResonanciaChecklist(form);
-    setResonanciaResumenTexto(resumen);
-
-    try {
-      sessionStorage.setItem("resonanciaChecklist", JSON.stringify(form));
-      sessionStorage.setItem("resonanciaResumenTexto", resumen);
-    } catch {}
-
-    fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        idPago,
-        resonanciaChecklist: form,
-        resonanciaResumenTexto: resumen,
-      }),
-    }).catch(() => {});
-
-    setShowRM(false);
-  };
-
-  /* ======================================================
-     ⚡ PAGAR IA — SOLO PREPARA Y PASA A PANTALLA TRES ⚡
-     ====================================================== */
-
+  // ======================================================
+  // ⚡ PAGAR IA — AQUÍ TAMBIÉN APLIQUÉ EL FIX
+  // ======================================================
   const handlePagarIA = async () => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
     const base = saved ? JSON.parse(saved) : { ...datos, edad: Number(datos.edad) };
@@ -471,12 +400,14 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           tobilloMarcadores,
         } = construirMarcadores();
 
+        // === FIX APLICADO ===
         await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             idPago,
             datosPaciente: { ...base, edad: edadNum },
+            examen: previewIA || datos.consulta || "",
             marcadores,
             rodillaMarcadores,
             manoMarcadores,
@@ -502,6 +433,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
+  // ======================================================
+  // DESCARGAS (sin cambios)
+  // ======================================================
   const handleDescargarIA = async () => {
     const id = sessionStorage.getItem("idPago") || idPago;
     if (!id) {
@@ -552,7 +486,8 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           }).catch(() => {});
           await sleep(1500);
 
-          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente.");
+          if (i === maxIntentos)
+            alert("El pago aún no se confirma. Intenta nuevamente.");
           continue;
         }
 
@@ -686,7 +621,8 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           }).catch(() => {});
           await sleep(1500);
 
-          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente.");
+          if (i === maxIntentos)
+            alert("El pago aún no se confirma. Intenta nuevamente.");
           continue;
         }
 
@@ -770,9 +706,17 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
+  // ======================================================
+  // UI
+  // ======================================================
   return (
     <div style={S.card}>
-      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
+      <AvisoLegal
+        visible={mostrarAviso}
+        persist={false}
+        onAccept={continuarTrasAviso}
+        onReject={rechazarAviso}
+      />
 
       <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
         {previewIA ? "Informe IA generado — revisa antes de continuar." : "Describe los síntomas para generar el informe."}
@@ -858,23 +802,33 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       )}
 
       {previewIA && requiereRM && !resonanciaChecklist && !bloqueaRM && (
-        <div style={S.hint}>La IA sugiere Resonancia Magnética. Presione “Continuar” para completar el checklist.</div>
+        <div style={S.hint}>
+          La IA sugiere Resonancia Magnética. Presione “Continuar” para completar el checklist.
+        </div>
       )}
 
       {previewIA && bloqueaRM && (
-        <div style={S.hint}>RM contraindicada. {ordenAlternativa || "Se sugiere alternativa."}</div>
+        <div style={S.hint}>
+          RM contraindicada. {ordenAlternativa || "Se sugiere alternativa."}
+        </div>
       )}
 
       {!pagoRealizado && previewIA && (
         <>
           {requiereRM && !resonanciaChecklist && !bloqueaRM && (
-            <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={lanzarChecklistRM}>
+            <button
+              style={{ ...S.btnPrimary, marginTop: 12 }}
+              onClick={lanzarChecklistRM}
+            >
               Continuar
             </button>
           )}
 
           {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
-            <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={handlePagarIA}>
+            <button
+              style={{ ...S.btnPrimary, marginTop: 12 }}
+              onClick={handlePagarIA}
+            >
               Pagar ahora (Informe IA)
             </button>
           )}
@@ -909,7 +863,11 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         <div style={S.modalBackdrop} role="dialog" aria-modal="true">
           <div style={S.modalCard}>
             <h4 style={{ margin: 8, color: T.primary }}>Checklist de Resonancia</h4>
-            <FormularioResonancia initial={resonanciaChecklist || {}} onSave={handleSaveRM} onCancel={() => setShowRM(false)} />
+            <FormularioResonancia
+              initial={resonanciaChecklist || {}}
+              onSave={handleSaveRM}
+              onCancel={() => setShowRM(false)}
+            />
           </div>
         </div>
       )}
