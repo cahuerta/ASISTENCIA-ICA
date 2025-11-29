@@ -8,6 +8,24 @@ import FormularioResonancia from "../components/FormularioResonancia.jsx";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
+/* =============== Helpers ID PAGO (igual filosofía que Trauma) =============== */
+function ensureIAIdPago() {
+  try {
+    let id = sessionStorage.getItem("idPago");
+    // Reutiliza idPago existente si viene de pago_ o ia_
+    if (id && (/^pago_/.test(id) || /^ia_/.test(id))) {
+      return id;
+    }
+    // Si no hay o no calza, crea uno nuevo ia_
+    id = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    sessionStorage.setItem("idPago", id);
+    return id;
+  } catch {
+    // fallback extremo si sessionStorage falla
+    return `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+  }
+}
+
 /** JSON centralizado (similar a traumaJSON) */
 function buildIAJSON(datos = {}, informeIA = "", opciones = {}, marcadoresStruct = null) {
   const edadNum = Number(datos.edad);
@@ -60,20 +78,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const [descargandoOrden, setDescargandoOrden] = useState(false);
   const [mensajeDescargaOrden, setMensajeDescargaOrden] = useState("");
   const pollerRef = useRef(null);
-
-  // ==== IDPAGO UNIFICADO PARA IA ====
-  const [idPago, setIdPago] = useState(() => {
-    try {
-      let saved = sessionStorage.getItem("idPago");
-      if (saved && saved.startsWith("ia_")) return saved;
-
-      const nuevo = "ia_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-      sessionStorage.setItem("idPago", nuevo);
-      return nuevo;
-    } catch {
-      return "ia_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-    }
-  });
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -182,6 +186,11 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   // Cargar data previa
   // ======================================================
   useEffect(() => {
+    // Asegurar que exista un idPago coherente (mismo patrón que Trauma)
+    try {
+      ensureIAIdPago();
+    } catch {}
+
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
@@ -189,9 +198,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       if (savedIA) setDatos((prev) => ({ ...prev, consulta: savedIA }));
       const savedPrev = sessionStorage.getItem("previewIA");
       if (savedPrev) setPreviewIA(savedPrev);
-
-      const savedId = sessionStorage.getItem("idPago");
-      if (savedId && savedId.startsWith("ia_")) setIdPago(savedId);
     } catch {}
 
     const avisoOk = (() => {
@@ -212,6 +218,11 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     const idFromURL = params.get("idPago") || sessionStorage.getItem("idPago");
 
     if (pago === "ok" && idFromURL) {
+      // Reforzar que sessionStorage use el mismo idPago que viene del pago
+      try {
+        sessionStorage.setItem("idPago", idFromURL);
+      } catch {}
+
       setPagoRealizado(true);
 
       fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
@@ -410,6 +421,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       return;
     }
 
+    // Asegurar idPago coherente (igual que Trauma)
+    const idPago = ensureIAIdPago();
+
     sessionStorage.setItem("idPago", idPago);
     sessionStorage.setItem("modulo", "ia");
     sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
@@ -483,7 +497,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             idPago,
-            iaJSON, // ← NUEVO Bloque grande
+            iaJSON, // ← Bloque grande
             datosPaciente: iaJSON.paciente,
             examen: iaJSON.informeIA || iaJSON.consulta || "",
             marcadores,
@@ -520,6 +534,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       alert("Completa nombre, RUT y edad (>0).");
       return;
     }
+
+    // Asegurar idPago coherente para el flujo de pago (PantallaTres)
+    const idPago = ensureIAIdPago();
 
     try {
       sessionStorage.setItem("idPago", idPago);
@@ -562,7 +579,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             idPago,
-            iaJSON, // ← NUEVO
+            iaJSON, // ← JSON central
             datosPaciente: iaJSON.paciente,
             examen: iaJSON.informeIA || iaJSON.consulta || "",
             marcadores,
@@ -594,7 +611,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   // DESCARGAS (misma lógica, pero reinyectando iaJSON guardado)
   // ======================================================
   const handleDescargarIA = async () => {
-    const id = sessionStorage.getItem("idPago") || idPago;
+    const id = sessionStorage.getItem("idPago") || ensureIAIdPago();
     if (!id) {
       alert("ID de pago no encontrado.");
       return;
@@ -758,7 +775,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   };
 
   const handleDescargarOrdenIA = async () => {
-    const id = sessionStorage.getItem("idPago") || idPago;
+    const id = sessionStorage.getItem("idPago") || ensureIAIdPago();
     if (!id) {
       alert("ID de pago no encontrado.");
       return;
