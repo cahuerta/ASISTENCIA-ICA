@@ -193,7 +193,8 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
-      if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      // 🔁 CAMBIO: ahora los datos de sessionStorage NO pisan initialDatos (Guest, etc.)
+      if (saved) setDatos((prev) => ({ ...JSON.parse(saved), ...prev }));
       const savedIA = sessionStorage.getItem("consultaIA");
       if (savedIA) setDatos((prev) => ({ ...prev, consulta: savedIA }));
       const savedPrev = sessionStorage.getItem("previewIA");
