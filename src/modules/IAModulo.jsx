@@ -1177,7 +1177,7 @@ function makeStyles(T) {
       padding: "10px",
       borderRadius: 8,
       border: `1px solid ${T.border ?? "#ddd"}`,
-      background: T.bg ?? "#fff`,
+      background: T.bg ?? "#fff",
       color: T.text ?? "#1b1b1b",
       fontSize: 16,
       marginTop: 6,
