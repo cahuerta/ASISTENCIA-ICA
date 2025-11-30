@@ -10,8 +10,12 @@ import PreopModulo from "../modules/PreopModulo.jsx";
 import GeneralesModulo from "../modules/GeneralesModulo.jsx";
 import IAModulo from "../modules/IAModulo.jsx";
 
-/* Logo (header pequeño) */
+/* Logos */
 import logoICA from "../assets/ica.jpg";
+import logoTrauma from "../assets/logo traumamodulo.png";
+import logoPreop from "../assets/logo examenes pre.png";
+import logoGenerales from "../assets/logo generales.png";
+import logoIA from "../assets/logo modulo ia.png";
 
 /**
  * PantallaDos
@@ -25,7 +29,7 @@ export default function PantallaDos({
   pagoOk = false,
   idPago = "",
   moduloActual = null, // opcional, puede venir desde App
-  onIrPantallaTres,    // ⬅️ NUEVO: viene desde App.jsx
+  onIrPantallaTres, // ⬅️ NUEVO: viene desde App.jsx
 }) {
   const T = getTheme();
 
@@ -167,8 +171,15 @@ export default function PantallaDos({
   if (modulo === "generales") return <GeneralesModulo {...mountProps} />;
   if (modulo === "ia") return <IAModulo {...mountProps} />;
 
-  // UI de selección (sin módulo activo) — NUEVO LAYOUT:
-  // Logo pequeño arriba → info paciente → botones → nota al final
+  // Config de botones con logos (solo visual)
+  const moduleButtons = [
+    { key: "trauma", label: "ASISTENTE TRAUMATOLÓGICO", logo: logoTrauma },
+    { key: "preop", label: "EXÁMENES PREQUIRÚRGICOS", logo: logoPreop },
+    { key: "generales", label: "REVISIÓN GENERAL", logo: logoGenerales },
+    { key: "ia", label: "ANÁLISIS MEDIANTE IA", logo: logoIA },
+  ];
+
+  // UI de selección (sin módulo activo)
   return (
     <div className="app" style={cssVars}>
       <div style={styles(T).wrap}>
@@ -193,14 +204,9 @@ export default function PantallaDos({
           </div>
         </div>
 
-        {/* Botones de módulos */}
+        {/* Botones de módulos con logo + texto */}
         <div style={styles(T).buttonsGrid}>
-          {[
-            { key: "trauma", label: "ASISTENTE TRAUMATOLÓGICO" },
-            { key: "preop", label: "EXÁMENES PREQUIRÚRGICOS" },
-            { key: "generales", label: "REVISIÓN GENERAL" },
-            { key: "ia", label: "ANÁLISIS MEDIANTE IA" },
-          ].map((b) => (
+          {moduleButtons.map((b) => (
             <button
               key={b.key}
               type="button"
@@ -214,7 +220,14 @@ export default function PantallaDos({
               }}
               aria-label={`Abrir ${b.label}`}
             >
-              {b.label}
+              <div style={styles(T).btnInner}>
+                {b.logo && (
+                  <div style={styles(T).btnLogoWrap}>
+                    <img src={b.logo} alt={b.label} style={styles(T).btnLogoImg} />
+                  </div>
+                )}
+                <div style={styles(T).btnLabel}>{b.label}</div>
+              </div>
             </button>
           ))}
         </div>
@@ -238,12 +251,23 @@ export default function PantallaDos({
               if (!ok) return;
 
               // Eliminar SOLO la info del paciente del JSON almacenado
-              try { sessionStorage.removeItem("datosPacienteJSON"); } catch {}
-              try { localStorage.removeItem("datosPacienteJSON"); } catch {}
+              try {
+                sessionStorage.removeItem("datosPacienteJSON");
+              } catch {}
+              try {
+                localStorage.removeItem("datosPacienteJSON");
+              } catch {}
 
               // Cerrar/Salir (best-effort)
-              try { window.open("", "_self"); window.close(); } catch {}
-              try { window.location.replace("about:blank"); } catch { window.location.href = "about:blank"; }
+              try {
+                window.open("", "_self");
+                window.close();
+              } catch {}
+              try {
+                window.location.replace("about:blank");
+              } catch {
+                window.location.href = "about:blank";
+              }
             }}
           >
             Salir
@@ -316,6 +340,42 @@ function styles(T) {
       color: T.primary,
       borderColor: T.primary,
       boxShadow: `0 0 0 2px ${T.accentAlpha}, ${T.shadowSm}`,
+      display: "flex",
+      alignItems: "stretch",
+      justifyContent: "center",
+    },
+    btnInner: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      width: "100%",
+    },
+    btnLogoWrap: {
+      width: 64,
+      height: 64,
+      borderRadius: "50%",
+      overflow: "hidden",
+      background: T.surface,
+      border: `1px solid ${T.border}`,
+      boxShadow: T.shadowSm,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 4,
+    },
+    btnLogoImg: {
+      maxWidth: "90%",
+      maxHeight: "90%",
+      objectFit: "contain",
+      display: "block",
+    },
+    btnLabel: {
+      textAlign: "center",
+      fontSize: "clamp(13px,1.9vw,15px)",
+      fontWeight: 800,
+      color: T.primaryDark,
     },
 
     /* Nota/leyenda al final */
