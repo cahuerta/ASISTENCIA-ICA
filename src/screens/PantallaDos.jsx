@@ -12,10 +12,10 @@ import IAModulo from "../modules/IAModulo.jsx";
 
 /* Logos */
 import logoICA from "../assets/ica.jpg";
-import logoTrauma from "../assets/logo traumamodulo.png";
-import logoPreop from "../assets/logo examenes pre.png";
-import logoGenerales from "../assets/logo generales.png";
-import logoIA from "../assets/logo modulo ia.png";
+import logoTrauma from "../assets/logo_traumamodulo.png";
+import logoPreop from "../assets/logo_examenes_pre.png";
+import logoGenerales from "../assets/logo_generales.png";
+import logoIA from "../assets/logo_modulo_ia.png";
 
 /**
  * PantallaDos
