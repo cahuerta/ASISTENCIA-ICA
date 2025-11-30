@@ -452,10 +452,19 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       const j = await res.json();
       if (!j.ok) throw new Error(j.error || "No se pudo generar el preview");
 
+      // === AQUÍ sólo cambiamos claves de exámenes ===
       const resp = j.respuesta || "";
+      const listaExamenes =
+        Array.isArray(j.examenes) && j.examenes.length
+          ? j.examenes
+          : Array.isArray(j.examenesIA_rm) && j.examenesIA_rm.length
+          ? j.examenesIA_rm
+          : [];
+
       setPreviewIA(resp);
       sessionStorage.setItem("previewIA", resp);
 
+      // también guardamos los exámenes en sessionStorage dentro del iaJSON
       window.scrollTo({ top: 0, behavior: "smooth" });
 
       const pideRM = await detectarRM(resp);
@@ -488,6 +497,11 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           marcadoresStruct
         );
 
+        // 🔑 CLAVE REAL QUE USA EL BACKEND: "examenes"
+        if (listaExamenes.length) {
+          iaJSON.examenes = listaExamenes;
+        }
+
         try {
           sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
         } catch {}
@@ -498,9 +512,10 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             idPago,
-            iaJSON, // ← Bloque grande
+            iaJSON, // ← Bloque grande con examenes
             datosPaciente: iaJSON.paciente,
             examen: iaJSON.informeIA || iaJSON.consulta || "",
+            examenes: listaExamenes, // ← envío explícito en clave correcta
             marcadores,
             rodillaMarcadores,
             manoMarcadores,
@@ -558,6 +573,17 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
         const textoInforme = previewIA || datos.consulta || "";
 
+        // Recuperar exámenes ya guardados en iaJSON (si existen)
+        let examenesPrevios = [];
+        try {
+          const prevIA = JSON.parse(sessionStorage.getItem("iaJSON") || "null");
+          if (prevIA && Array.isArray(prevIA.examenes)) {
+            examenesPrevios = prevIA.examenes;
+          }
+        } catch {
+          examenesPrevios = [];
+        }
+
         // JSON central iaJSON
         const iaJSON = buildIAJSON(
           { ...base, edad: edadNum },
@@ -569,6 +595,11 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           },
           marcadoresStruct
         );
+
+        // 🔑 mantiene la misma clave que lee el backend
+        if (examenesPrevios.length) {
+          iaJSON.examenes = examenesPrevios;
+        }
 
         try {
           sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
@@ -583,6 +614,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             iaJSON, // ← JSON central
             datosPaciente: iaJSON.paciente,
             examen: iaJSON.informeIA || iaJSON.consulta || "",
+            examenes: iaJSON.examenes || examenesPrevios || [],
             marcadores,
             rodillaMarcadores,
             manoMarcadores,
@@ -738,6 +770,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
                   iaJSON,
                   datosPaciente: iaJSON.paciente,
                   examen: iaJSON.informeIA || iaJSON.consulta || "",
+                  examenes: iaJSON.examenes || [],
                   marcadores,
                   rodillaMarcadores,
                   manoMarcadores,
@@ -901,6 +934,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
                   iaJSON,
                   datosPaciente: iaJSON.paciente,
                   examen: iaJSON.informeIA || iaJSON.consulta || "",
+                  examenes: iaJSON.examenes || [],
                   marcadores,
                   rodillaMarcadores,
                   manoMarcadores,
