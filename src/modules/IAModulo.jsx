@@ -452,19 +452,18 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       const j = await res.json();
       if (!j.ok) throw new Error(j.error || "No se pudo generar el preview");
 
-      // === AQUÍ sólo cambiamos claves de exámenes ===
+      // === Usar claves reales del backend para exámenes ===
       const resp = j.respuesta || "";
       const listaExamenes =
         Array.isArray(j.examenes) && j.examenes.length
           ? j.examenes
-          : Array.isArray(j.examenesIA_rm) && j.examenesIA_rm.length
-          ? j.examenesIA_rm
+          : Array.isArray(j.examenesIA) && j.examenesIA.length
+          ? j.examenesIA
           : [];
 
       setPreviewIA(resp);
       sessionStorage.setItem("previewIA", resp);
 
-      // también guardamos los exámenes en sessionStorage dentro del iaJSON
       window.scrollTo({ top: 0, behavior: "smooth" });
 
       const pideRM = await detectarRM(resp);
@@ -1178,7 +1177,7 @@ function makeStyles(T) {
       padding: "10px",
       borderRadius: 8,
       border: `1px solid ${T.border ?? "#ddd"}`,
-      background: T.bg ?? "#fff",
+      background: T.bg ?? "#fff`,
       color: T.text ?? "#1b1b1b",
       fontSize: 16,
       marginTop: 6,
