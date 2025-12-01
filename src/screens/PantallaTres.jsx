@@ -7,7 +7,7 @@ import { irAPagoFlow } from "../PagoFlow.jsx";
 import logoICA from "../assets/ica.jpg";
 
 /* Layout común de módulos */
-import LayoutModulo from "../modules/LayoutModulo.jsx";
+import ModuloLayout from "../components/ModuloLayout.jsx";
 
 /* Logos por módulo (mismos que PantallaDos) */
 import logoTrauma from "../assets/logo_traumamodulo.png";
