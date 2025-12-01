@@ -759,7 +759,16 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   // UI
   // ======================================================
   return (
-    <div style={S.card}>
+  <ModuloLayout
+    logo={logoIA}
+    variant="ia"
+    title="Asistente IA"
+    subtitle={
+      previewIA
+        ? "Informe IA generado — revisa antes de continuar."
+        : "Describe los síntomas para generar el informe."
+    }
+  >
       <AvisoLegal
         visible={mostrarAviso}
         persist={false}
@@ -922,9 +931,10 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           </div>
         </div>
       )}
-    </div>
+        </ModuloLayout>
   );
 }
+
 
 function makeStyles(T) {
   return {
