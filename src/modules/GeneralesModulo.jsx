@@ -8,6 +8,10 @@ import { getTheme } from "../theme.js";
 import AvisoLegal from "../components/AvisoLegal.jsx";
 import FormularioComorbilidades from "../components/FormularioComorbilidades.jsx";
 
+/* NUEVO: Layout común de módulos + logo Generales */
+import ModuloLayout from "../components/ModuloLayout.jsx";
+import logoGenerales from "../assets/logo_generales.png";
+
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
 /* Etiquetas amigables para el preview de comorbilidades */
@@ -459,151 +463,160 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
+  /* ===== SUBTÍTULO dinámico para el layout ===== */
+  const subtitleLayout = stepStarted
+    ? "Revise la propuesta de exámenes, agregue un examen opcional si lo desea y continúe al pago."
+    : "Indique enfermedades previas y comorbilidades para generar una propuesta de exámenes generales.";
+
   /* ============================== RENDER ============================== */
   return (
-    <div className="card" style={styles.card}>
-      {/* AVISO LEGAL (bloquea hasta aceptar) */}
-      <AvisoLegal
-        visible={mostrarAviso}
-        persist={false}
-        onAccept={continuarTrasAviso}
-        onReject={rechazarAviso}
-      />
+    <ModuloLayout
+      logo={logoGenerales}
+      title="Asistente Generales"
+      subtitle={subtitleLayout}
+      variant="generales"
+    >
+      <div className="card" style={styles.card}>
+        {/* AVISO LEGAL (bloquea hasta aceptar) */}
+        <AvisoLegal
+          visible={mostrarAviso}
+          persist={false}
+          onAccept={continuarTrasAviso}
+          onReject={rechazarAviso}
+        />
 
-      {/* FORMULARIO COMORBILIDADES (antes del preview) */}
-      {mostrarComorbilidades && (
-        <div style={styles.modalOverlay}>
-          <div className="card" style={{ width: "min(900px, 96vw)" }}>
-            <FormularioComorbilidades
-              initial={comorbilidades || {}}
-              onSave={handleSaveComorbilidades}
-              onCancel={() => setMostrarComorbilidades(false)}
-            />
-          </div>
-        </div>
-      )}
-
-      <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
-        {stepStarted
-          ? "Revise la propuesta de exámenes y agregue un examen opcional si lo requiere. Luego continúe al pago."
-          : "Seleccione los datos e indique enfermedades previas."}
-      </h3>
-
-      <div style={{ marginBottom: 10 }}>
-        <div>
-          <strong>Paciente:</strong> {datos?.nombre || "—"}
-        </div>
-        <div>
-          <strong>RUT:</strong> {datos?.rut || "—"}
-        </div>
-        <div>
-          <strong>Edad:</strong> {datos?.edad || "—"}
-        </div>
-        <div>
-          <strong>Sexo:</strong> {datos?.genero || "—"}
-        </div>
-      </div>
-
-      {/* Primer preview: SOLO resumen (si NO está abierto el formulario de comorbilidades) */}
-      {!stepStarted && !mostrarComorbilidades && (
-        <>
-          <div style={{ ...styles.mono, marginTop: 6 }}>
-            {resumenInicialGenerales(datos, comorbilidades)}
-          </div>
-
-          <button
-            className="btn"
-            style={styles.btnPrimary}
-            onClick={handleContinuar}
-            disabled={loadingIA}
-            aria-busy={loadingIA}
-          >
-            {loadingIA ? "Generando con IA…" : "Continuar"}
-          </button>
-        </>
-      )}
-
-      {/* Segundo preview: IA + texto libre + pago */}
-      {stepStarted && (
-        <>
-          {prettyComorb(comorbilidades).length > 0 && (
-            <div style={styles.block}>
-              <strong>Comorbilidades:</strong>
-              <div style={{ marginTop: 6 }}>
-                {prettyComorb(comorbilidades).map((t, i) => (
-                  <span key={i} style={styles.tag}>
-                    {t}
-                  </span>
-                ))}
-              </div>
+        {/* FORMULARIO COMORBILIDADES (antes del preview) */}
+        {mostrarComorbilidades && (
+          <div style={styles.modalOverlay}>
+            <div className="card" style={{ width: "min(900px, 96vw)" }}>
+              <FormularioComorbilidades
+                initial={comorbilidades || {}}
+                onSave={handleSaveComorbilidades}
+                onCancel={() => setMostrarComorbilidades(false)}
+              />
             </div>
-          )}
+          </div>
+        )}
 
-          <div style={styles.block}>
-            <strong>Exámenes solicitados (IA):</strong>
-            {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
-              <ul style={{ marginTop: 6, paddingLeft: 18 }}>
-                {examenesIA.map((e, idx) => (
-                  <li key={`${e}-${idx}`}>{e}</li>
-                ))}
-              </ul>
-            ) : (
-              <div style={styles.hint}>
-                Aún no hay lista generada por IA. Desde el formulario principal, pulsa
-                <strong> “Generar Informe”</strong> para ejecutar la IA y ver el
-                resultado aquí.
+        <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
+          {stepStarted
+            ? "Revise la propuesta de exámenes y agregue un examen opcional si lo requiere. Luego continúe al pago."
+            : "Seleccione los datos e indique enfermedades previas."}
+        </h3>
+
+        <div style={{ marginBottom: 10 }}>
+          <div>
+            <strong>Paciente:</strong> {datos?.nombre || "—"}
+          </div>
+          <div>
+            <strong>RUT:</strong> {datos?.rut || "—"}
+          </div>
+          <div>
+            <strong>Edad:</strong> {datos?.edad || "—"}
+          </div>
+          <div>
+            <strong>Sexo:</strong> {datos?.genero || "—"}
+          </div>
+        </div>
+
+        {/* Primer preview: SOLO resumen (si NO está abierto el formulario de comorbilidades) */}
+        {!stepStarted && !mostrarComorbilidades && (
+          <>
+            <div style={{ ...styles.mono, marginTop: 6 }}>
+              {resumenInicialGenerales(datos, comorbilidades)}
+            </div>
+
+            <button
+              className="btn"
+              style={styles.btnPrimary}
+              onClick={handleContinuar}
+              disabled={loadingIA}
+              aria-busy={loadingIA}
+            >
+              {loadingIA ? "Generando con IA…" : "Continuar"}
+            </button>
+          </>
+        )}
+
+        {/* Segundo preview: IA + texto libre + pago */}
+        {stepStarted && (
+          <>
+            {prettyComorb(comorbilidades).length > 0 && (
+              <div style={styles.block}>
+                <strong>Comorbilidades:</strong>
+                <div style={{ marginTop: 6 }}>
+                  {prettyComorb(comorbilidades).map((t, i) => (
+                    <span key={i} style={styles.tag}>
+                      {t}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
-          </div>
 
-          <div style={styles.block}>
-            <label>
-              <strong>Agregar examen opcional:</strong>
-            </label>
-            <input
-              type="text"
-              value={examenLibre}
-              onChange={(e) => setExamenLibre(e.target.value)}
-              placeholder="Ej.: Densitometría ósea"
-              style={styles.input}
-            />
-            <div style={styles.hint}>
-              Este campo es opcional y se incluirá junto a la lista.
-            </div>
-          </div>
-
-          {informeIA && (
             <div style={styles.block}>
-              <strong>Informe IA (resumen):</strong>
-              <div style={{ marginTop: 6, ...styles.mono }}>{informeIA}</div>
+              <strong>Exámenes solicitados (IA):</strong>
+              {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
+                <ul style={{ marginTop: 6, paddingLeft: 18 }}>
+                  {examenesIA.map((e, idx) => (
+                    <li key={`${e}-${idx}`}>{e}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div style={styles.hint}>
+                  Aún no hay lista generada por IA. Desde el formulario principal, pulsa
+                  <strong> “Generar Informe”</strong> para ejecutar la IA y ver el
+                  resultado aquí.
+                </div>
+              )}
             </div>
-          )}
 
-          {!pagoRealizado ? (
-            <button
-              className="btn"
-              style={{ ...styles.btnPrimary, marginTop: 12 }}
-              onClick={handlePagarGenerales}
-            >
-              Pagar ahora (Generales)
-            </button>
-          ) : (
-            <button
-              className="btn"
-              style={{ ...styles.btnPrimary, marginTop: 12 }}
-              onClick={handleDescargarGenerales}
-              disabled={descargando}
-              aria-busy={descargando}
-              title={mensajeDescarga || "Verificar y descargar"}
-            >
-              {descargando
-                ? mensajeDescarga || "Verificando…"
-                : "Descargar Documento"}
-            </button>
-          )}
-        </>
-      )}
-    </div>
+            <div style={styles.block}>
+              <label>
+                <strong>Agregar examen opcional:</strong>
+              </label>
+              <input
+                type="text"
+                value={examenLibre}
+                onChange={(e) => setExamenLibre(e.target.value)}
+                placeholder="Ej.: Densitometría ósea"
+                style={styles.input}
+              />
+            </div>
+
+            {informeIA && (
+              <div style={styles.block}>
+                <strong>Informe IA (resumen):</strong>
+                <div style={{ marginTop: 6, ...styles.mono }}>{informeIA}</div>
+              </div>
+            )}
+
+            {!pagoRealizado ? (
+              <button
+                className="btn"
+                style={{ ...styles.btnPrimary, marginTop: 12 }}
+                onClick={handlePagarGenerales}
+              >
+                Pagar ahora (Generales)
+              </button>
+            ) : (
+              <button
+                className="btn"
+                style={{ ...styles.btnPrimary, marginTop: 12 }}
+                onClick={handleDescargarGenerales}
+                disabled={descargando}
+                aria-busy={descargando}
+                title={mensajeDescarga || "Verificar y descargar"}
+              >
+                {descargando
+                  ? mensajeDescarga || "Verificando…"
+                  : "Descargar Documento"}
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </ModuloLayout>
   );
 }
 
