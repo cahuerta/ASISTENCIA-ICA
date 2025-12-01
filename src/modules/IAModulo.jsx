@@ -5,6 +5,8 @@ import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 import AvisoLegal from "../components/AvisoLegal.jsx";
 import FormularioResonancia from "../components/FormularioResonancia.jsx";
+import ModuloLayout from "../components/ModuloLayout.jsx";
+import logoIA from "../assets/logo_modulo_ia.png";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
