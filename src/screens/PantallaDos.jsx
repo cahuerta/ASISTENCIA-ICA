@@ -186,7 +186,11 @@ export default function PantallaDos({
         {/* Header con logo pequeño */}
         <div style={styles(T).headerRow}>
           <div style={styles(T).logoBadge}>
-            <img src={logoICA} alt="Instituto de Cirugía Articular" style={styles(T).logoImg} />
+            <img
+              src={logoICA}
+              alt="Instituto de Cirugía Articular"
+              style={styles(T).logoImg}
+            />
           </div>
         </div>
 
@@ -239,7 +243,7 @@ export default function PantallaDos({
           </div>
         </div>
 
-        {/* === Botón SALIR (mensaje corto + borrar datos del paciente + cerrar ventana) === */}
+        {/* === Botón SALIR === */}
         <div className="toolbar" style={{ flexDirection: "column", gap: 12, marginTop: 12 }}>
           <button
             type="button"
@@ -352,9 +356,11 @@ function styles(T) {
       gap: 8,
       width: "100%",
     },
+
+    /* ⬇️ LOGOS MÁS GRANDES */
     btnLogoWrap: {
-      width: 64,
-      height: 64,
+      width: 88,          // antes 64
+      height: 88,         // antes 64
       borderRadius: "50%",
       overflow: "hidden",
       background: T.surface,
@@ -366,15 +372,17 @@ function styles(T) {
       marginBottom: 4,
     },
     btnLogoImg: {
-      maxWidth: "90%",
-      maxHeight: "90%",
+      maxWidth: "92%",   // un pelín más grande
+      maxHeight: "92%",
       objectFit: "contain",
       display: "block",
     },
+
+    /* ⬇️ TEXTO DEL NOMBRE MÁS PEQUEÑO */
     btnLabel: {
       textAlign: "center",
-      fontSize: "clamp(13px,1.9vw,15px)",
-      fontWeight: 800,
+      fontSize: "clamp(11px,1.5vw,13px)", // antes: clamp(13px,1.9vw,15px)
+      fontWeight: 700,                    // un poco menos pesado
       color: T.primaryDark,
     },
 
