@@ -848,8 +848,8 @@ export default function TraumaModulo({
   if (mostrarAviso) {
     return (
       <ModuloLayout
-        titulo="Asistente Traumatológico"
-        subtitulo={subtituloFase}
+        title="Asistente Traumatológico"
+        subtitle={subtituloFase}
         logo={logoTrauma}
         variant="trauma"
       >
