@@ -59,14 +59,15 @@ export default function ModuloLayout({
           boxShadow: T.shadowMd ?? "0 6px 24px rgba(0,0,0,0.15)",
         }}
       >
-        {/* Header */}
+
+        {/* ===================== HEADER ===================== */}
         <div
           style={{
             display: "flex",
-            alignItems: "center",
-            gap: 12,
+            alignItems: "center", // ← título y subtítulo al lado del logo
+            gap: 16,
             marginBottom: 20,
-            flexWrap: "wrap",
+            flexWrap: "nowrap", // ← evita que el título baje
           }}
         >
           {logo && (
@@ -98,7 +99,8 @@ export default function ModuloLayout({
             </div>
           )}
 
-          <div>
+          {/* Texto al lado del logo */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
             <h2
               style={{
                 margin: 0,
@@ -106,6 +108,7 @@ export default function ModuloLayout({
                 fontSize: "clamp(18px, 2vw, 22px)",
                 fontWeight: 700,
                 color: T.primaryDark ?? "#002b55",
+                lineHeight: 1.2,
               }}
             >
               {title}
@@ -114,9 +117,10 @@ export default function ModuloLayout({
             {subtitle && (
               <div
                 style={{
-                  marginTop: 2,
+                  marginTop: 4,
                   fontSize: "clamp(12px, 1vw, 14px)",
                   color: T.textMuted ?? "#666",
+                  lineHeight: 1.2,
                 }}
               >
                 {subtitle}
@@ -124,13 +128,16 @@ export default function ModuloLayout({
             )}
           </div>
         </div>
+        {/* ================== FIN HEADER ===================== */}
 
         {/* Contenido del módulo */}
         <div>{children}</div>
 
         {/* Footer (botones) */}
         {footer && (
-          <div style={{ marginTop: 24, paddingTop: 12 }}>{footer}</div>
+          <div style={{ marginTop: 24, paddingTop: 12 }}>
+            {footer}
+          </div>
         )}
       </div>
     </div>
