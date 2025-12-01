@@ -447,16 +447,29 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
       const resp = j.respuesta || "";
 
-      // 🔑 USAR LAS CLAVES REALES DEL BACKEND PARA EXÁMENES
-      const listaExamenes =
-        Array.isArray(j.examenes) && j.examenes.length
-          ? j.examenes
-          : Array.isArray(j.examenesIA) && j.examenesIA.length
-          ? j.examenesIA
-          : [];
+      // 🔧 NUEVO: capturar exámenes aunque vengan anidados
+      const listaExamenes = (() => {
+        if (Array.isArray(j.examenes) && j.examenes.length) return j.examenes;
+        if (Array.isArray(j.examenesIA) && j.examenesIA.length) return j.examenesIA;
+
+        if (Array.isArray(j.orden?.examenes) && j.orden.examenes.length) {
+          return j.orden.examenes;
+        }
+        if (typeof j.orden?.examen === "string" && j.orden.examen.trim()) {
+          return [j.orden.examen.trim()];
+        }
+        if (typeof j.examen === "string" && j.examen.trim()) {
+          return [j.examen.trim()];
+        }
+        return [];
+      })();
 
       setPreviewIA(resp);
       sessionStorage.setItem("previewIA", resp);
+
+      try {
+        console.log("preview-informe IA → respuesta backend", j, "listaExamenes=", listaExamenes);
+      } catch {}
 
       window.scrollTo({ top: 0, behavior: "smooth" });
 
@@ -499,7 +512,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
         } catch {}
 
-        // ✅ PRIMERA llamada importante a guardar-datos-ia (preview listo)
+        // ✅ PRIMERa llamada importante a guardar-datos-ia (preview listo)
         await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
