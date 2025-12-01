@@ -6,6 +6,15 @@ import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { irAPagoFlow } from "../PagoFlow.jsx";
 import logoICA from "../assets/ica.jpg";
 
+/* Layout común de módulos */
+import LayoutModulo from "../modules/LayoutModulo.jsx";
+
+/* Logos por módulo (mismos que PantallaDos) */
+import logoTrauma from "../assets/logo_traumamodulo.png";
+import logoPreop from "../assets/logo_examenes_pre.png";
+import logoGenerales from "../assets/logo_generales.png";
+import logoIA from "../assets/logo_modulo_ia.png";
+
 /* ====== GUEST (misma lógica que en PagoKhipu.jsx) ====== */
 const GUEST_PERFIL = {
   nombre: "Guest",
@@ -25,8 +34,10 @@ function esGuest(datos) {
 /* ===== Backend ESTUDIO CLÍNICO (Google Sheets) ===== */
 const ESTUDIO_BACKEND_BASE =
   (typeof window !== "undefined" && window.__ENV__?.ESTUDIO_BACKEND_BASE) ||
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_ESTUDIO_BACKEND_BASE) ||
-  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_ESTUDIO_BACKEND_BASE) ||
+  (typeof import.meta !== "undefined" &&
+    import.meta.env?.VITE_ESTUDIO_BACKEND_BASE) ||
+  (typeof process !== "undefined" &&
+    process.env?.NEXT_PUBLIC_ESTUDIO_BACKEND_BASE) ||
   "https://trabajo-schot-backend.onrender.com"; // ← URL real del backend de estudio
 
 function joinURL(base, path) {
@@ -35,6 +46,26 @@ function joinURL(base, path) {
   const p = String(path || "").replace(/^\/+/, "");
   return `${b}/${p}`;
 }
+
+/* Meta para mostrar logo y título según módulo */
+const MODULO_META = {
+  trauma: {
+    titulo: "Asistente Traumatológico",
+    logo: logoTrauma,
+  },
+  preop: {
+    titulo: "Exámenes Prequirúrgicos",
+    logo: logoPreop,
+  },
+  generales: {
+    titulo: "Revisión General",
+    logo: logoGenerales,
+  },
+  ia: {
+    titulo: "Análisis mediante IA",
+    logo: logoIA,
+  },
+};
 
 /**
  * Lee desde sessionStorage un pequeño resumen de la orden
@@ -130,6 +161,9 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
   const [loading, setLoading] = useState(null); // "flow" | "khipu" | "estudio" | null
   const [preview, setPreview] = useState(null);
 
+  // Para saber qué módulo nos trajo acá (para el logo del Layout)
+  const [moduloActual, setModuloActual] = useState("trauma");
+
   // Modo estudio clínico
   const [modoEstudioClinico, setModoEstudioClinico] = useState(false);
   const [medicoNombre, setMedicoNombre] = useState("");
@@ -144,6 +178,7 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
     try {
       const p = buildPreviewOrden();
       setPreview(p);
+      if (p?.modulo) setModuloActual(p.modulo);
     } catch {
       setPreview(null);
     }
@@ -204,7 +239,9 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
     }
 
     if (!medicoNombre?.trim() || !medicoEspecialidad?.trim()) {
-      alert("Completa el nombre del médico y la especialidad para el estudio clínico.");
+      alert(
+        "Completa el nombre del médico y la especialidad para el estudio clínico."
+      );
       return;
     }
 
@@ -280,390 +317,351 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
     }
   };
 
+  const meta = MODULO_META[moduloActual] || MODULO_META.trauma;
+
   return (
-    <div
-      className="pantalla pantalla-tres"
-      style={{
-        maxWidth: 480,
-        margin: "0 auto",
-        padding: "16px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 16,
-      }}
+    <LayoutModulo
+      logo={meta.logo}
+      titulo={meta.titulo}
+      subtitulo="Revise la orden generada y elija el método de pago"
     >
-      {/* Encabezado */}
-      <header style={{ textAlign: "center" }}>
-        <h2 style={{ marginBottom: 4 }}>Elegir método de pago</h2>
-        <p style={{ fontSize: 14, color: "var(--muted-foreground, #666)" }}>
-          Seleccione la opción que le resulte más cómoda.
-        </p>
-      </header>
+      {/* Contenido propio de PantallaTres dentro del marco */}
+      <div
+        className="pantalla pantalla-tres"
+        style={{
+          maxWidth: 480,
+          margin: "0 auto",
+          padding: "16px 0",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
+        {/* Encabezado (texto) */}
+        <header style={{ textAlign: "center" }}>
+          <h2 style={{ marginBottom: 4 }}>Elegir método de pago</h2>
+          <p style={{ fontSize: 14, color: "var(--muted-foreground, #666)" }}>
+            Seleccione la opción que le resulte más cómoda.
+          </p>
+        </header>
 
-      {/* Resumen del paciente (opcional) */}
-      {datosPaciente && (
-        <section
-          style={{
-            borderRadius: 12,
-            padding: 12,
-            border: "1px solid var(--border, #e0e0e0)",
-            background: "var(--card, #fafafa)",
-            fontSize: 14,
-          }}
-        >
-          <strong>Paciente:</strong> {datosPaciente.nombre || "-"}
-          <br />
-          <strong>RUT:</strong> {datosPaciente.rut || "-"}
-          <br />
-          {datosPaciente.edad && (
-            <>
-              <strong>Edad:</strong> {datosPaciente.edad} años
-              <br />
-            </>
-          )}
-          {datosPaciente.dolor && (
-            <>
-              <strong>Motivo / Dolor:</strong> {datosPaciente.dolor}
-            </>
-          )}
-        </section>
-      )}
-
-      {/* MINI “PDF” */}
-      {preview && (
-        <section
-          style={{
-            borderRadius: 12,
-            padding: 12,
-            border: "1px solid var(--border, #e0e0e0)",
-            background: "#ffffff",
-            fontSize: 11,
-          }}
-        >
-          <div
+        {/* Resumen del paciente (opcional) */}
+        {datosPaciente && (
+          <section
             style={{
+              borderRadius: 12,
+              padding: 12,
+              border: "1px solid var(--border, #e0e0e0)",
+              background: "var(--card, #fafafa)",
+              fontSize: 14,
+            }}
+          >
+            <strong>Paciente:</strong> {datosPaciente.nombre || "-"}
+            <br />
+            <strong>RUT:</strong> {datosPaciente.rut || "-"}
+            <br />
+            {datosPaciente.edad && (
+              <>
+                <strong>Edad:</strong> {datosPaciente.edad} años
+                <br />
+              </>
+            )}
+            {datosPaciente.dolor && (
+              <>
+                <strong>Motivo / Dolor:</strong> {datosPaciente.dolor}
+              </>
+            )}
+          </section>
+        )}
+
+        {/* MINI “PDF” */}
+        {preview && (
+          <section
+            style={{
+              borderRadius: 12,
+              padding: 12,
+              border: "1px solid var(--border, #e0e0e0)",
+              background: "#ffffff",
               fontSize: 11,
-              fontWeight: 600,
-              marginBottom: 6,
-              color: "var(--muted-foreground, #555)",
             }}
           >
-            Vista previa de la orden
-            {preview.modulo === "generales"
-              ? " (Revisión general)"
-              : preview.modulo === "preop"
-              ? " (Preoperatorio)"
-              : preview.modulo === "ia"
-              ? " (IA)"
-              : " (Trauma)"}
-          </div>
-
-          {/* Hoja tipo PDF, pequeña */}
-          <div
-            style={{
-              position: "relative",
-              borderRadius: 10,
-              border: "1px solid rgba(0,0,0,0.08)",
-              background: "#fdfdfd",
-              padding: 8,
-              boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
-              overflow: "hidden",
-              height: 190, // pequeño
-            }}
-          >
-            {/* Header: logo + texto */}
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
+                fontSize: 11,
+                fontWeight: 600,
                 marginBottom: 6,
+                color: "var(--muted-foreground, #555)",
               }}
             >
+              Vista previa de la orden
+              {preview.modulo === "generales"
+                ? " (Revisión general)"
+                : preview.modulo === "preop"
+                ? " (Preoperatorio)"
+                : preview.modulo === "ia"
+                ? " (IA)"
+                : " (Trauma)"}
+            </div>
+
+            {/* Hoja tipo PDF, pequeña */}
+            <div
+              style={{
+                position: "relative",
+                borderRadius: 10,
+                border: "1px solid rgba(0,0,0,0.08)",
+                background: "#fdfdfd",
+                padding: 8,
+                boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+                overflow: "hidden",
+                height: 190, // pequeño
+              }}
+            >
+              {/* Header: logo + texto */}
               <div
                 style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: 6,
-                  overflow: "hidden",
-                  marginRight: 6,
-                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  marginBottom: 6,
                 }}
               >
-                <img
-                  src={logoICA}
-                  alt="ICA"
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                />
-              </div>
-              <div style={{ lineHeight: 1.1 }}>
-                <div style={{ fontSize: 9, fontWeight: 700 }}>
-                  INSTITUTO DE CIRUGÍA ARTICULAR
+                <div
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 6,
+                    overflow: "hidden",
+                    marginRight: 6,
+                    flexShrink: 0,
+                  }}
+                >
+                  <img
+                    src={logoICA}
+                    alt="ICA"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                    }}
+                  />
                 </div>
-                <div style={{ fontSize: 8, color: "#666" }}>
-                  {preview.titulo || "Orden médica"}
+                <div style={{ lineHeight: 1.1 }}>
+                  <div style={{ fontSize: 9, fontWeight: 700 }}>
+                    INSTITUTO DE CIRUGÍA ARTICULAR
+                  </div>
+                  <div style={{ fontSize: 8, color: "#666" }}>
+                    {preview.titulo || "Orden médica"}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Datos paciente, letra pequeña */}
-            <div style={{ fontSize: 8, marginBottom: 6, color: "#333" }}>
-              <div>
-                <strong>Paciente:</strong>{" "}
-                {datosPaciente?.nombre || "________________"}
+              {/* Datos paciente, letra pequeña */}
+              <div style={{ fontSize: 8, marginBottom: 6, color: "#333" }}>
+                <div>
+                  <strong>Paciente:</strong>{" "}
+                  {datosPaciente?.nombre || "________________"}
+                </div>
+                <div>
+                  <strong>RUT:</strong>{" "}
+                  {datosPaciente?.rut || "________________"}
+                </div>
+                <div>
+                  <strong>Edad:</strong>{" "}
+                  {datosPaciente?.edad
+                    ? `${datosPaciente.edad} años`
+                    : "____"}
+                </div>
               </div>
-              <div>
-                <strong>RUT:</strong>{" "}
-                {datosPaciente?.rut || "________________"}
-              </div>
-              <div>
-                <strong>Edad:</strong>{" "}
-                {datosPaciente?.edad ? `${datosPaciente.edad} años` : "____"}
-              </div>
-            </div>
 
-            {/* Lista de exámenes */}
-            <div style={{ fontSize: 8 }}>
-              <strong>Exámenes solicitados:</strong>
-              <ul
+              {/* Lista de exámenes */}
+              <div style={{ fontSize: 8 }}>
+                <strong>Exámenes solicitados:</strong>
+                <ul
+                  style={{
+                    marginTop: 2,
+                    paddingLeft: 12,
+                    maxHeight: 90,
+                    overflow: "hidden",
+                  }}
+                >
+                  {preview.lineas && preview.lineas.length > 0 ? (
+                    preview.lineas.slice(0, 6).map((line, idx) => (
+                      <li key={`${idx}-${line.slice(0, 12)}`}>{line}</li>
+                    ))
+                  ) : preview.extra ? (
+                    <li>{preview.extra}</li>
+                  ) : (
+                    <li style={{ fontStyle: "italic", color: "#999" }}>
+                      Sin exámenes registrados aún.
+                    </li>
+                  )}
+                </ul>
+              </div>
+
+              {/* Watermark PREVIEW */}
+              <div
                 style={{
-                  marginTop: 2,
-                  paddingLeft: 12,
-                  maxHeight: 90,
-                  overflow: "hidden",
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  pointerEvents: "none",
+                  opacity: 0.18,
+                  transform: "rotate(-20deg)",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: "#999",
                 }}
               >
-                {preview.lineas && preview.lineas.length > 0 ? (
-                  preview.lineas.slice(0, 6).map((line, idx) => (
-                    <li key={`${idx}-${line.slice(0, 12)}`}>{line}</li>
-                  ))
-                ) : preview.extra ? (
-                  <li>{preview.extra}</li>
-                ) : (
-                  <li style={{ fontStyle: "italic", color: "#999" }}>
-                    Sin exámenes registrados aún.
-                  </li>
-                )}
-              </ul>
-            </div>
+                PREVIEW SIN VALOR
+              </div>
 
-            {/* Watermark PREVIEW */}
+              {/* Etiqueta esquina */}
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 4,
+                  right: 6,
+                  fontSize: 9,
+                  color: "rgba(0,0,0,0.6)",
+                  background: "rgba(255,255,255,0.9)",
+                  padding: "2px 6px",
+                  borderRadius: 6,
+                  border: "1px solid rgba(0,0,0,0.05)",
+                }}
+              >
+                Vista referencial del PDF
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Bloque extra SOLO para modo estudio clínico */}
+        {modoEstudioClinico && (
+          <section
+            style={{
+              borderRadius: 12,
+              padding: 12,
+              border: "1px solid var(--border, #e0e0e0)",
+              background: "#f7fbff",
+              fontSize: 13,
+            }}
+          >
             <div
               style={{
-                position: "absolute",
-                inset: 0,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                pointerEvents: "none",
-                opacity: 0.18,
-                transform: "rotate(-20deg)",
-                fontSize: 18,
-                fontWeight: 700,
-                color: "#999",
+                fontWeight: 600,
+                marginBottom: 8,
+                color: "var(--primary, #0057b7)",
               }}
             >
-              PREVIEW SIN VALOR
+              Datos del médico (Estudio clínico)
             </div>
 
-            {/* Etiqueta esquina */}
-            <div
+            <label style={{ display: "block", marginBottom: 8 }}>
+              <span style={{ display: "block", marginBottom: 4 }}>
+                Nombre del médico
+              </span>
+              <input
+                type="text"
+                value={medicoNombre}
+                onChange={(e) => setMedicoNombre(e.target.value)}
+                placeholder="Ej: Dr. Cristóbal Huerta"
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: 8,
+                  border: "1px solid #ddd",
+                  fontSize: 13,
+                }}
+              />
+            </label>
+
+            <label style={{ display: "block", marginBottom: 8 }}>
+              <span style={{ display: "block", marginBottom: 4 }}>
+                Especialidad
+              </span>
+              <select
+                value={medicoEspecialidad}
+                onChange={(e) => setMedicoEspecialidad(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: 8,
+                  border: "1px solid #ddd",
+                  fontSize: 13,
+                }}
+              >
+                <option value="">Seleccione...</option>
+                <option value="Traumatólogo">Traumatólogo</option>
+                <option value="Medicina general">Medicina general</option>
+                <option value="Otra">Otra</option>
+              </select>
+            </label>
+
+            <label style={{ display: "block", marginBottom: 4 }}>
+              <span style={{ display: "block", marginBottom: 4 }}>
+                Examen solicitado por el médico
+              </span>
+              <textarea
+                rows={3}
+                value={examenMedico}
+                onChange={(e) => setExamenMedico(e.target.value)}
+                placeholder="Ej: RM de rodilla derecha con contraste..."
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: 8,
+                  border: "1px solid #ddd",
+                  fontSize: 13,
+                  resize: "vertical",
+                }}
+              />
+            </label>
+
+            <p
               style={{
-                position: "absolute",
-                bottom: 4,
-                right: 6,
-                fontSize: 9,
-                color: "rgba(0,0,0,0.6)",
-                background: "rgba(255,255,255,0.9)",
-                padding: "2px 6px",
-                borderRadius: 6,
-                border: "1px solid rgba(0,0,0,0.05)",
+                fontSize: 12,
+                color: "#555",
+                marginTop: 6,
+                fontStyle: "italic",
               }}
             >
-              Vista referencial del PDF
-            </div>
-          </div>
-        </section>
-      )}
+              Se guardará en columnas separadas: lo sugerido por la IA y lo que
+              usted indicó manualmente.
+            </p>
 
-      {/* Bloque extra SOLO para modo estudio clínico */}
-      {modoEstudioClinico && (
-        <section
-          style={{
-            borderRadius: 12,
-            padding: 12,
-            border: "1px solid var(--border, #e0e0e0)",
-            background: "#f7fbff",
-            fontSize: 13,
-          }}
-        >
-          <div
-            style={{
-              fontWeight: 600,
-              marginBottom: 8,
-              color: "var(--primary, #0057b7)",
-            }}
-          >
-            Datos del médico (Estudio clínico)
-          </div>
-
-          <label style={{ display: "block", marginBottom: 8 }}>
-            <span style={{ display: "block", marginBottom: 4 }}>
-              Nombre del médico
-            </span>
-            <input
-              type="text"
-              value={medicoNombre}
-              onChange={(e) => setMedicoNombre(e.target.value)}
-              placeholder="Ej: Dr. Cristóbal Huerta"
-              style={{
-                width: "100%",
-                padding: "8px",
-                borderRadius: 8,
-                border: "1px solid #ddd",
-                fontSize: 13,
-              }}
-            />
-          </label>
-
-          <label style={{ display: "block", marginBottom: 8 }}>
-            <span style={{ display: "block", marginBottom: 4 }}>
-              Especialidad
-            </span>
-            <select
-              value={medicoEspecialidad}
-              onChange={(e) => setMedicoEspecialidad(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "8px",
-                borderRadius: 8,
-                border: "1px solid #ddd",
-                fontSize: 13,
-              }}
-            >
-              <option value="">Seleccione...</option>
-              <option value="Traumatólogo">Traumatólogo</option>
-              <option value="Medicina general">Medicina general</option>
-              <option value="Otra">Otra</option>
-            </select>
-          </label>
-
-          <label style={{ display: "block", marginBottom: 4 }}>
-            <span style={{ display: "block", marginBottom: 4 }}>
-              Examen solicitado por el médico
-            </span>
-            <textarea
-              rows={3}
-              value={examenMedico}
-              onChange={(e) => setExamenMedico(e.target.value)}
-              placeholder="Ej: RM de rodilla derecha con contraste..."
-              style={{
-                width: "100%",
-                padding: "8px",
-                borderRadius: 8,
-                border: "1px solid #ddd",
-                fontSize: 13,
-                resize: "vertical",
-              }}
-            />
-          </label>
-
-          <p
-            style={{
-              fontSize: 12,
-              color: "#555",
-              marginTop: 6,
-              fontStyle: "italic",
-            }}
-          >
-            Se guardará en columnas separadas: lo sugerido por la IA y lo que usted indicó
-            manualmente.
-          </p>
-
-          <button
-            type="button"
-            onClick={handleRegistrarEstudio}
-            disabled={loading !== null}
-            style={{
-              marginTop: 8,
-              width: "100%",
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "none",
-              background:
-                loading === "estudio"
-                  ? "#cfe3ff"
-                  : "var(--primary, #0057b7)",
-              color: "#fff",
-              fontWeight: 600,
-              fontSize: 14,
-              cursor: "pointer",
-            }}
-          >
-            {loading === "estudio"
-              ? "Registrando en estudio clínico..."
-              : "Registrar en estudio clínico (sin pago)"}
-          </button>
-        </section>
-      )}
-
-      {/* Botones de pago / guest — solo si NO es modo estudio clínico */}
-      {!modoEstudioClinico && (
-        <>
-          {isGuest ? (
-            // MODO GUEST: usamos el mismo flujo de Khipu, que internamente respeta modoGuest
             <button
               type="button"
-              onClick={handleKhipu}
+              onClick={handleRegistrarEstudio}
               disabled={loading !== null}
               style={{
+                marginTop: 8,
                 width: "100%",
-                padding: "12px 16px",
-                borderRadius: 12,
-                border: "1px solid var(--border, #e0e0e0)",
-                boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
+                padding: "10px 14px",
+                borderRadius: 10,
+                border: "none",
                 background:
-                  loading === "khipu"
-                    ? "var(--accent-soft, #f0f5ff)"
-                    : "var(--accent, #00a39a)",
-                color: "#ffffff",
+                  loading === "estudio"
+                    ? "#cfe3ff"
+                    : "var(--primary, #0057b7)",
+                color: "#fff",
                 fontWeight: 600,
-                fontSize: 15,
+                fontSize: 14,
                 cursor: "pointer",
               }}
             >
-              {loading === "khipu"
-                ? "Redirigiendo..."
-                : "Continuar (modo invitado)"}
+              {loading === "estudio"
+                ? "Registrando en estudio clínico..."
+                : "Registrar en estudio clínico (sin pago)"}
             </button>
-          ) : (
-            <>
-              {/* Botón Flow */}
-              <button
-                type="button"
-                onClick={handleFlow}
-                disabled={loading !== null}
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
-                  borderRadius: 12,
-                  border: "1px solid var(--border, #e0e0e0)",
-                  boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
-                  background:
-                    loading === "flow"
-                      ? "var(--primary-soft, #e0f0ff)"
-                      : "var(--primary, #0066ff)",
-                  color: "var(--onPrimary, #ffffff)",
-                  fontWeight: 600,
-                  fontSize: 15,
-                  cursor: "pointer",
-                }}
-              >
-                {loading === "flow"
-                  ? "Redirigiendo a Flow..."
-                  : "Pagar con Flow (tarjeta / débito)"}
-              </button>
+          </section>
+        )}
 
-              {/* Botón Khipu */}
+        {/* Botones de pago / guest — solo si NO es modo estudio clínico */}
+        {!modoEstudioClinico && (
+          <>
+            {isGuest ? (
+              // MODO GUEST: usamos el mismo flujo de Khipu, que internamente respeta modoGuest
               <button
                 type="button"
                 onClick={handleKhipu}
@@ -673,7 +671,8 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
                   padding: "12px 16px",
                   borderRadius: 12,
                   border: "1px solid var(--border, #e0e0e0)",
-                  boxShadow: "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
+                  boxShadow:
+                    "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
                   background:
                     loading === "khipu"
                       ? "var(--accent-soft, #f0f5ff)"
@@ -685,35 +684,91 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
                 }}
               >
                 {loading === "khipu"
-                  ? "Redirigiendo a Khipu..."
-                  : "Pagar con Khipu (transferencia)"}
+                  ? "Redirigiendo..."
+                  : "Continuar (modo invitado)"}
               </button>
-            </>
-          )}
-        </>
-      )}
+            ) : (
+              <>
+                {/* Botón Flow */}
+                <button
+                  type="button"
+                  onClick={handleFlow}
+                  disabled={loading !== null}
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    borderRadius: 12,
+                    border: "1px solid var(--border, #e0e0e0)",
+                    boxShadow:
+                      "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
+                    background:
+                      loading === "flow"
+                        ? "var(--primary-soft, #e0f0ff)"
+                        : "var(--primary, #0066ff)",
+                    color: "var(--onPrimary, #ffffff)",
+                    fontWeight: 600,
+                    fontSize: 15,
+                    cursor: "pointer",
+                  }}
+                >
+                  {loading === "flow"
+                    ? "Redirigiendo a Flow..."
+                    : "Pagar con Flow (tarjeta / débito)"}
+                </button>
 
-      {/* Botón volver */}
-      {typeof onVolver === "function" && (
-        <button
-          type="button"
-          onClick={() => onVolver()}
-          disabled={loading !== null}
-          style={{
-            marginTop: 8,
-            padding: "8px 12px",
-            borderRadius: 10,
-            border: "none",
-            background: "transparent",
-            color: "var(--muted-foreground, #666)",
-            fontSize: 13,
-            textDecoration: "underline",
-            cursor: "pointer",
-          }}
-        >
-          ⬅ Volver
-        </button>
-      )}
-    </div>
+                {/* Botón Khipu */}
+                <button
+                  type="button"
+                  onClick={handleKhipu}
+                  disabled={loading !== null}
+                  style={{
+                    width: "100%",
+                    padding: "12px 16px",
+                    borderRadius: 12,
+                    border: "1px solid var(--border, #e0e0e0)",
+                    boxShadow:
+                      "var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.08))",
+                    background:
+                      loading === "khipu"
+                        ? "var(--accent-soft, #f0f5ff)"
+                        : "var(--accent, #00a39a)",
+                    color: "#ffffff",
+                    fontWeight: 600,
+                    fontSize: 15,
+                    cursor: "pointer",
+                  }}
+                >
+                  {loading === "khipu"
+                    ? "Redirigiendo a Khipu..."
+                    : "Pagar con Khipu (transferencia)"}
+                </button>
+              </>
+            )}
+          </>
+        )}
+
+        {/* Botón volver */}
+        {typeof onVolver === "function" && (
+          <button
+            type="button"
+            onClick={() => onVolver()}
+            disabled={loading !== null}
+            style={{
+              marginTop: 8,
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: "none",
+              background: "transparent",
+              color: "var(--muted-foreground, #666)",
+              fontSize: 13,
+              textDecoration: "underline",
+              cursor: "pointer",
+            }}
+          >
+            ⬅ Volver
+          </button>
+        )}
+      </div>
+    </LayoutModulo>
   );
 }
