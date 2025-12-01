@@ -16,6 +16,10 @@ import EsquemaToggleTabs from "../EsquemaToggleTabs.jsx";
 import FormularioTipoCirugia from "../FormularioTipoCirugia.jsx";
 import FormularioComorbilidades from "../components/FormularioComorbilidades.jsx";
 
+/* NUEVO: Layout común de módulos + logo PREOP */
+import ModuloLayout from "../components/ModuloLayout.jsx";
+import logoPreop from "../assets/logo_examenes_pre.png";
+
 const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
@@ -76,7 +80,7 @@ function generoPalabra(genero = "") {
 function resumenInicialPreop({ datos = {}, comorb = {}, tipoCirugia = "" }) {
   const sujeto = generoPalabra(datos.genero);
   const edad = datos.edad ? `${datos.edad} años` : "";
-  const lista = prettyComorb(comorb);
+  const lista = prettyComorb(comorbididades);
   const antecedentes = lista.length
     ? `con antecedentes de: ${lista.join(", ")}`
     : "sin comorbilidades relevantes registradas";
@@ -450,208 +454,248 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     preview: "Revise y confirme la orden; exámenes preoperatorios sugeridos por IA.",
   }[fase];
 
+  /* ====== NUEVO: SUBTÍTULO PARA LAYOUT (según fase / avance) ====== */
+  const subtitleLayout = {
+    esquema:
+      "Revise el esquema corporal y marque la zona donde se realizará la cirugía.",
+    tipo:
+      "Confirme el tipo de cirugía para ajustar la indicación de exámenes preoperatorios.",
+    comorb:
+      "Registre comorbilidades, tratamientos y alergias antes de generar la orden preoperatoria.",
+    preview: stepStarted
+      ? "Revise los exámenes sugeridos por IA y continúe al pago o descarga del documento."
+      : "Revise el resumen preoperatorio y genere la propuesta de exámenes con IA.",
+  }[fase];
+
   return (
-    <div className="card" aria-live="polite">
-      <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
+    <ModuloLayout
+      logo={logoPreop}
+      title="Asistente Preoperatorio"
+      subtitle={subtitleLayout}
+      variant="preop"
+    >
+      <div className="card" aria-live="polite">
+        <AvisoLegal
+          visible={mostrarAviso}
+          persist={false}
+          onAccept={continuarTrasAviso}
+          onReject={rechazarAviso}
+        />
 
-      <h3 className="h1" style={{ color: T.primary }}>{tituloFase}</h3>
+        <h3 className="h1" style={{ color: T.primary }}>{tituloFase}</h3>
 
-      {/* ====== FASE 1: ESQUEMA ====== */}
-      {fase === "esquema" && (
-        <div className="card" style={{ marginTop: 8 }}>
-          <EsquemaToggleTabs vista={vista} onChange={setVista} />
-          {vista === "anterior" ? (
-            <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
-          ) : (
-            <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
-          )}
-          <div className="mt-8 muted">
-            {datos?.dolor
-              ? <>Zona: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong></>
-              : "Seleccione una zona del esquema para continuar"}
-          </div>
-          <div className="toolbar right mt-16">
-            <button
-              className="btn"
-              disabled={!datos?.dolor}
-              onClick={() => setFase("tipo")}
-            >
-              Continuar → Tipo de cirugía
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ====== FASE 2: TIPO DE CIRUGÍA ====== */}
-      {fase === "tipo" && (
-        <div className="card" style={{ marginTop: 12 }}>
-          <div className="section">
-            <h2 className="h1" style={{ margin: 0 }}>Tipo de cirugía</h2>
-            <div className="muted">
-              {datos?.dolor
-                ? <>Zona: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong></>
-                : "Seleccione una zona en el paso anterior"}
-            </div>
-          </div>
-          <div className="divider" />
-          <FormularioTipoCirugia
-            datos={datos}
-            onTipoCirugiaChange={() => {
-              try {
-                const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
-                const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
-                const final = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
-                setTipoCirugia(final || "");
-              } catch {}
-            }}
-          />
-          <div className="toolbar right mt-16">
-            <button
-              className="btn"
-              onClick={() => {
-                const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "");
-                const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "");
-                const isOtro = fijo.trim().toUpperCase().startsWith("OTRO");
-                const ok = (fijo && !isOtro) || (isOtro && (otro || "").trim());
-                if (!ok) {
-                  alert("Seleccione el tipo de cirugía o especifique 'OTRO'.");
-                  return;
-                }
-                setFase("comorb");
-              }}
-            >
-              Continuar → Comorbilidades
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ====== FASE 3: COMORBILIDADES ====== */}
-      {fase === "comorb" && (
-        <div className="card" style={{ marginTop: 12 }}>
-          <div className="section">
-            <h2 className="h1" style={{ margin: 0 }}>Comorbilidades</h2>
-          </div>
-          <div className="divider" />
-          <FormularioComorbilidades
-            initial={comorbilidades || {}}
-            onSave={async (payload) => {
-              try {
-                sessionStorage.setItem("preop_comorbilidades_data", JSON.stringify(payload || {}));
-                sessionStorage.setItem("preop_comorbilidades_ok", "1");
-                // Limpiar IA previa para que NO aparezca sola en preview
-                sessionStorage.removeItem("preop_ia_examenes");
-                sessionStorage.removeItem("preop_ia_resumen");
-              } catch {}
-              setComorbilidades(payload || {});
-              setStepStarted(false);   // aún NO hay IA
-              setFase("preview");      // vamos a preview de ORDEN (sin IA)
-            }}
-            onCancel={() => {}}
-          />
-        </div>
-      )}
-
-      {/* ====== FASE 4: PREVIEW (orden) + PREVIEW IA (si stepStarted) ====== */}
-      {fase === "preview" && (
-        <>
-          <section style={{ marginBottom: 10 }}>
-            <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
-            <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
-            <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
-            <div><strong>Sexo:</strong> {datos?.genero || "—"}</div>
-            <div>
-              <strong>Motivo/Área:</strong>{" "}
-              {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
-            </div>
-            {tipoCirugia ? (
-              <div><strong>Tipo de cirugía:</strong> {tipoCirugia}</div>
+        {/* ====== FASE 1: ESQUEMA ====== */}
+        {fase === "esquema" && (
+          <div className="card" style={{ marginTop: 8 }}>
+            <EsquemaToggleTabs vista={vista} onChange={setVista} />
+            {vista === "anterior" ? (
+              <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
             ) : (
-              <div className="muted">
-                (El tipo de cirugía se toma del formulario principal de PREOP).
-              </div>
+              <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
             )}
-          </section>
-
-          {/* PREVIEW ORDEN (sin IA) */}
-          {!stepStarted && (
-            <>
-              <div className="mono">{resumenInicialPreop({ datos, comorb: comorbilidades, tipoCirugia })}</div>
+            <div className="mt-8 muted">
+              {datos?.dolor
+                ? (
+                  <>
+                    Zona: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong>
+                  </>
+                )
+                : "Seleccione una zona del esquema para continuar"}
+            </div>
+            <div className="toolbar right mt-16">
               <button
-                className="btn fullw"
-                style={{ marginTop: 10 }}
-                onClick={handleGenerarIA}          // ← ahora aquí recién llamamos IA
-                disabled={loadingIA}
-                aria-busy={loadingIA}
+                className="btn"
+                disabled={!datos?.dolor}
+                onClick={() => setFase("tipo")}
               >
-                {loadingIA ? "Generando con IA…" : "Aceptar y continuar"}
+                Continuar → Tipo de cirugía
               </button>
-            </>
-          )}
+            </div>
+          </div>
+        )}
 
-          {/* PREVIEW IA (exámenes + informe) */}
-          {stepStarted && (
-            <>
-              {/* Comorbilidades (chips) */}
-              {comorbChips.length > 0 && (
-                <section className="mt-8">
-                  <strong>Comorbilidades:</strong>
-                  <div className="chips mt-6">
-                    {comorbChips.map((t, i) => (
-                      <span key={`${t}-${i}`} className="chip">{t}</span>
-                    ))}
-                  </div>
-                </section>
-              )}
+        {/* ====== FASE 2: TIPO DE CIRUGÍA ====== */}
+        {fase === "tipo" && (
+          <div className="card" style={{ marginTop: 12 }}>
+            <div className="section">
+              <h2 className="h1" style={{ margin: 0 }}>Tipo de cirugía</h2>
+              <div className="muted">
+                {datos?.dolor
+                  ? (
+                    <>
+                      Zona: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong>
+                    </>
+                  )
+                  : "Seleccione una zona en el paso anterior"}
+              </div>
+            </div>
+            <div className="divider" />
+            <FormularioTipoCirugia
+              datos={datos}
+              onTipoCirugiaChange={() => {
+                try {
+                  const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
+                  const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
+                  const final = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
+                  setTipoCirugia(final || "");
+                } catch {}
+              }}
+            />
+            <div className="toolbar right mt-16">
+              <button
+                className="btn"
+                onClick={() => {
+                  const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "");
+                  const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "");
+                  const isOtro = fijo.trim().toUpperCase().startsWith("OTRO");
+                  const ok = (fijo && !isOtro) || (isOtro && (otro || "").trim());
+                  if (!ok) {
+                    alert("Seleccione el tipo de cirugía o especifique 'OTRO'.");
+                    return;
+                  }
+                  setFase("comorb");
+                }}
+              >
+                Continuar → Comorbilidades
+              </button>
+            </div>
+          </div>
+        )}
 
-              {/* Lista de exámenes IA */}
-              {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
-                <section className="mt-12">
-                  <strong>Exámenes a solicitar (IA):</strong>
-                  <ul className="mt-6">
-                    {examenesIA.map((e, idx) => (
-                      <li key={`${typeof e === "string" ? e : e?.nombre || "item"}-${idx}`}>
-                        {typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
+        {/* ====== FASE 3: COMORBILIDADES ====== */}
+        {fase === "comorb" && (
+          <div className="card" style={{ marginTop: 12 }}>
+            <div className="section">
+              <h2 className="h1" style={{ margin: 0 }}>Comorbilidades</h2>
+            </div>
+            <div className="divider" />
+            <FormularioComorbilidades
+              initial={comorbilidades || {}}
+              onSave={async (payload) => {
+                try {
+                  sessionStorage.setItem(
+                    "preop_comorbilidades_data",
+                    JSON.stringify(payload || {})
+                  );
+                  sessionStorage.setItem("preop_comorbilidades_ok", "1");
+                  // Limpiar IA previa para que NO aparezca sola en preview
+                  sessionStorage.removeItem("preop_ia_examenes");
+                  sessionStorage.removeItem("preop_ia_resumen");
+                } catch {}
+                setComorbilidades(payload || {});
+                setStepStarted(false);   // aún NO hay IA
+                setFase("preview");      // vamos a preview de ORDEN (sin IA)
+              }}
+              onCancel={() => {}}
+            />
+          </div>
+        )}
+
+        {/* ====== FASE 4: PREVIEW (orden) + PREVIEW IA (si stepStarted) ====== */}
+        {fase === "preview" && (
+          <>
+            <section style={{ marginBottom: 10 }}>
+              <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
+              <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
+              <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
+              <div><strong>Sexo:</strong> {datos?.genero || "—"}</div>
+              <div>
+                <strong>Motivo/Área:</strong>{" "}
+                {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
+              </div>
+              {tipoCirugia ? (
+                <div><strong>Tipo de cirugía:</strong> {tipoCirugia}</div>
               ) : (
-                <div className="muted mt-12">
-                  (Aún no hay lista de exámenes. Pulsa “Generar con IA…” para que se ejecute y aparezcan aquí.)
+                <div className="muted">
+                  (El tipo de cirugía se toma del formulario principal de PREOP).
                 </div>
               )}
+            </section>
 
-              {informeIA && (
-                <section className="mt-8">
-                  <strong>Informe IA (resumen):</strong>
-                  <div className="mono mt-6">{informeIA}</div>
-                </section>
-              )}
+            {/* PREVIEW ORDEN (sin IA) */}
+            {!stepStarted && (
+              <>
+                <div className="mono">
+                  {resumenInicialPreop({ datos, comorb: comorbilidades, tipoCirugia })}
+                </div>
+                <button
+                  className="btn fullw"
+                  style={{ marginTop: 10 }}
+                  onClick={handleGenerarIA}          // ← aquí recién llamamos IA
+                  disabled={loadingIA}
+                  aria-busy={loadingIA}
+                >
+                  {loadingIA ? "Generando con IA…" : "Aceptar y continuar"}
+                </button>
+              </>
+            )}
 
-              {/* Acciones finales: pagar o descargar */}
-              {pagoRealizado ? (
-                <button
-                  className="btn fullw mt-12"
-                  onClick={handleDescargarPreop}
-                  disabled={descargando}
-                  aria-busy={descargando}
-                  title={mensajeDescarga || "Verificar y descargar"}
-                >
-                  {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
-                </button>
-              ) : (
-                <button
-                  className="btn fullw mt-12"
-                  onClick={handlePagarDesdePreview}
-                >
-                  Pagar ahora (Pre Op)
-                </button>
-              )}
-            </>
-          )}
-        </>
-      )}
-    </div>
+            {/* PREVIEW IA (exámenes + informe) */}
+            {stepStarted && (
+              <>
+                {/* Comorbilidades (chips) */}
+                {comorbChips.length > 0 && (
+                  <section className="mt-8">
+                    <strong>Comorbilidades:</strong>
+                    <div className="chips mt-6">
+                      {comorbChips.map((t, i) => (
+                        <span key={`${t}-${i}`} className="chip">{t}</span>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* Lista de exámenes IA */}
+                {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
+                  <section className="mt-12">
+                    <strong>Exámenes a solicitar (IA):</strong>
+                    <ul className="mt-6">
+                      {examenesIA.map((e, idx) => (
+                        <li
+                          key={`${typeof e === "string" ? e : e?.nombre || "item"}-${idx}`}
+                        >
+                          {typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : (
+                  <div className="muted mt-12">
+                    (Aún no hay lista de exámenes. Pulsa “Generar con IA…” para que se ejecute y aparezcan aquí.)
+                  </div>
+                )}
+
+                {informeIA && (
+                  <section className="mt-8">
+                    <strong>Informe IA (resumen):</strong>
+                    <div className="mono mt-6">{informeIA}</div>
+                  </section>
+                )}
+
+                {/* Acciones finales: pagar o descargar */}
+                {pagoRealizado ? (
+                  <button
+                    className="btn fullw mt-12"
+                    onClick={handleDescargarPreop}
+                    disabled={descargando}
+                    aria-busy={descargando}
+                    title={mensajeDescarga || "Verificar y descargar"}
+                  >
+                    {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
+                  </button>
+                ) : (
+                  <button
+                    className="btn fullw mt-12"
+                    onClick={handlePagarDesdePreview}
+                  >
+                    Pagar ahora (Pre Op)
+                  </button>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </ModuloLayout>
   );
 }
