@@ -320,10 +320,11 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
   const meta = MODULO_META[moduloActual] || MODULO_META.trauma;
 
   return (
-    <LayoutModulo
+    <ModuloLayout
       logo={meta.logo}
-      titulo={meta.titulo}
-      subtitulo="Revise la orden generada y elija el método de pago"
+      title={meta.titulo}
+      subtitle="Revise la orden generada y elija el método de pago"
+      variant={moduloActual}
     >
       {/* Contenido propio de PantallaTres dentro del marco */}
       <div
@@ -769,6 +770,6 @@ export default function PantallaTres({ datosPaciente, onVolver }) {
           </button>
         )}
       </div>
-    </LayoutModulo>
+    </ModuloLayout>
   );
 }
