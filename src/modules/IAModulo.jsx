@@ -79,8 +79,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const [mensajeDescargaOrden, setMensajeDescargaOrden] = useState("");
   const pollerRef = useRef(null);
 
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
   const zonasSoportadas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
   const capitalizar = (s = "") => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
 
@@ -226,12 +224,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
       setPagoRealizado(true);
 
-      fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idPago: idFromURL }),
-      }).catch(() => {});
-
+      // Solo poll de lectura (no volvemos a guardar datos vacíos)
       if (pollerRef.current) clearInterval(pollerRef.current);
       let intentos = 0;
 
@@ -506,7 +499,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
         } catch {}
 
-        // Compatibilidad: seguimos enviando campos planos + JSON grande
+        // ✅ PRIMERA llamada importante a guardar-datos-ia (preview listo)
         await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -605,7 +598,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
         } catch {}
 
-        // Compatibilidad: enviamos JSON grande + campos planos
+        // ✅ SEGUNDA llamada importante a guardar-datos-ia (antes de ir a PantallaTres)
         await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -641,7 +634,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   };
 
   // ======================================================
-  // DESCARGAS (misma lógica, pero reinyectando iaJSON guardado)
+  // DESCARGAS (sin volver a guardar-datos-ia)
   // ======================================================
   const handleDescargarIA = async () => {
     const id = sessionStorage.getItem("idPago") || ensureIAIdPago();
@@ -675,129 +668,16 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     setDescargando(true);
     setMensajeDescarga("Verificando pago…");
 
-    let reinyectado = false;
-
     try {
-      const maxIntentos = 30;
-
-      for (let i = 1; i <= maxIntentos; i++) {
-        const r = await intentaDescarga();
-        if (r.ok) break;
-
+      const r = await intentaDescarga();
+      if (!r.ok) {
         if (r.status === 402) {
-          setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
-          fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idPago: id }),
-          }).catch(() => {});
-          await sleep(1500);
-
-          if (i === maxIntentos)
-            alert("El pago aún no se confirma. Intenta nuevamente.");
-          continue;
+          alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
+        } else if (r.status === 404) {
+          alert("No se encontró el PDF del informe IA. Si ya pagaste, genera nuevamente el informe IA para reconstruirlo.");
+        } else {
+          alert("No se pudo descargar el PDF.");
         }
-
-        if (r.status === 404) {
-          if (!reinyectado) {
-            setMensajeDescarga("Restaurando datos del informe…");
-
-            const respaldo = sessionStorage.getItem("datosPacienteJSON");
-            const datosReinyectar = respaldo
-              ? JSON.parse(respaldo)
-              : { ...datos, edad: Number(datos.edad) || undefined };
-
-            const consultaGuardada =
-              sessionStorage.getItem("consultaIA") || datos.consulta || "";
-
-            await fetch(`${BACKEND_BASE}/api/preview-informe`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                idPago: id,
-                consulta: consultaGuardada,
-                nombre: datosReinyectar?.nombre,
-                edad: Number(datosReinyectar?.edad) || undefined,
-                rut: datosReinyectar?.rut,
-                genero: datosReinyectar?.genero,
-                dolor: datosReinyectar?.dolor,
-                lado: datosReinyectar?.lado,
-              }),
-            });
-
-            try {
-              const marcadoresStruct = construirMarcadores();
-              const {
-                marcadores,
-                rodillaMarcadores,
-                manoMarcadores,
-                hombroMarcadores,
-                codoMarcadores,
-                tobilloMarcadores,
-              } = marcadoresStruct;
-
-              // Usar iaJSON real guardado si existe
-              let iaJSON = null;
-              try {
-                iaJSON = JSON.parse(sessionStorage.getItem("iaJSON") || "null");
-              } catch {
-                iaJSON = null;
-              }
-
-              if (!iaJSON) {
-                // fallback: reconstruimos usando la mejor info disponible
-                const texto = sessionStorage.getItem("previewIA") || consultaGuardada || "";
-                iaJSON = buildIAJSON(
-                  { ...datosReinyectar },
-                  texto,
-                  {
-                    resonanciaChecklist,
-                    resonanciaResumenTexto,
-                    ordenAlternativa,
-                  },
-                  marcadoresStruct
-                );
-                try {
-                  sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
-                } catch {}
-              }
-
-              await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  idPago: id,
-                  iaJSON,
-                  datosPaciente: iaJSON.paciente,
-                  examen: iaJSON.informeIA || iaJSON.consulta || "",
-                  examenes: iaJSON.examenes || [],
-                  marcadores,
-                  rodillaMarcadores,
-                  manoMarcadores,
-                  hombroMarcadores,
-                  codoMarcadores,
-                  tobilloMarcadores,
-                }),
-              });
-            } catch {}
-
-            await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ idPago: id }),
-            });
-
-            reinyectado = true;
-            await sleep(600);
-            continue;
-          } else {
-            alert("No fue posible descargar el PDF después de reintentar.");
-            break;
-          }
-        }
-
-        alert("No se pudo descargar el PDF.");
-        break;
       }
     } catch (err) {
       console.error(err);
@@ -840,128 +720,16 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     setDescargandoOrden(true);
     setMensajeDescargaOrden("Verificando pago…");
 
-    let reinyectado = false;
-
     try {
-      const maxIntentos = 30;
-
-      for (let i = 1; i <= maxIntentos; i++) {
-        const r = await intentaDescarga();
-        if (r.ok) break;
-
+      const r = await intentaDescarga();
+      if (!r.ok) {
         if (r.status === 402) {
-          setMensajeDescargaOrden(`Verificando pago… (${i}/${maxIntentos})`);
-          fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ idPago: id }),
-          }).catch(() => {});
-          await sleep(1500);
-
-          if (i === maxIntentos)
-            alert("El pago aún no se confirma. Intenta nuevamente.");
-          continue;
+          alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
+        } else if (r.status === 404) {
+          alert("No se encontró la orden de exámenes IA. Si ya pagaste, genera nuevamente el informe IA para reconstruirla.");
+        } else {
+          alert("No se pudo descargar la orden.");
         }
-
-        if (r.status === 404) {
-          if (!reinyectado) {
-            setMensajeDescargaOrden("Restaurando datos…");
-
-            const respaldo = sessionStorage.getItem("datosPacienteJSON");
-            const datosReinyectar = respaldo
-              ? JSON.parse(respaldo)
-              : { ...datos, edad: Number(datos.edad) || undefined };
-
-            const consultaGuardada =
-              sessionStorage.getItem("consultaIA") || datos.consulta || "";
-
-            await fetch(`${BACKEND_BASE}/api/preview-informe`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                idPago: id,
-                consulta: consultaGuardada,
-                nombre: datosReinyectar?.nombre,
-                edad: Number(datosReinyectar?.edad) || undefined,
-                rut: datosReinyectar?.rut,
-                genero: datosReinyectar?.genero,
-                dolor: datosReinyectar?.dolor,
-                lado: datosReinyectar?.lado,
-              }),
-            });
-
-            try {
-              const marcadoresStruct = construirMarcadores();
-              const {
-                marcadores,
-                rodillaMarcadores,
-                manoMarcadores,
-                hombroMarcadores,
-                codoMarcadores,
-                tobilloMarcadores,
-              } = marcadoresStruct;
-
-              // Usar iaJSON real guardado si existe
-              let iaJSON = null;
-              try {
-                iaJSON = JSON.parse(sessionStorage.getItem("iaJSON") || "null");
-              } catch {
-                iaJSON = null;
-              }
-
-              if (!iaJSON) {
-                const texto = sessionStorage.getItem("previewIA") || consultaGuardada || "";
-                iaJSON = buildIAJSON(
-                  { ...datosReinyectar },
-                  texto,
-                  {
-                    resonanciaChecklist,
-                    resonanciaResumenTexto,
-                    ordenAlternativa,
-                  },
-                  marcadoresStruct
-                );
-                try {
-                  sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
-                } catch {}
-              }
-
-              await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  idPago: id,
-                  iaJSON,
-                  datosPaciente: iaJSON.paciente,
-                  examen: iaJSON.informeIA || iaJSON.consulta || "",
-                  examenes: iaJSON.examenes || [],
-                  marcadores,
-                  rodillaMarcadores,
-                  manoMarcadores,
-                  hombroMarcadores,
-                  codoMarcadores,
-                  tobilloMarcadores,
-                }),
-              });
-            } catch {}
-
-            await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ idPago: id }),
-            });
-
-            reinyectado = true;
-            await sleep(600);
-            continue;
-          } else {
-            alert("No se pudo descargar la orden después de reintentar.");
-            break;
-          }
-        }
-
-        alert("No se pudo descargar la orden.");
-        break;
       }
     } catch (err) {
       console.error(err);
