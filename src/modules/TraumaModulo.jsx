@@ -867,8 +867,8 @@ export default function TraumaModulo({
 
   return (
     <ModuloLayout
-      titulo="Asistente Traumatológico"
-      subtitulo={subtituloFase}
+      title="Asistente Traumatológico"
+      subtitle={subtituloFase}
       logo={logoTrauma}
       variant="trauma"
     >
