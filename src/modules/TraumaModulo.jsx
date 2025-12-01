@@ -20,6 +20,10 @@ import EsquemaToggleTabs from "../EsquemaToggleTabs.jsx";
 import GenericMapper from "../mappers/GenericMapper.jsx";
 import { resolveZonaKey } from "../mappers/mapperRegistry.js";
 
+/* NUEVO: Layout común de módulos + logo del módulo Trauma */
+import ModuloLayout from "../components/ModuloLayout.jsx";
+import logoTrauma from "../assets/logo_traumamodulo.png";
+
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
 /* ================= Helpers ================= */
@@ -833,251 +837,268 @@ export default function TraumaModulo({
   /* -------- UI -------- */
   const usarIA = Array.isArray(examenesIA) && examenesIA.length > 0;
 
+  const subtituloFase =
+    fase === "esquema"
+      ? "Seleccione la zona donde presenta molestias o dolor."
+      : fase === "preview"
+      ? "Revise su información y las áreas marcadas antes de continuar."
+      : "Resultados y exámenes sugeridos según su evaluación.";
+
   /* === Gating estricto: si no acepta Aviso, no mostramos nada más === */
   if (mostrarAviso) {
     return (
-      <div style={S.card}>
-        <AvisoLegal
-          visible={true}
-          persist={false}
-          onAccept={continuarTrasAviso}
-          onReject={rechazarAviso}
-        />
-      </div>
+      <ModuloLayout
+        titulo="Asistente Traumatológico"
+        subtitulo={subtituloFase}
+        logo={logoTrauma}
+        variant="trauma"
+      >
+        <div style={S.cardInner}>
+          <AvisoLegal
+            visible={true}
+            persist={false}
+            onAccept={continuarTrasAviso}
+            onReject={rechazarAviso}
+          />
+        </div>
+      </ModuloLayout>
     );
   }
 
   return (
-    <div style={S.card}>
-      <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
-        {fase === "esquema"
-          ? "Seleccione la zona donde presenta molestias o dolor."
-          : fase === "preview"
-          ? "Revise su información y las áreas marcadas antes de continuar."
-          : "Resultados y exámenes sugeridos según su evaluación."}
-      </h3>
-
-      {/* ===== FASE 1: ESQUEMA ===== */}
-      {fase === "esquema" && (
-        <div style={{ marginTop: 6 }}>
-          <EsquemaToggleTabs vista={vista} onChange={setVista} />
-          {vista === "anterior" ? (
-            <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
-          ) : (
-            <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
-          )}
-          <div className="muted" style={{ marginTop: 10 }}>
-            {datos?.dolor ? (
-              <>
-                Zona:{" "}
-                <strong>
-                  {datos.dolor}
-                  {datos.lado ? ` — ${datos.lado}` : ""}
-                </strong>
-              </>
+    <ModuloLayout
+      titulo="Asistente Traumatológico"
+      subtitulo={subtituloFase}
+      logo={logoTrauma}
+      variant="trauma"
+    >
+      <div style={S.cardInner}>
+        {/* ===== FASE 1: ESQUEMA ===== */}
+        {fase === "esquema" && (
+          <div style={{ marginTop: 6 }}>
+            <EsquemaToggleTabs vista={vista} onChange={setVista} />
+            {vista === "anterior" ? (
+              <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
             ) : (
-              "Seleccione una zona del esquema para continuar"
+              <EsquemaPosterior
+                onSeleccionZona={onSeleccionZona}
+                width={400}
+              />
             )}
-          </div>
-          <button
-            style={{ ...S.btnPrimary, marginTop: 12 }}
-            onClick={() => setFase("preview")}
-            disabled={!datos?.dolor}
-            title={
-              datos?.dolor ? "Ir a vista previa" : "Seleccione una zona primero"
-            }
-          >
-            Continuar → Vista previa
-          </button>
-        </div>
-      )}
-
-      {/* ===== FASE 2: PREVIEW ORDEN (sin IA) ===== */}
-      {fase === "preview" && (
-        <>
-          <div style={{ marginBottom: 10, marginTop: 8 }}>
-            <div>
-              <strong>Paciente:</strong> {datos?.nombre || "—"}
-            </div>
-            <div>
-              <strong>RUT:</strong> {datos?.rut || "—"}
-            </div>
-            <div>
-              <strong>Edad:</strong> {datos?.edad || "—"}
-            </div>
-            <div>
-              <strong>Sexo:</strong> {datos?.genero || "—"}
-            </div>
-            <div>
-              <strong>Dolor:</strong> {datos?.dolor || "—"}
-            </div>
-            <div>
-              <strong>Lado:</strong> {datos?.lado || "—"}
-            </div>
-          </div>
-
-          <div style={{ ...S.mono, marginTop: 6 }}>
-            {resumenInicialTrauma(datos)}
-          </div>
-
-          {/* Secciones de puntos de cualquier zona disponible (guardadas con “Guardar/Enviar” del mapper) */}
-          {seccionesMarcadores.map((sec, idx) => (
-            <div style={S.block} key={`sec-${idx}`}>
-              <strong>{sec.title}</strong>
-              <ul style={{ marginTop: 6 }}>
-                {sec.lines.map((l, i) => (
-                  <li key={i}>{l}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
-
-          <button
-            style={{ ...S.btnPrimary, marginTop: 12 }}
-            onClick={handleContinuarIA}
-            disabled={loadingIA || !datos?.dolor}
-            title={
-              !datos?.dolor ? "Seleccione zona en el esquema" : "Analizar con IA"
-            }
-          >
-            {loadingIA ? "Analizando con IA…" : "Continuar"}
-          </button>
-        </>
-      )}
-
-      {/* ===== FASE 3: PREVIEW IA + pago/descarga ===== */}
-      {fase === "previewIA" && (
-        <>
-          <div style={S.block}>
-            <strong>Diagnóstico presuntivo:</strong>
-            <div style={{ ...S.mono, marginTop: 6 }}>
-              {diagnosticoIA || "—"}
-            </div>
-          </div>
-
-          <div style={S.block}>
-            <strong>Exámenes sugeridos (IA):</strong>
-            {usarIA ? (
-              <ul style={{ marginTop: 6 }}>
-                {examenesIA.map((e, i) => (
-                  <li key={`${e}-${i}`}>{e}</li>
-                ))}
-              </ul>
-            ) : (
-              <div style={S.hint}>Aún no hay lista generada por IA.</div>
-            )}
-          </div>
-
-          {justificacionIA && (
-            <div style={S.block}>
-              <strong>Justificación (≈100 palabras):</strong>
-              <div style={{ ...S.mono, marginTop: 6 }}>{justificacionIA}</div>
-            </div>
-          )}
-
-          {/* Mensajes de estado RM */}
-          {requiereRM && !resonanciaChecklist && !bloqueaRM && (
-            <div style={S.hint}>
-              La IA sugiere Resonancia Magnética. Presiona “Continuar” para
-              completar el checklist de seguridad.
-            </div>
-          )}
-          {bloqueaRM && (
-            <div style={S.hint}>
-              RM contraindicada por checklist.{" "}
-              {ordenAlternativa || "Se sugiere alternativa."}
-            </div>
-          )}
-
-          {!pagoRealizado ? (
-            <>
-              {requiereRM && !resonanciaChecklist && !bloqueaRM && (
-                <button
-                  style={{ ...S.btnPrimary, marginTop: 12 }}
-                  onClick={lanzarChecklistRM}
-                >
-                  Continuar
-                </button>
-              )}
-
-              {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
+            <div className="muted" style={{ marginTop: 10 }}>
+              {datos?.dolor ? (
                 <>
-                  <button
-                    style={{ ...S.btnPrimary, marginTop: 12 }}
-                    onClick={handlePagar}
-                  >
-                    Pagar ahora (Trauma)
-                  </button>
+                  Zona:{" "}
+                  <strong>
+                    {datos.dolor}
+                    {datos.lado ? ` — ${datos.lado}` : ""}
+                  </strong>
                 </>
+              ) : (
+                "Seleccione una zona del esquema para continuar"
               )}
-            </>
-          ) : (
+            </div>
             <button
               style={{ ...S.btnPrimary, marginTop: 12 }}
-              onClick={handleDescargar}
-              disabled={descargando}
-              title={mensajeDescarga || "Verificar y descargar"}
+              onClick={() => setFase("preview")}
+              disabled={!datos?.dolor}
+              title={
+                datos?.dolor ? "Ir a vista previa" : "Seleccione una zona primero"
+              }
             >
-              {descargando
-                ? mensajeDescarga || "Verificando…"
-                : "Descargar Documento"}
+              Continuar → Vista previa
             </button>
-          )}
+          </div>
+        )}
 
-          {/* ===== Modal local del Formulario de Resonancia ===== */}
-          {showRM && (
-            <div style={S.modalBackdrop} role="dialog" aria-modal="true">
-              <div style={S.modalCard}>
-                <FormularioResonancia
-                  initial={resonanciaChecklist || {}}
-                  onSave={handleSaveRM}
-                  onCancel={() => setShowRM(false)}
-                />
+        {/* ===== FASE 2: PREVIEW ORDEN (sin IA) ===== */}
+        {fase === "preview" && (
+          <>
+            <div style={{ marginBottom: 10, marginTop: 8 }}>
+              <div>
+                <strong>Paciente:</strong> {datos?.nombre || "—"}
+              </div>
+              <div>
+                <strong>RUT:</strong> {datos?.rut || "—"}
+              </div>
+              <div>
+                <strong>Edad:</strong> {datos?.edad || "—"}
+              </div>
+              <div>
+                <strong>Sexo:</strong> {datos?.genero || "—"}
+              </div>
+              <div>
+                <strong>Dolor:</strong> {datos?.dolor || "—"}
+              </div>
+              <div>
+                <strong>Lado:</strong> {datos?.lado || "—"}
               </div>
             </div>
-          )}
-        </>
-      )}
 
-      {/* ===== Modal con GenericMapper ===== */}
-      {mostrarMapper && (
-        <div style={S.modalBackdrop} role="dialog" aria-modal="true">
-          <div style={S.modalCard}>
-            <GenericMapper
-              mapperId={mapperId}
-              ladoInicial={(datos?.lado || "").toLowerCase()}
-              vistaInicial={mapperVistaInicial}
-              /* Volver: NO guarda, solo cierra el modal */
-              onVolver={() => {
-                setMostrarMapper(false);
-                setMapperRefresh((v) => v + 1);
-              }}
-              /* Guardar: los mappers persisten y aquí pasamos a Preview */
-              onSave={handleMapperSave}
-            />
-            <div style={{ marginTop: 12, textAlign: "right" }}>
+            <div style={{ ...S.mono, marginTop: 6 }}>
+              {resumenInicialTrauma(datos)}
+            </div>
+
+            {/* Secciones de puntos de cualquier zona disponible (guardadas con “Guardar/Enviar” del mapper) */}
+            {seccionesMarcadores.map((sec, idx) => (
+              <div style={S.block} key={`sec-${idx}`}>
+                <strong>{sec.title}</strong>
+                <ul style={{ marginTop: 6 }}>
+                  {sec.lines.map((l, i) => (
+                    <li key={i}>{l}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+
+            <button
+              style={{ ...S.btnPrimary, marginTop: 12 }}
+              onClick={handleContinuarIA}
+              disabled={loadingIA || !datos?.dolor}
+              title={
+                !datos?.dolor ? "Seleccione zona en el esquema" : "Analizar con IA"
+              }
+            >
+              {loadingIA ? "Analizando con IA…" : "Continuar"}
+            </button>
+          </>
+        )}
+
+        {/* ===== FASE 3: PREVIEW IA + pago/descarga ===== */}
+        {fase === "previewIA" && (
+          <>
+            <div style={S.block}>
+              <strong>Diagnóstico presuntivo:</strong>
+              <div style={{ ...S.mono, marginTop: 6 }}>
+                {diagnosticoIA || "—"}
+              </div>
+            </div>
+
+            <div style={S.block}>
+              <strong>Exámenes sugeridos (IA):</strong>
+              {usarIA ? (
+                <ul style={{ marginTop: 6 }}>
+                  {examenesIA.map((e, i) => (
+                    <li key={`${e}-${i}`}>{e}</li>
+                  ))}
+                </ul>
+              ) : (
+                <div style={S.hint}>Aún no hay lista generada por IA.</div>
+              )}
+            </div>
+
+            {justificacionIA && (
+              <div style={S.block}>
+                <strong>Justificación (≈100 palabras):</strong>
+                <div style={{ ...S.mono, marginTop: 6 }}>{justificacionIA}</div>
+              </div>
+            )}
+
+            {/* Mensajes de estado RM */}
+            {requiereRM && !resonanciaChecklist && !bloqueaRM && (
+              <div style={S.hint}>
+                La IA sugiere Resonancia Magnética. Presiona “Continuar” para
+                completar el checklist de seguridad.
+              </div>
+            )}
+            {bloqueaRM && (
+              <div style={S.hint}>
+                RM contraindicada por checklist.{" "}
+                {ordenAlternativa || "Se sugiere alternativa."}
+              </div>
+            )}
+
+            {!pagoRealizado ? (
+              <>
+                {requiereRM && !resonanciaChecklist && !bloqueaRM && (
+                  <button
+                    style={{ ...S.btnPrimary, marginTop: 12 }}
+                    onClick={lanzarChecklistRM}
+                  >
+                    Continuar
+                  </button>
+                )}
+
+                {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
+                  <>
+                    <button
+                      style={{ ...S.btnPrimary, marginTop: 12 }}
+                      onClick={handlePagar}
+                    >
+                      Pagar ahora (Trauma)
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
               <button
-                style={S.btnSecondary}
-                onClick={() => {
-                  // Botón externo “Cerrar/Volver” NO guarda, solo cierra
+                style={{ ...S.btnPrimary, marginTop: 12 }}
+                onClick={handleDescargar}
+                disabled={descargando}
+                title={mensajeDescarga || "Verificar y descargar"}
+              >
+                {descargando
+                  ? mensajeDescarga || "Verificando…"
+                  : "Descargar Documento"}
+              </button>
+            )}
+
+            {/* ===== Modal local del Formulario de Resonancia ===== */}
+            {showRM && (
+              <div style={S.modalBackdrop} role="dialog" aria-modal="true">
+                <div style={S.modalCard}>
+                  <FormularioResonancia
+                    initial={resonanciaChecklist || {}}
+                    onSave={handleSaveRM}
+                    onCancel={() => setShowRM(false)}
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ===== Modal con GenericMapper ===== */}
+        {mostrarMapper && (
+          <div style={S.modalBackdrop} role="dialog" aria-modal="true">
+            <div style={S.modalCard}>
+              <GenericMapper
+                mapperId={mapperId}
+                ladoInicial={(datos?.lado || "").toLowerCase()}
+                vistaInicial={mapperVistaInicial}
+                /* Volver: NO guarda, solo cierra el modal */
+                onVolver={() => {
                   setMostrarMapper(false);
                   setMapperRefresh((v) => v + 1);
                 }}
-              >
-                Cerrar
-              </button>
+                /* Guardar: los mappers persisten y aquí pasamos a Preview */
+                onSave={handleMapperSave}
+              />
+              <div style={{ marginTop: 12, textAlign: "right" }}>
+                <button
+                  style={S.btnSecondary}
+                  onClick={() => {
+                    // Botón externo “Cerrar/Volver” NO guarda, solo cierra
+                    setMostrarMapper(false);
+                    setMapperRefresh((v) => v + 1);
+                  }}
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </ModuloLayout>
   );
 }
 
 /* =============== Estilos (desde theme.json) =============== */
 function makeStyles(T) {
   return {
-    card: {
+    /* Ahora esta "cardInner" es el contenedor interno dentro del ModuloLayout */
+    cardInner: {
       background: T.surface ?? "#fff",
       borderRadius: 12,
       padding: 16,
