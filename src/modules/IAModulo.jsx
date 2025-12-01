@@ -193,7 +193,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
-      // 🔁 CAMBIO: ahora los datos de sessionStorage NO pisan initialDatos (Guest, etc.)
+      // AHORA los datos de sessionStorage NO pisan initialDatos (Guest, etc.) → se mezclan
       if (saved) setDatos((prev) => ({ ...JSON.parse(saved), ...prev }));
       const savedIA = sessionStorage.getItem("consultaIA");
       if (savedIA) setDatos((prev) => ({ ...prev, consulta: savedIA }));
@@ -407,7 +407,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   };
 
   // ======================================================
-  // ⚡ GENERAR PREVIEW IA — ahora con iaJSON grande
+  // ⚡ GENERAR PREVIEW IA — ahora con iaJSON grande + examenes
   // ======================================================
   const handleGenerarPreview = async () => {
     const edadNum = Number(datos.edad);
@@ -452,8 +452,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       const j = await res.json();
       if (!j.ok) throw new Error(j.error || "No se pudo generar el preview");
 
-      // === Usar claves reales del backend para exámenes ===
       const resp = j.respuesta || "";
+
+      // 🔑 USAR LAS CLAVES REALES DEL BACKEND PARA EXÁMENES
       const listaExamenes =
         Array.isArray(j.examenes) && j.examenes.length
           ? j.examenes
