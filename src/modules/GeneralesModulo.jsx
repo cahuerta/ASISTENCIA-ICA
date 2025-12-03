@@ -34,10 +34,16 @@ const LABELS_COMORB = {
 };
 
 function ensureGeneralesIdPago() {
-  let id = sessionStorage.getItem("idPago");
-  if (!id || !id.startsWith("generales_")) {
+  let id = null;
+  try {
+    id = sessionStorage.getItem("idPago");
+  } catch {}
+
+  if (!id || !String(id).startsWith("generales_")) {
     id = `generales_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-    sessionStorage.setItem("idPago", id);
+    try {
+      sessionStorage.setItem("idPago", id);
+    } catch {}
   }
   return id;
 }
@@ -122,7 +128,9 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
     // IA previa
     try {
-      const ex = JSON.parse(sessionStorage.getItem("generales_ia_examenes") || "[]");
+      const ex = JSON.parse(
+        sessionStorage.getItem("generales_ia_examenes") || "[]"
+      );
       const inf = sessionStorage.getItem("generales_ia_resumen") || "";
       setExamenesIA(Array.isArray(ex) ? ex : []);
       setInformeIA(inf);
@@ -169,7 +177,16 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
     // retorno de pago
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
-    const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
+    const idPago =
+      params.get("idPago") ||
+      (() => {
+        try {
+          return sessionStorage.getItem("idPago");
+        } catch {
+          return null;
+        }
+      })();
+
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
       setStepStarted(true);
@@ -237,7 +254,12 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
   /* ------------------------------ Pago ------------------------------ */
   const handlePagarGenerales = async () => {
     const edadNum = Number(datos.edad);
-    if (!datos.nombre?.trim() || !datos.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
+    if (
+      !datos.nombre?.trim() ||
+      !datos.rut?.trim() ||
+      !Number.isFinite(edadNum) ||
+      edadNum <= 0
+    ) {
       alert("Complete nombre, RUT y edad (>0) antes de pagar.");
       return;
     }
@@ -248,13 +270,16 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
     try {
       const idPago = ensureGeneralesIdPago();
-      sessionStorage.setItem("modulo", "generales");
-      sessionStorage.setItem(
-        "datosPacienteJSON",
-        JSON.stringify({ ...datos, edad: edadNum })
-      );
-      // Dejamos marcada la intención de ir a PantallaTres
-      sessionStorage.setItem("pantalla", "tres");
+
+      try {
+        sessionStorage.setItem("modulo", "generales");
+        sessionStorage.setItem(
+          "datosPacienteJSON",
+          JSON.stringify({ ...datos, edad: edadNum })
+        );
+        // Dejamos marcada la intención de ir a PantallaTres
+        sessionStorage.setItem("pantalla", "tres");
+      } catch {}
 
       const examenPaciente = (examenLibre || "").trim();
       const examenesFinales = [
@@ -297,7 +322,11 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
   /* --------------------------- Descargar PDF --------------------------- */
   const handleDescargarGenerales = async () => {
-    const idPago = sessionStorage.getItem("idPago");
+    let idPago = null;
+    try {
+      idPago = sessionStorage.getItem("idPago");
+    } catch {}
+
     if (!idPago) {
       alert("ID de pago no encontrado");
       return;
@@ -337,15 +366,23 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
           setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
           if (i === maxIntentos)
-            alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
+            alert(
+              "El pago aún no se confirma. Intenta nuevamente en unos segundos."
+            );
           continue;
         }
 
         if (r.status === 404) {
           if (!reinyectado) {
             setMensajeDescarga("Restaurando datos…");
-            const respaldo = sessionStorage.getItem("datosPacienteJSON");
-            const datosReinyectar = respaldo ? JSON.parse(respaldo) : datos;
+            let respaldo = null;
+            try {
+              respaldo = sessionStorage.getItem("datosPacienteJSON");
+            } catch {}
+
+            const datosReinyectar = respaldo
+              ? JSON.parse(respaldo)
+              : datos;
 
             await fetch(`${BACKEND_BASE}/guardar-datos-generales`, {
               method: "POST",
@@ -394,8 +431,10 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       setLoadingIA(true);
 
       // refresco defensivo
-      const saved = sessionStorage.getItem("datosPacienteJSON");
-      if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      try {
+        const saved = sessionStorage.getItem("datosPacienteJSON");
+        if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      } catch {}
 
       // comorbilidades actuales (por si viniera de formulario)
       let c = {};
@@ -406,14 +445,19 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       } catch {}
       setComorbilidades(c || {});
 
-      const idPago =
-        sessionStorage.getItem("idPago") ||
-        `generales_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-      sessionStorage.setItem("idPago", idPago);
+      // 🔹 ÚNICO idPago para todo el flujo Generales (IA + guardar + pago)
+      const idPago = ensureGeneralesIdPago();
 
+      const pacienteBase = {
+        ...datos,
+        edad: Number(datos.edad) || datos.edad,
+      };
+
+      // Body compatible con el backend (paciente + datosPaciente)
       const body = {
         idPago,
-        paciente: { ...datos, edad: Number(datos.edad) || datos.edad },
+        paciente: pacienteBase,
+        datosPaciente: pacienteBase,
         comorbilidades: c || {},
       };
 
@@ -446,7 +490,10 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
       // persistimos para PDF y estado
       try {
-        sessionStorage.setItem("generales_ia_examenes", JSON.stringify(ex));
+        sessionStorage.setItem(
+          "generales_ia_examenes",
+          JSON.stringify(ex)
+        );
         sessionStorage.setItem("generales_ia_resumen", inf || "");
         sessionStorage.setItem("generales_step", "2");
       } catch {}
@@ -455,6 +502,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       setInformeIA(inf);
       setStepStarted(true);
     } catch (e) {
+      console.error("IA Generales error:", e);
       alert(
         "No fue posible obtener la información de IA (Generales). Intenta nuevamente."
       );
@@ -564,9 +612,10 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
                 </ul>
               ) : (
                 <div style={styles.hint}>
-                  Aún no hay lista generada por IA. Desde el formulario principal, pulsa
-                  <strong> “Generar Informe”</strong> para ejecutar la IA y ver el
-                  resultado aquí.
+                  Aún no hay lista generada por IA. Desde el formulario
+                  principal, pulsa
+                  <strong> “Generar Informe”</strong> para ejecutar la IA y
+                  ver el resultado aquí.
                 </div>
               )}
             </div>
@@ -587,7 +636,9 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
             {informeIA && (
               <div style={styles.block}>
                 <strong>Informe IA (resumen):</strong>
-                <div style={{ marginTop: 6, ...styles.mono }}>{informeIA}</div>
+                <div style={{ marginTop: 6, ...styles.mono }}>
+                  {informeIA}
+                </div>
               </div>
             )}
 
@@ -655,7 +706,7 @@ function makeStyles(T) {
       cursor: "pointer",
       width: "100%",
       boxShadow: "var(--shadow-sm, 0 1px 4px rgba(0,0,0,0.08))",
-      transition: "transform .12s ease",
+      transition: "transform .12s.ease",
     },
     block: { marginTop: 12 },
     mono: {
