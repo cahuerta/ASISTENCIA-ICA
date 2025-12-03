@@ -33,13 +33,19 @@ const LABELS_COMORB = {
   anticoagulantes_detalle: "Detalle anticoagulantes",
 };
 
+/**
+ * Igual filosofía que Trauma:
+ * - Si YA hay idPago en sessionStorage, se reutiliza (sea "pago_", "trauma_", "preop_", "ia_", etc.).
+ * - Si no hay, se crea uno nuevo con prefijo "generales_".
+ */
 function ensureGeneralesIdPago() {
   let id = null;
   try {
     id = sessionStorage.getItem("idPago");
-  } catch {}
-
-  if (!id || !String(id).startsWith("generales_")) {
+  } catch {
+    id = null;
+  }
+  if (!id) {
     id = `generales_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
     try {
       sessionStorage.setItem("idPago", id);
@@ -177,16 +183,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
     // retorno de pago
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
-    const idPago =
-      params.get("idPago") ||
-      (() => {
-        try {
-          return sessionStorage.getItem("idPago");
-        } catch {
-          return null;
-        }
-      })();
-
+    const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
       setStepStarted(true);
@@ -269,17 +266,14 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
     }
 
     try {
-      const idPago = ensureGeneralesIdPago();
-
-      try {
-        sessionStorage.setItem("modulo", "generales");
-        sessionStorage.setItem(
-          "datosPacienteJSON",
-          JSON.stringify({ ...datos, edad: edadNum })
-        );
-        // Dejamos marcada la intención de ir a PantallaTres
-        sessionStorage.setItem("pantalla", "tres");
-      } catch {}
+      const idPago = ensureGeneralesIdPago(); // ← MISMO idPago para IA, guardar y pago
+      sessionStorage.setItem("modulo", "generales");
+      sessionStorage.setItem(
+        "datosPacienteJSON",
+        JSON.stringify({ ...datos, edad: edadNum })
+      );
+      // Dejamos marcada la intención de ir a PantallaTres
+      sessionStorage.setItem("pantalla", "tres");
 
       const examenPaciente = (examenLibre || "").trim();
       const examenesFinales = [
@@ -287,7 +281,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
         ...(examenPaciente ? [examenPaciente] : []),
       ];
 
-      // Guardar todo antes de escoger método de pago
+      // Guardar TODO en la ruta que espera el backend
       await fetch(`${BACKEND_BASE}/guardar-datos-generales`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -295,8 +289,9 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
           idPago,
           datosPaciente: { ...datos, edad: edadNum },
           comorbilidades,
-          examenesIA: examenesFinales,
+          examenesIA: examenesFinales, // ← el PDF usa examenesIA
           informeIA,
+          // examenLibre solo como referencia (el backend hoy no lo usa en el PDF)
           examenLibre: examenPaciente,
         }),
       });
@@ -322,11 +317,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
   /* --------------------------- Descargar PDF --------------------------- */
   const handleDescargarGenerales = async () => {
-    let idPago = null;
-    try {
-      idPago = sessionStorage.getItem("idPago");
-    } catch {}
-
+    const idPago = sessionStorage.getItem("idPago");
     if (!idPago) {
       alert("ID de pago no encontrado");
       return;
@@ -375,14 +366,8 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
         if (r.status === 404) {
           if (!reinyectado) {
             setMensajeDescarga("Restaurando datos…");
-            let respaldo = null;
-            try {
-              respaldo = sessionStorage.getItem("datosPacienteJSON");
-            } catch {}
-
-            const datosReinyectar = respaldo
-              ? JSON.parse(respaldo)
-              : datos;
+            const respaldo = sessionStorage.getItem("datosPacienteJSON");
+            const datosReinyectar = respaldo ? JSON.parse(respaldo) : datos;
 
             await fetch(`${BACKEND_BASE}/guardar-datos-generales`, {
               method: "POST",
@@ -431,10 +416,8 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       setLoadingIA(true);
 
       // refresco defensivo
-      try {
-        const saved = sessionStorage.getItem("datosPacienteJSON");
-        if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
-      } catch {}
+      const saved = sessionStorage.getItem("datosPacienteJSON");
+      if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
 
       // comorbilidades actuales (por si viniera de formulario)
       let c = {};
@@ -445,19 +428,13 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       } catch {}
       setComorbilidades(c || {});
 
-      // 🔹 ÚNICO idPago para todo el flujo Generales (IA + guardar + pago)
+      // ⬅️ MISMO idPago para IA y resto del flujo
       const idPago = ensureGeneralesIdPago();
+      sessionStorage.setItem("idPago", idPago);
 
-      const pacienteBase = {
-        ...datos,
-        edad: Number(datos.edad) || datos.edad,
-      };
-
-      // Body compatible con el backend (paciente + datosPaciente)
       const body = {
         idPago,
-        paciente: pacienteBase,
-        datosPaciente: pacienteBase,
+        paciente: { ...datos, edad: Number(datos.edad) || datos.edad },
         comorbilidades: c || {},
       };
 
@@ -490,10 +467,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
       // persistimos para PDF y estado
       try {
-        sessionStorage.setItem(
-          "generales_ia_examenes",
-          JSON.stringify(ex)
-        );
+        sessionStorage.setItem("generales_ia_examenes", JSON.stringify(ex));
         sessionStorage.setItem("generales_ia_resumen", inf || "");
         sessionStorage.setItem("generales_step", "2");
       } catch {}
@@ -502,7 +476,6 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       setInformeIA(inf);
       setStepStarted(true);
     } catch (e) {
-      console.error("IA Generales error:", e);
       alert(
         "No fue posible obtener la información de IA (Generales). Intenta nuevamente."
       );
@@ -612,10 +585,9 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
                 </ul>
               ) : (
                 <div style={styles.hint}>
-                  Aún no hay lista generada por IA. Desde el formulario
-                  principal, pulsa
-                  <strong> “Generar Informe”</strong> para ejecutar la IA y
-                  ver el resultado aquí.
+                  Aún no hay lista generada por IA. Desde el formulario principal,
+                  pulsa<strong> “Generar Informe”</strong> para ejecutar la IA y ver
+                  el resultado aquí.
                 </div>
               )}
             </div>
@@ -636,9 +608,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
             {informeIA && (
               <div style={styles.block}>
                 <strong>Informe IA (resumen):</strong>
-                <div style={{ marginTop: 6, ...styles.mono }}>
-                  {informeIA}
-                </div>
+                <div style={{ marginTop: 6, ...styles.mono }}>{informeIA}</div>
               </div>
             )}
 
@@ -706,7 +676,7 @@ function makeStyles(T) {
       cursor: "pointer",
       width: "100%",
       boxShadow: "var(--shadow-sm, 0 1px 4px rgba(0,0,0,0.08))",
-      transition: "transform .12s.ease",
+      transition: "transform .12s ease",
     },
     block: { marginTop: 12 },
     mono: {
