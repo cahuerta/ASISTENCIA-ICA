@@ -23,6 +23,24 @@ import logoPreop from "../assets/logo_examenes_pre.png";
 const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
+/* ===== Helper ID PAGO (misma filosofía que Trauma / Generales) ===== */
+function ensurePreopIdPago() {
+  try {
+    let id = sessionStorage.getItem("idPago");
+    // Reutiliza idPago existente si viene de pago_ o preop_
+    if (id && (/^pago_/.test(id) || /^preop_/.test(id))) {
+      return id;
+    }
+    // Si no hay o no calza, genera uno nuevo tipo preop_
+    id = `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    sessionStorage.setItem("idPago", id);
+    return id;
+  } catch {
+    // Fallback si falla sessionStorage
+    return `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+  }
+}
+
 /* Etiquetas amigables para chips de comorbilidades */
 const LABELS_COMORB = {
   hta: "Hipertensión arterial",
@@ -77,10 +95,12 @@ function generoPalabra(genero = "") {
   if (s === "FEMENINO") return "Mujer";
   return "Paciente";
 }
+
 function resumenInicialPreop({ datos = {}, comorb = {}, tipoCirugia = "" }) {
   const sujeto = generoPalabra(datos.genero);
   const edad = datos.edad ? `${datos.edad} años` : "";
-  const lista = prettyComorb(comorbididades);
+  // 🔧 FIX: usar el parámetro comorb, no una variable global inexistente
+  const lista = prettyComorb(comorb);
   const antecedentes = lista.length
     ? `con antecedentes de: ${lista.join(", ")}`
     : "sin comorbilidades relevantes registradas";
@@ -116,7 +136,9 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
   const [mostrarAviso, setMostrarAviso] = useState(false);
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
-    try { sessionStorage.setItem("preop_aviso_ok", "1"); } catch {}
+    try {
+      sessionStorage.setItem("preop_aviso_ok", "1");
+    } catch {}
   };
   const rechazarAviso = () => {
     setMostrarAviso(false);
@@ -126,7 +148,11 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
   useEffect(() => {
     // Aviso Legal
     const avisoOk = (() => {
-      try { return sessionStorage.getItem("preop_aviso_ok") === "1"; } catch { return false; }
+      try {
+        return sessionStorage.getItem("preop_aviso_ok") === "1";
+      } catch {
+        return false;
+      }
     })();
     if (!avisoOk) setMostrarAviso(true);
 
@@ -152,7 +178,9 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
       } else {
         // compat legada
         const idPago = sessionStorage.getItem("idPago") || "";
-        const legacy = idPago ? sessionStorage.getItem(`preop_comorbilidades_${idPago}`) : null;
+        const legacy = idPago
+          ? sessionStorage.getItem(`preop_comorbilidades_${idPago}`)
+          : null;
         if (legacy) setComorbilidades(JSON.parse(legacy));
       }
     } catch {}
@@ -164,19 +192,33 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
       setExamenesIA(Array.isArray(ex) ? ex : []);
       setInformeIA(inf);
       if ((Array.isArray(ex) && ex.length) || inf) {
-        setStepStarted(true);   // IA ya generada previamente
+        setStepStarted(true); // IA ya generada previamente
         setFase("preview");
       }
     } catch {}
 
-    // Retorno de pago
+    // Retorno de pago (pago=ok)
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
-    const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
+    const idPagoFromUrl = params.get("idPago");
+    const idPagoStored = (() => {
+      try {
+        return sessionStorage.getItem("idPago") || "";
+      } catch {
+        return "";
+      }
+    })();
+    const idPago = idPagoFromUrl || idPagoStored;
 
     if (pago === "ok" && idPago) {
+      // Aseguramos que ese idPago quede como actual
+      try {
+        sessionStorage.setItem("idPago", idPago);
+        sessionStorage.setItem("modulo", "preop");
+      } catch {}
+
       setPagoRealizado(true);
-      setStepStarted(true);   // para que aparezca botón de "Descargar"
+      setStepStarted(true); // para que aparezca botón de "Descargar"
       setFase("preview");
 
       if (pollerRef.current) clearInterval(pollerRef.current);
@@ -185,7 +227,10 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
         intentos++;
         try {
           let r = await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`);
-          if (!r.ok) r = await fetch(`${BACKEND_BASE}/obtener-datos/${idPago}`);
+          if (!r.ok) {
+            r = await fetch(`${BACKEND_BASE}/obtener-datos/${idPago}`);
+          }
+          // no usamos respuesta; solo forzamos que backend genere PDF si falta
         } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
@@ -206,22 +251,44 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
 
   /* ===== handler del esquema (SIN mapper) ===== */
   const onSeleccionZona = (zona) => {
-    let dolor = "", lado = "";
+    let dolor = "",
+      lado = "";
     const zl = String(zona || "").toLowerCase();
 
-    if (zl.includes("columna cervical")) { dolor = "Columna cervical"; lado = ""; }
-    else if (zl.includes("columna dorsal")) { dolor = "Columna dorsal"; lado = ""; }
-    else if (zl.includes("columna lumbar") || zl.includes("columna")) { dolor = "Columna lumbar"; lado = ""; }
-    else if (zl.includes("cadera")) { dolor = "Cadera"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("rodilla")) { dolor = "Rodilla"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("hombro")) { dolor = "Hombro"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("codo")) { dolor = "Codo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("mano")) { dolor = "Mano"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
-    else if (zl.includes("tobillo")) { dolor = "Tobillo"; lado = zl.includes("izquierda") ? "Izquierda" : "Derecha"; }
+    if (zl.includes("columna cervical")) {
+      dolor = "Columna cervical";
+      lado = "";
+    } else if (zl.includes("columna dorsal")) {
+      dolor = "Columna dorsal";
+      lado = "";
+    } else if (zl.includes("columna lumbar") || zl.includes("columna")) {
+      dolor = "Columna lumbar";
+      lado = "";
+    } else if (zl.includes("cadera")) {
+      dolor = "Cadera";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("rodilla")) {
+      dolor = "Rodilla";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("hombro")) {
+      dolor = "Hombro";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("codo")) {
+      dolor = "Codo";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("mano")) {
+      dolor = "Mano";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (zl.includes("tobillo")) {
+      dolor = "Tobillo";
+      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
+    }
 
     const next = { ...datos, dolor, lado };
     setDatos(next);
-    try { sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next)); } catch {}
+    try {
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
+    } catch {}
   };
 
   /* ===== Generar IA (solo cuando el médico “acepta y continúa” desde preview orden) ===== */
@@ -237,7 +304,11 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
 
       // Leer comorbilidades y tipo actualizados desde sessionStorage (por si hubo cambios)
       let rawComorb = {};
-      try { rawComorb = JSON.parse(sessionStorage.getItem("preop_comorbilidades_data") || "{}"); } catch {}
+      try {
+        rawComorb = JSON.parse(
+          sessionStorage.getItem("preop_comorbilidades_data") || "{}"
+        );
+      } catch {}
       setComorbilidades(rawComorb || {});
 
       let fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
@@ -245,12 +316,11 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
       const cir = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
       setTipoCirugia(cir || "");
 
-      // asegurar idPago (no pagamos aún; solo necesitamos un id para continuidad si deseas)
-      const idPago =
-        sessionStorage.getItem("idPago") ||
-        `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-      sessionStorage.setItem("idPago", idPago);
-      sessionStorage.setItem("modulo", "preop");
+      // asegurar idPago común (no crear varios distintos)
+      const idPago = ensurePreopIdPago();
+      try {
+        sessionStorage.setItem("modulo", "preop");
+      } catch {}
 
       const payload = {
         idPago,
@@ -286,7 +356,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
 
       setExamenesIA(ex);
       setInformeIA(inf);
-      setStepStarted(true);   // ahora ya estamos en “previewIA”
+      setStepStarted(true); // ahora ya estamos en “previewIA”
       setFase("preview");
     } catch (err) {
       console.error(err);
@@ -300,19 +370,20 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
   const handlePagarDesdePreview = async () => {
     const edadNum = Number(datos.edad) || datos.edad;
 
-    const idPago =
-      sessionStorage.getItem("idPago") ||
-      `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    // Usa SIEMPRE el mismo helper de idPago
+    const idPago = ensurePreopIdPago();
 
     try {
       // Dejar todo seteado en sessionStorage para PantallaTres
-      sessionStorage.setItem("idPago", idPago);
-      sessionStorage.setItem("modulo", "preop");
-      sessionStorage.setItem("pantalla", "tres");
-      sessionStorage.setItem(
-        "datosPacienteJSON",
-        JSON.stringify({ ...datos, edad: edadNum })
-      );
+      try {
+        sessionStorage.setItem("idPago", idPago);
+        sessionStorage.setItem("modulo", "preop");
+        sessionStorage.setItem("pantalla", "tres");
+        sessionStorage.setItem(
+          "datosPacienteJSON",
+          JSON.stringify({ ...datos, edad: edadNum })
+        );
+      } catch {}
 
       const payload = {
         idPago,
@@ -356,12 +427,18 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
 
   /* ===== Descargar PDF ===== */
   const handleDescargarPreop = async () => {
-    const idPago = sessionStorage.getItem("idPago");
+    const idPago = ensurePreopIdPago();
     if (!idPago) return alert("ID de pago no encontrado");
 
     const intentaDescarga = async () => {
-      let res = await fetch(`${BACKEND_BASE}/pdf-preop/${idPago}`, { cache: "no-store" });
-      if (!res.ok) res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
+      let res = await fetch(`${BACKEND_BASE}/pdf-preop/${idPago}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, {
+          cache: "no-store",
+        });
+      }
 
       if (res.status === 404) return { ok: false, status: 404 };
       if (res.status === 402) return { ok: false, status: 402 };
@@ -393,7 +470,8 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
         if (r.status === 402) {
           setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
-          if (i === maxIntentos) alert("El pago aún no se confirma. Intenta nuevamente.");
+          if (i === maxIntentos)
+            alert("El pago aún no se confirma. Intenta nuevamente.");
           continue;
         }
 
@@ -451,7 +529,8 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     esquema: "Seleccione la zona relacionada con su cirugía.",
     tipo: "Indique el tipo de cirugía propuesta.",
     comorb: "Consigne enfermedades previas, tratamientos y alergias relevantes.",
-    preview: "Revise y confirme la orden; exámenes preoperatorios sugeridos por IA.",
+    preview:
+      "Revise y confirme la orden; exámenes preoperatorios sugeridos por IA.",
   }[fase];
 
   /* ====== NUEVO: SUBTÍTULO PARA LAYOUT (según fase / avance) ====== */
@@ -482,7 +561,9 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
           onReject={rechazarAviso}
         />
 
-        <h3 className="h1" style={{ color: T.primary }}>{tituloFase}</h3>
+        <h3 className="h1" style={{ color: T.primary }}>
+          {tituloFase}
+        </h3>
 
         {/* ====== FASE 1: ESQUEMA ====== */}
         {fase === "esquema" && (
@@ -494,13 +575,17 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
               <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
             )}
             <div className="mt-8 muted">
-              {datos?.dolor
-                ? (
-                  <>
-                    Zona: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong>
-                  </>
-                )
-                : "Seleccione una zona del esquema para continuar"}
+              {datos?.dolor ? (
+                <>
+                  Zona:{" "}
+                  <strong>
+                    {datos.dolor}
+                    {datos.lado ? ` — ${datos.lado}` : ""}
+                  </strong>
+                </>
+              ) : (
+                "Seleccione una zona del esquema para continuar"
+              )}
             </div>
             <div className="toolbar right mt-16">
               <button
@@ -518,15 +603,21 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
         {fase === "tipo" && (
           <div className="card" style={{ marginTop: 12 }}>
             <div className="section">
-              <h2 className="h1" style={{ margin: 0 }}>Tipo de cirugía</h2>
+              <h2 className="h1" style={{ margin: 0 }}>
+                Tipo de cirugía
+              </h2>
               <div className="muted">
-                {datos?.dolor
-                  ? (
-                    <>
-                      Zona: <strong>{datos.dolor}{datos.lado ? ` — ${datos.lado}` : ""}</strong>
-                    </>
-                  )
-                  : "Seleccione una zona en el paso anterior"}
+                {datos?.dolor ? (
+                  <>
+                    Zona:{" "}
+                    <strong>
+                      {datos.dolor}
+                      {datos.lado ? ` — ${datos.lado}` : ""}
+                    </strong>
+                  </>
+                ) : (
+                  "Seleccione una zona en el paso anterior"
+                )}
               </div>
             </div>
             <div className="divider" />
@@ -534,9 +625,15 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
               datos={datos}
               onTipoCirugiaChange={() => {
                 try {
-                  const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
-                  const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
-                  const final = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
+                  const fijo = (
+                    sessionStorage.getItem("preop_tipoCirugia") || ""
+                  ).toUpperCase();
+                  const otro = (
+                    sessionStorage.getItem("preop_tipoCirugia_otro") || ""
+                  ).toUpperCase();
+                  const final = fijo.startsWith("OTRO")
+                    ? (otro || "").trim()
+                    : fijo.trim();
                   setTipoCirugia(final || "");
                 } catch {}
               }}
@@ -545,12 +642,17 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
               <button
                 className="btn"
                 onClick={() => {
-                  const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "");
-                  const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "");
+                  const fijo =
+                    sessionStorage.getItem("preop_tipoCirugia") || "";
+                  const otro =
+                    sessionStorage.getItem("preop_tipoCirugia_otro") || "";
                   const isOtro = fijo.trim().toUpperCase().startsWith("OTRO");
-                  const ok = (fijo && !isOtro) || (isOtro && (otro || "").trim());
+                  const ok =
+                    (fijo && !isOtro) || (isOtro && (otro || "").trim());
                   if (!ok) {
-                    alert("Seleccione el tipo de cirugía o especifique 'OTRO'.");
+                    alert(
+                      "Seleccione el tipo de cirugía o especifique 'OTRO'."
+                    );
                     return;
                   }
                   setFase("comorb");
@@ -566,7 +668,9 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
         {fase === "comorb" && (
           <div className="card" style={{ marginTop: 12 }}>
             <div className="section">
-              <h2 className="h1" style={{ margin: 0 }}>Comorbilidades</h2>
+              <h2 className="h1" style={{ margin: 0 }}>
+                Comorbilidades
+              </h2>
             </div>
             <div className="divider" />
             <FormularioComorbilidades
@@ -583,8 +687,8 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
                   sessionStorage.removeItem("preop_ia_resumen");
                 } catch {}
                 setComorbilidades(payload || {});
-                setStepStarted(false);   // aún NO hay IA
-                setFase("preview");      // vamos a preview de ORDEN (sin IA)
+                setStepStarted(false); // aún NO hay IA
+                setFase("preview"); // vamos a preview de ORDEN (sin IA)
               }}
               onCancel={() => {}}
             />
@@ -595,16 +699,30 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
         {fase === "preview" && (
           <>
             <section style={{ marginBottom: 10 }}>
-              <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
-              <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
-              <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
-              <div><strong>Sexo:</strong> {datos?.genero || "—"}</div>
+              <div>
+                <strong>Paciente:</strong> {datos?.nombre || "—"}
+              </div>
+              <div>
+                <strong>RUT:</strong> {datos?.rut || "—"}
+              </div>
+              <div>
+                <strong>Edad:</strong> {datos?.edad || "—"}
+              </div>
+              <div>
+                <strong>Sexo:</strong> {datos?.genero || "—"}
+              </div>
               <div>
                 <strong>Motivo/Área:</strong>{" "}
-                {`Dolor en ${(datos?.dolor || "")}${datos?.lado ? ` ${datos.lado}` : ""}`.trim() || "—"}
+                {(
+                  `Dolor en ${(datos?.dolor || "")}${
+                    datos?.lado ? ` ${datos.lado}` : ""
+                  }`
+                ).trim() || "—"}
               </div>
               {tipoCirugia ? (
-                <div><strong>Tipo de cirugía:</strong> {tipoCirugia}</div>
+                <div>
+                  <strong>Tipo de cirugía:</strong> {tipoCirugia}
+                </div>
               ) : (
                 <div className="muted">
                   (El tipo de cirugía se toma del formulario principal de PREOP).
@@ -616,12 +734,16 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
             {!stepStarted && (
               <>
                 <div className="mono">
-                  {resumenInicialPreop({ datos, comorb: comorbilidades, tipoCirugia })}
+                  {resumenInicialPreop({
+                    datos,
+                    comorb: comorbilidades,
+                    tipoCirugia,
+                  })}
                 </div>
                 <button
                   className="btn fullw"
                   style={{ marginTop: 10 }}
-                  onClick={handleGenerarIA}          // ← aquí recién llamamos IA
+                  onClick={handleGenerarIA} // ← aquí recién llamamos IA
                   disabled={loadingIA}
                   aria-busy={loadingIA}
                 >
@@ -639,7 +761,9 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
                     <strong>Comorbilidades:</strong>
                     <div className="chips mt-6">
                       {comorbChips.map((t, i) => (
-                        <span key={`${t}-${i}`} className="chip">{t}</span>
+                        <span key={`${t}-${i}`} className="chip">
+                          {t}
+                        </span>
                       ))}
                     </div>
                   </section>
@@ -652,16 +776,23 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
                     <ul className="mt-6">
                       {examenesIA.map((e, idx) => (
                         <li
-                          key={`${typeof e === "string" ? e : e?.nombre || "item"}-${idx}`}
+                          key={`${
+                            typeof e === "string"
+                              ? e
+                              : e?.nombre || "item"
+                          }-${idx}`}
                         >
-                          {typeof e === "string" ? e : e?.nombre || JSON.stringify(e)}
+                          {typeof e === "string"
+                            ? e
+                            : e?.nombre || JSON.stringify(e)}
                         </li>
                       ))}
                     </ul>
                   </section>
                 ) : (
                   <div className="muted mt-12">
-                    (Aún no hay lista de exámenes. Pulsa “Generar con IA…” para que se ejecute y aparezcan aquí.)
+                    (Aún no hay lista de exámenes. Pulsa “Generar con IA…” para
+                    que se ejecute y aparezcan aquí.)
                   </div>
                 )}
 
@@ -681,7 +812,9 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
                     aria-busy={descargando}
                     title={mensajeDescarga || "Verificar y descargar"}
                   >
-                    {descargando ? (mensajeDescarga || "Verificando…") : "Descargar Documento"}
+                    {descargando
+                      ? mensajeDescarga || "Verificando…"
+                      : "Descargar Documento"}
                   </button>
                 ) : (
                   <button
