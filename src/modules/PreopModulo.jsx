@@ -332,7 +332,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
 
     const payload = {
       idPago,
-      datosPaciente: datos,
+      paciente: datos,
       comorbilidades,
       tipoCirugia,
       examenesIA,
