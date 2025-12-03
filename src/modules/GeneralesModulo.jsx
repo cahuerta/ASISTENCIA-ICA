@@ -66,7 +66,11 @@ function prettyComorb(c = {}) {
         if (v) bullets.push(label);
         continue;
       }
-      if (typeof v === "object" && v !== null && (v.tiene || v.usa || v.detalle)) {
+      if (
+        typeof v === "object" &&
+        v !== null &&
+        (v.tiene || v.usa || v.detalle)
+      ) {
         let t = label;
         if (v.detalle) t += ` — ${v.detalle}`;
         bullets.push(t);
@@ -132,9 +136,6 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
     } catch {}
 
-    // ============================================
-    // ⚠️ CAMBIO REALIZADO (según lo solicitado)
-    // ============================================
     // Solo cargar examen previo si YA estabas en step 2
     let wasStep2 = false;
     try {
@@ -157,7 +158,6 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       setExamenesIA([]);
       setInformeIA("");
     }
-    // ============================================
 
     // Comorbilidades (para mostrar en resumen si ya existen)
     try {
@@ -207,9 +207,26 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
-          await fetch(`${BACKEND_BASE}/obtener-datos-generales/${idPago}`);
+          const res = await fetch(
+            `${BACKEND_BASE}/obtener-datos-generales/${idPago}`
+          );
+          if (res.ok) {
+            const j = await res.json();
+
+            if (Array.isArray(j.examenesIA)) {
+              setExamenesIA(j.examenesIA);
+            }
+            if (typeof j.informeIA === "string") {
+              setInformeIA(j.informeIA);
+            }
+
+            // si ya cargamos los datos, dejamos de consultar
+            clearInterval(pollerRef.current);
+            pollerRef.current = null;
+          }
         } catch {}
-        if (intentos >= 30) {
+
+        if (intentos >= 30 && pollerRef.current) {
           clearInterval(pollerRef.current);
           pollerRef.current = null;
         }
@@ -580,9 +597,9 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
                 </ul>
               ) : (
                 <div style={styles.hint}>
-                  Aún no hay lista generada por IA. Desde el formulario principal,
-                  pulsa<strong> “Generar Informe”</strong> para ejecutar la IA y ver
-                  el resultado aquí.
+                  Aún no hay lista generada por IA. Desde el formulario
+                  principal, pulsa<strong> “Generar Informe”</strong> para
+                  ejecutar la IA y ver el resultado aquí.
                 </div>
               )}
             </div>
