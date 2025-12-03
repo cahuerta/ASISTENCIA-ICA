@@ -132,15 +132,32 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
     } catch {}
 
-    // IA previa
+    // ============================================
+    // ⚠️ CAMBIO REALIZADO (según lo solicitado)
+    // ============================================
+    // Solo cargar examen previo si YA estabas en step 2
+    let wasStep2 = false;
     try {
-      const ex = JSON.parse(
-        sessionStorage.getItem("generales_ia_examenes") || "[]"
-      );
-      const inf = sessionStorage.getItem("generales_ia_resumen") || "";
-      setExamenesIA(Array.isArray(ex) ? ex : []);
-      setInformeIA(inf);
+      wasStep2 = sessionStorage.getItem("generales_step") === "2";
     } catch {}
+
+    if (wasStep2) {
+      try {
+        const ex = JSON.parse(
+          sessionStorage.getItem("generales_ia_examenes") || "[]"
+        );
+        const inf = sessionStorage.getItem("generales_ia_resumen") || "";
+
+        setExamenesIA(Array.isArray(ex) ? ex : []);
+        setInformeIA(inf);
+        setStepStarted(true);
+      } catch {}
+    } else {
+      // limpiar cualquier lista previa obsoleta
+      setExamenesIA([]);
+      setInformeIA("");
+    }
+    // ============================================
 
     // Comorbilidades (para mostrar en resumen si ya existen)
     try {
@@ -150,12 +167,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       setComorbilidades(c || {});
     } catch {}
 
-    // Mantener segundo preview si ya estaba
-    try {
-      if (sessionStorage.getItem("generales_step") === "2") setStepStarted(true);
-    } catch {}
-
-    // NUEVO: verificación de Aviso Legal -> si no, pedirlo
+    // NUEVO: verificación Aviso Legal
     const avisoOk = (() => {
       try {
         return sessionStorage.getItem("generales_aviso_ok") === "1";
@@ -165,10 +177,10 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
     })();
     if (!avisoOk) {
       setMostrarAviso(true);
-      return; // no seguimos mostrando nada hasta aceptar
+      return;
     }
 
-    // Si aviso OK, chequear comorbilidades: si no hay confirmación, abrir formulario
+    // Verificación comorbilidades
     const comorbOk = (() => {
       try {
         return sessionStorage.getItem("generales_comorbilidades_ok") === "1";
@@ -176,9 +188,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
         return false;
       }
     })();
-    if (!comorbOk) {
-      setMostrarComorbilidades(true);
-    }
+    if (!comorbOk) setMostrarComorbilidades(true);
 
     // retorno de pago
     const params = new URLSearchParams(window.location.search);
@@ -187,6 +197,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
       setStepStarted(true);
+
       try {
         sessionStorage.setItem("generales_step", "2");
       } catch {}
@@ -221,7 +232,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
     try {
       sessionStorage.setItem("generales_aviso_ok", "1");
     } catch {}
-    // Si faltan comorbilidades, abrirlas inmediatamente
+
     try {
       const ok = sessionStorage.getItem("generales_comorbilidades_ok") === "1";
       if (!ok) setMostrarComorbilidades(true);
@@ -232,7 +243,6 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
   const rechazarAviso = () => {
     setMostrarAviso(false);
-    // Bloquea el módulo si no acepta (no se muestra contenido)
     alert("Debes aceptar el aviso legal para continuar.");
   };
 
@@ -266,13 +276,12 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
     }
 
     try {
-      const idPago = ensureGeneralesIdPago(); // ← MISMO idPago para IA, guardar y pago
+      const idPago = ensureGeneralesIdPago();
       sessionStorage.setItem("modulo", "generales");
       sessionStorage.setItem(
         "datosPacienteJSON",
         JSON.stringify({ ...datos, edad: edadNum })
       );
-      // Dejamos marcada la intención de ir a PantallaTres
       sessionStorage.setItem("pantalla", "tres");
 
       const examenPaciente = (examenLibre || "").trim();
@@ -281,7 +290,6 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
         ...(examenPaciente ? [examenPaciente] : []),
       ];
 
-      // Guardar TODO en la ruta que espera el backend
       await fetch(`${BACKEND_BASE}/guardar-datos-generales`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -289,21 +297,18 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
           idPago,
           datosPaciente: { ...datos, edad: edadNum },
           comorbilidades,
-          examenesIA: examenesFinales, // ← el PDF usa examenesIA
+          examenesIA: examenesFinales,
           informeIA,
-          // examenLibre solo como referencia (el backend hoy no lo usa en el PDF)
           examenLibre: examenPaciente,
         }),
       });
 
-      // 🔁 SIEMPRE ir a PantallaTres si viene del padre
       if (typeof onIrPantallaTres === "function") {
         try {
           sessionStorage.setItem("idPago", idPago);
         } catch {}
         onIrPantallaTres({ ...datos, edad: edadNum, idPago });
       } else {
-        // Fallback: comportamiento antiguo, pagar directo con Khipu
         await irAPagoKhipu(
           { ...datos, edad: edadNum },
           { idPago, modulo: "generales" }
@@ -410,16 +415,13 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
   /* ------------------------------ Preview ------------------------------ */
 
-  // “Continuar” → llama a la IA y pasa al segundo preview
   const handleContinuar = async () => {
     try {
       setLoadingIA(true);
 
-      // refresco defensivo
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
 
-      // comorbilidades actuales (por si viniera de formulario)
       let c = {};
       try {
         c = JSON.parse(
@@ -428,7 +430,6 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       } catch {}
       setComorbilidades(c || {});
 
-      // ⬅️ MISMO idPago para IA y resto del flujo
       const idPago = ensureGeneralesIdPago();
       sessionStorage.setItem("idPago", idPago);
 
@@ -438,13 +439,12 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
         comorbilidades: c || {},
       };
 
-      // 1) Ruta específica
       let resp = await fetch(`${BACKEND_BASE}/ia-generales`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      // 2) Fallbacks legacy
+
       if (!resp.ok) {
         resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
           method: "POST",
@@ -465,7 +465,6 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       const ex = Array.isArray(j?.examenes) ? j.examenes : [];
       const inf = typeof j?.informeIA === "string" ? j.informeIA : "";
 
-      // persistimos para PDF y estado
       try {
         sessionStorage.setItem("generales_ia_examenes", JSON.stringify(ex));
         sessionStorage.setItem("generales_ia_resumen", inf || "");
@@ -498,7 +497,6 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       variant="generales"
     >
       <div className="card" style={styles.card}>
-        {/* AVISO LEGAL (bloquea hasta aceptar) */}
         <AvisoLegal
           visible={mostrarAviso}
           persist={false}
@@ -506,7 +504,6 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
           onReject={rechazarAviso}
         />
 
-        {/* FORMULARIO COMORBILIDADES (antes del preview) */}
         {mostrarComorbilidades && (
           <div style={styles.modalOverlay}>
             <div className="card" style={{ width: "min(900px, 96vw)" }}>
@@ -540,7 +537,6 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
           </div>
         </div>
 
-        {/* Primer preview: SOLO resumen (si NO está abierto el formulario de comorbilidades) */}
         {!stepStarted && !mostrarComorbilidades && (
           <>
             <div style={{ ...styles.mono, marginTop: 6 }}>
@@ -559,7 +555,6 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
           </>
         )}
 
-        {/* Segundo preview: IA + texto libre + pago */}
         {stepStarted && (
           <>
             {prettyComorb(comorbilidades).length > 0 && (
@@ -716,7 +711,6 @@ function makeStyles(T) {
       color: "var(--text, #1b1b1b)",
       marginTop: 6,
     },
-    /* Overlay simple para formularios modales */
     modalOverlay: {
       position: "fixed",
       inset: 0,
