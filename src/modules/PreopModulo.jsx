@@ -419,7 +419,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 idPago,
-                datosPaciente: datos,
+                paciente: datos,
                 comorbilidades,
                 tipoCirugia,
                 examenesIA,
