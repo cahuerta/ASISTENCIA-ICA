@@ -23,25 +23,20 @@ import logoPreop from "../assets/logo_examenes_pre.png";
 const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* ===== Helper ID PAGO (misma filosofía que Trauma / Generales) ===== */
+/* ===== ID PAGO — un solo idPago por módulo, igual a trauma ===== */
 function ensurePreopIdPago() {
   try {
     let id = sessionStorage.getItem("idPago");
-    // Reutiliza idPago existente si viene de pago_ o preop_
-    if (id && (/^pago_/.test(id) || /^preop_/.test(id))) {
-      return id;
-    }
-    // Si no hay o no calza, genera uno nuevo tipo preop_
+    if (id && (/^preop_/.test(id) || /^pago_/.test(id))) return id;
     id = `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
     sessionStorage.setItem("idPago", id);
     return id;
   } catch {
-    // Fallback si falla sessionStorage
     return `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   }
 }
 
-/* Etiquetas amigables para chips de comorbilidades */
+/* Etiquetas amigables */
 const LABELS_COMORB = {
   hta: "Hipertensión arterial",
   dm2: "Diabetes mellitus tipo 2",
@@ -78,9 +73,7 @@ function prettyComorb(c = {}) {
         out.push(t);
         continue;
       }
-      if (typeof v === "string" && v.trim()) {
-        out.push(`${label}: ${v.trim()}`);
-      }
+      if (typeof v === "string" && v.trim()) out.push(`${label}: ${v.trim()}`);
     }
     return out;
   } catch {
@@ -88,18 +81,16 @@ function prettyComorb(c = {}) {
   }
 }
 
-/* ===== Helper para el resumen inicial PREOP (antes de IA) ===== */
-function generoPalabra(genero = "") {
-  const s = String(genero).toUpperCase();
+function generoPalabra(g) {
+  const s = String(g).toUpperCase();
   if (s === "MASCULINO") return "Hombre";
   if (s === "FEMENINO") return "Mujer";
   return "Paciente";
 }
 
-function resumenInicialPreop({ datos = {}, comorb = {}, tipoCirugia = "" }) {
-  const sujeto = generoPalabra(datos.genero);
-  const edad = datos.edad ? `${datos.edad} años` : "";
-  // 🔧 FIX: usar el parámetro comorb, no una variable global inexistente
+function resumenInicialPreop({ datos, comorb, tipoCirugia }) {
+  const sujeto = generoPalabra(datos?.genero);
+  const edad = datos?.edad ? `${datos.edad} años` : "";
   const lista = prettyComorb(comorb);
   const antecedentes = lista.length
     ? `con antecedentes de: ${lista.join(", ")}`
@@ -109,30 +100,24 @@ function resumenInicialPreop({ datos = {}, comorb = {}, tipoCirugia = "" }) {
 }
 
 export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
-  /* Stepper: esquema → tipo → comorb → preview (orden) → [Aceptar y continuar] → IA (previewIA) */
   const [fase, setFase] = useState("esquema");
-
-  /* Datos y estado */
   const [datos, setDatos] = useState(initialDatos || {});
   const [pagoRealizado, setPagoRealizado] = useState(false);
+
+  const [loadingIA, setLoadingIA] = useState(false);
+  const [examenesIA, setExamenesIA] = useState([]);
+  const [informeIA, setInformeIA] = useState("");
+
+  const [comorbilidades, setComorbilidades] = useState({});
+  const [tipoCirugia, setTipoCirugia] = useState("");
+
+  const [stepStarted, setStepStarted] = useState(false);
+  const [vista, setVista] = useState("anterior");
+
   const [descargando, setDescargando] = useState(false);
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
-  /* IA y metadatos */
-  const [loadingIA, setLoadingIA] = useState(false);
-  const [examenesIA, setExamenesIA] = useState([]);
-  const [informeIA, setInformeIA] = useState("");
-  const [comorbilidades, setComorbilidades] = useState({});
-  const [tipoCirugia, setTipoCirugia] = useState("");
-
-  /* En esta versión, stepStarted = hay IA lista (o retorno de pago ok) */
-  const [stepStarted, setStepStarted] = useState(false);
-
-  /* UI esquema (solo toggle) */
-  const [vista, setVista] = useState("anterior");
-
-  /* Gating por Aviso Legal */
   const [mostrarAviso, setMostrarAviso] = useState(false);
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
@@ -146,7 +131,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
   };
 
   useEffect(() => {
-    // Aviso Legal
+    /* Aviso legal */
     const avisoOk = (() => {
       try {
         return sessionStorage.getItem("preop_aviso_ok") === "1";
@@ -156,13 +141,13 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     })();
     if (!avisoOk) setMostrarAviso(true);
 
-    // Datos paciente
+    /* Datos básicos */
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
-      if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      if (saved) setDatos((p) => ({ ...p, ...JSON.parse(saved) }));
     } catch {}
 
-    // Tipo cirugía (desde formulario principal)
+    /* Tipo cirugía */
     try {
       const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
       const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
@@ -170,67 +155,49 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
       setTipoCirugia(final || "");
     } catch {}
 
-    // Comorbilidades
+    /* Comorbilidades */
     try {
       const raw = sessionStorage.getItem("preop_comorbilidades_data");
-      if (raw) {
-        setComorbilidades(JSON.parse(raw));
-      } else {
-        // compat legada
-        const idPago = sessionStorage.getItem("idPago") || "";
-        const legacy = idPago
-          ? sessionStorage.getItem(`preop_comorbilidades_${idPago}`)
-          : null;
-        if (legacy) setComorbilidades(JSON.parse(legacy));
-      }
+      if (raw) setComorbilidades(JSON.parse(raw));
     } catch {}
 
-    // IA previa (si hay, mostramos preview con IA)
+    /* IA previa */
     try {
       const ex = JSON.parse(sessionStorage.getItem("preop_ia_examenes") || "[]");
       const inf = sessionStorage.getItem("preop_ia_resumen") || "";
       setExamenesIA(Array.isArray(ex) ? ex : []);
       setInformeIA(inf);
       if ((Array.isArray(ex) && ex.length) || inf) {
-        setStepStarted(true); // IA ya generada previamente
+        setStepStarted(true);
         setFase("preview");
       }
     } catch {}
 
-    // Retorno de pago (pago=ok)
+    /* ===== Retorno de pago — sin reemplazar idPago ===== */
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
-    const idPagoFromUrl = params.get("idPago");
-    const idPagoStored = (() => {
+
+    /* usamos SIEMPRE el idPago existente */
+    const idPago = (() => {
       try {
         return sessionStorage.getItem("idPago") || "";
       } catch {
         return "";
       }
     })();
-    const idPago = idPagoFromUrl || idPagoStored;
 
     if (pago === "ok" && idPago) {
-      // Aseguramos que ese idPago quede como actual
-      try {
-        sessionStorage.setItem("idPago", idPago);
-        sessionStorage.setItem("modulo", "preop");
-      } catch {}
-
       setPagoRealizado(true);
-      setStepStarted(true); // para que aparezca botón de "Descargar"
+      setStepStarted(true);
       setFase("preview");
 
       if (pollerRef.current) clearInterval(pollerRef.current);
       let intentos = 0;
+
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
-          let r = await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`);
-          if (!r.ok) {
-            r = await fetch(`${BACKEND_BASE}/obtener-datos/${idPago}`);
-          }
-          // no usamos respuesta; solo forzamos que backend genere PDF si falta
+          await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`);
         } catch {}
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
@@ -240,31 +207,22 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     }
 
     return () => {
-      if (pollerRef.current) {
-        clearInterval(pollerRef.current);
-        pollerRef.current = null;
-      }
+      if (pollerRef.current) clearInterval(pollerRef.current);
     };
   }, []);
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /* ===== handler del esquema (SIN mapper) ===== */
+  /* ===== Selección zona ===== */
   const onSeleccionZona = (zona) => {
     let dolor = "",
       lado = "";
     const zl = String(zona || "").toLowerCase();
 
-    if (zl.includes("columna cervical")) {
-      dolor = "Columna cervical";
-      lado = "";
-    } else if (zl.includes("columna dorsal")) {
-      dolor = "Columna dorsal";
-      lado = "";
-    } else if (zl.includes("columna lumbar") || zl.includes("columna")) {
-      dolor = "Columna lumbar";
-      lado = "";
-    } else if (zl.includes("cadera")) {
+    if (zl.includes("columna cervical")) dolor = "Columna cervical";
+    else if (zl.includes("columna dorsal")) dolor = "Columna dorsal";
+    else if (zl.includes("columna lumbar")) dolor = "Columna lumbar";
+    else if (zl.includes("cadera")) {
       dolor = "Cadera";
       lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
     } else if (zl.includes("rodilla")) {
@@ -291,18 +249,16 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     } catch {}
   };
 
-  /* ===== Generar IA (solo cuando el médico “acepta y continúa” desde preview orden) ===== */
+  /* ===== IA ===== */
   const handleGenerarIA = async () => {
     try {
       setLoadingIA(true);
 
-      // refrescos defensivos
       try {
         const saved = sessionStorage.getItem("datosPacienteJSON");
-        if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
+        if (saved) setDatos((p) => ({ ...p, ...JSON.parse(saved) }));
       } catch {}
 
-      // Leer comorbilidades y tipo actualizados desde sessionStorage (por si hubo cambios)
       let rawComorb = {};
       try {
         rawComorb = JSON.parse(
@@ -316,7 +272,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
       const cir = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
       setTipoCirugia(cir || "");
 
-      // asegurar idPago común (no crear varios distintos)
       const idPago = ensurePreopIdPago();
       try {
         sessionStorage.setItem("modulo", "preop");
@@ -324,12 +279,11 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
 
       const payload = {
         idPago,
-        paciente: { ...datos, edad: Number(datos.edad) || datos.edad },
+        paciente: { ...datos },
         comorbilidades: rawComorb || {},
         tipoCirugia: cir || "",
       };
 
-      // Llamar IA (no guardamos nada “oficial” aún)
       let r = await fetch(`${BACKEND_BASE}/preop-ia`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -348,7 +302,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
       const ex = Array.isArray(j?.examenes) ? j.examenes : [];
       const inf = typeof j?.informeIA === "string" ? j.informeIA : "";
 
-      // persistir en sesión para continuidad (descarga/pagos posteriores)
       try {
         sessionStorage.setItem("preop_ia_examenes", JSON.stringify(ex));
         sessionStorage.setItem("preop_ia_resumen", inf || "");
@@ -356,76 +309,63 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
 
       setExamenesIA(ex);
       setInformeIA(inf);
-      setStepStarted(true); // ahora ya estamos en “previewIA”
+      setStepStarted(true);
       setFase("preview");
-    } catch (err) {
-      console.error(err);
-      alert("No fue posible obtener la información de IA (Preop). Intenta nuevamente.");
+    } catch (e) {
+      console.error(e);
+      alert("Error al generar IA.");
     } finally {
       setLoadingIA(false);
     }
   };
 
-  /* ===== Pago (guarda en backend y luego PantallaTres / Khipu) ===== */
+  /* ===== Pago ===== */
   const handlePagarDesdePreview = async () => {
-    const edadNum = Number(datos.edad) || datos.edad;
-
-    // Usa SIEMPRE el mismo helper de idPago
     const idPago = ensurePreopIdPago();
 
     try {
-      // Dejar todo seteado en sessionStorage para PantallaTres
-      try {
-        sessionStorage.setItem("idPago", idPago);
-        sessionStorage.setItem("modulo", "preop");
-        sessionStorage.setItem("pantalla", "tres");
-        sessionStorage.setItem(
-          "datosPacienteJSON",
-          JSON.stringify({ ...datos, edad: edadNum })
-        );
-      } catch {}
+      sessionStorage.setItem("idPago", idPago);
+      sessionStorage.setItem("modulo", "preop");
+      sessionStorage.setItem("pantalla", "tres");
+      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
+    } catch {}
 
-      const payload = {
-        idPago,
-        datosPaciente: { ...datos, edad: edadNum },
-        comorbilidades,
-        tipoCirugia,
-        examenesIA: Array.isArray(examenesIA) ? examenesIA : [],
-        informeIA: informeIA || "",
-      };
+    const payload = {
+      idPago,
+      datosPaciente: datos,
+      comorbilidades,
+      tipoCirugia,
+      examenesIA,
+      informeIA,
+    };
 
-      // Guardamos para que el PDF quede consistente en backend
+    try {
       let r = await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
       if (!r.ok) {
-        r = await fetch(`${BACKEND_BASE}/guardar-datos`, {
+        await fetch(`${BACKEND_BASE}/guardar-datos`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            idPago,
-            datosPaciente: { ...datos, edad: edadNum },
-          }),
+          body: JSON.stringify({ idPago, datosPaciente: datos }),
         });
       }
 
       if (typeof onIrPantallaTres === "function") {
-        onIrPantallaTres({ ...datos, edad: edadNum, idPago });
+        onIrPantallaTres({ ...datos, idPago });
       } else {
-        await irAPagoKhipu(
-          { ...datos, edad: edadNum },
-          { idPago, modulo: "preop" }
-        );
+        await irAPagoKhipu(datos, { idPago, modulo: "preop" });
       }
     } catch (err) {
-      console.error("No se pudo preparar el pago (preop):", err);
-      alert(`No se pudo preparar el pago.\n${err?.message || err}`);
+      console.error(err);
+      alert("No se pudo iniciar el pago.");
     }
   };
 
-  /* ===== Descargar PDF ===== */
+  /* ===== Descargar ===== */
   const handleDescargarPreop = async () => {
     const idPago = ensurePreopIdPago();
     if (!idPago) return alert("ID de pago no encontrado");
@@ -448,8 +388,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const baseName = (datos?.nombre || "paciente").replace(/ /g, "_");
-      a.download = `preop_${baseName}.pdf`;
+      a.download = `preop_${(datos?.nombre || "paciente").replace(/ /g, "_")}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -470,17 +409,12 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
         if (r.status === 402) {
           setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
-          if (i === maxIntentos)
-            alert("El pago aún no se confirma. Intenta nuevamente.");
           continue;
         }
 
         if (r.status === 404) {
           if (!reinyectado) {
-            setMensajeDescarga("Restaurando datos…");
-
-            // Reinyectar en backend con lo último en sesión
-            let r2 = await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
+            await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -488,32 +422,22 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
                 datosPaciente: datos,
                 comorbilidades,
                 tipoCirugia,
-                examenesIA: Array.isArray(examenesIA) ? examenesIA : [],
-                informeIA: informeIA || "",
+                examenesIA,
+                informeIA,
               }),
-            });
-            if (!r2.ok) {
-              await fetch(`${BACKEND_BASE}/guardar-datos`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ idPago, datosPaciente: datos }),
-              });
-            }
-
+            }).catch(() => {});
             reinyectado = true;
             await sleep(500);
             continue;
-          } else {
-            alert("No se pudo descargar el PDF después de reintentar.");
-            break;
           }
+          alert("No se pudo descargar el PDF.");
+          break;
         }
 
         alert("No se pudo descargar el PDF.");
         break;
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
       alert("No se pudo descargar el PDF.");
     } finally {
       setDescargando(false);
@@ -521,10 +445,8 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
-  /* ===================== UI ===================== */
   const comorbChips = prettyComorb(comorbilidades);
 
-  /* ====== NUEVO: TÍTULO DINÁMICO POR FASE ====== */
   const tituloFase = {
     esquema: "Seleccione la zona relacionada con su cirugía.",
     tipo: "Indique el tipo de cirugía propuesta.",
@@ -533,7 +455,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
       "Revise y confirme la orden; exámenes preoperatorios sugeridos por IA.",
   }[fase];
 
-  /* ====== NUEVO: SUBTÍTULO PARA LAYOUT (según fase / avance) ====== */
   const subtitleLayout = {
     esquema:
       "Revise el esquema corporal y marque la zona donde se realizará la cirugía.",
@@ -565,7 +486,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
           {tituloFase}
         </h3>
 
-        {/* ====== FASE 1: ESQUEMA ====== */}
+        {/* ESQUEMA */}
         {fase === "esquema" && (
           <div className="card" style={{ marginTop: 8 }}>
             <EsquemaToggleTabs vista={vista} onChange={setVista} />
@@ -599,7 +520,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
           </div>
         )}
 
-        {/* ====== FASE 2: TIPO DE CIRUGÍA ====== */}
+        {/* TIPO CIRUGÍA */}
         {fase === "tipo" && (
           <div className="card" style={{ marginTop: 12 }}>
             <div className="section">
@@ -650,9 +571,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
                   const ok =
                     (fijo && !isOtro) || (isOtro && (otro || "").trim());
                   if (!ok) {
-                    alert(
-                      "Seleccione el tipo de cirugía o especifique 'OTRO'."
-                    );
+                    alert("Seleccione el tipo de cirugía o especifique 'OTRO'.");
                     return;
                   }
                   setFase("comorb");
@@ -664,7 +583,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
           </div>
         )}
 
-        {/* ====== FASE 3: COMORBILIDADES ====== */}
+        {/* COMORBILIDADES */}
         {fase === "comorb" && (
           <div className="card" style={{ marginTop: 12 }}>
             <div className="section">
@@ -675,27 +594,25 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
             <div className="divider" />
             <FormularioComorbilidades
               initial={comorbilidades || {}}
-              onSave={async (payload) => {
+              onSave={(payload) => {
                 try {
                   sessionStorage.setItem(
                     "preop_comorbilidades_data",
                     JSON.stringify(payload || {})
                   );
                   sessionStorage.setItem("preop_comorbilidades_ok", "1");
-                  // Limpiar IA previa para que NO aparezca sola en preview
                   sessionStorage.removeItem("preop_ia_examenes");
                   sessionStorage.removeItem("preop_ia_resumen");
                 } catch {}
                 setComorbilidades(payload || {});
-                setStepStarted(false); // aún NO hay IA
-                setFase("preview"); // vamos a preview de ORDEN (sin IA)
+                setStepStarted(false);
+                setFase("preview");
               }}
-              onCancel={() => {}}
             />
           </div>
         )}
 
-        {/* ====== FASE 4: PREVIEW (orden) + PREVIEW IA (si stepStarted) ====== */}
+        {/* PREVIEW */}
         {fase === "preview" && (
           <>
             <section style={{ marginBottom: 10 }}>
@@ -713,24 +630,18 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
               </div>
               <div>
                 <strong>Motivo/Área:</strong>{" "}
-                {(
-                  `Dolor en ${(datos?.dolor || "")}${
-                    datos?.lado ? ` ${datos.lado}` : ""
-                  }`
-                ).trim() || "—"}
+                {`Dolor en ${(datos?.dolor || "")}${
+                  datos?.lado ? ` ${datos.lado}` : ""
+                }`.trim()}
               </div>
-              {tipoCirugia ? (
+              {tipoCirugia && (
                 <div>
                   <strong>Tipo de cirugía:</strong> {tipoCirugia}
-                </div>
-              ) : (
-                <div className="muted">
-                  (El tipo de cirugía se toma del formulario principal de PREOP).
                 </div>
               )}
             </section>
 
-            {/* PREVIEW ORDEN (sin IA) */}
+            {/* PREVIEW ORDEN */}
             {!stepStarted && (
               <>
                 <div className="mono">
@@ -743,25 +654,23 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
                 <button
                   className="btn fullw"
                   style={{ marginTop: 10 }}
-                  onClick={handleGenerarIA} // ← aquí recién llamamos IA
+                  onClick={handleGenerarIA}
                   disabled={loadingIA}
-                  aria-busy={loadingIA}
                 >
                   {loadingIA ? "Generando con IA…" : "Aceptar y continuar"}
                 </button>
               </>
             )}
 
-            {/* PREVIEW IA (exámenes + informe) */}
+            {/* PREVIEW IA */}
             {stepStarted && (
               <>
-                {/* Comorbilidades (chips) */}
-                {comorbChips.length > 0 && (
+                {prettyComorb(comorbilidades).length > 0 && (
                   <section className="mt-8">
                     <strong>Comorbilidades:</strong>
                     <div className="chips mt-6">
-                      {comorbChips.map((t, i) => (
-                        <span key={`${t}-${i}`} className="chip">
+                      {prettyComorb(comorbilidades).map((t, i) => (
+                        <span className="chip" key={i}>
                           {t}
                         </span>
                       ))}
@@ -769,51 +678,32 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
                   </section>
                 )}
 
-                {/* Lista de exámenes IA */}
-                {Array.isArray(examenesIA) && examenesIA.length > 0 ? (
+                {Array.isArray(examenesIA) && examenesIA.length > 0 && (
                   <section className="mt-12">
                     <strong>Exámenes a solicitar (IA):</strong>
                     <ul className="mt-6">
-                      {examenesIA.map((e, idx) => (
-                        <li
-                          key={`${
-                            typeof e === "string"
-                              ? e
-                              : e?.nombre || "item"
-                          }-${idx}`}
-                        >
-                          {typeof e === "string"
-                            ? e
-                            : e?.nombre || JSON.stringify(e)}
-                        </li>
+                      {examenesIA.map((e, i) => (
+                        <li key={i}>{typeof e === "string" ? e : e?.nombre}</li>
                       ))}
                     </ul>
                   </section>
-                ) : (
-                  <div className="muted mt-12">
-                    (Aún no hay lista de exámenes. Pulsa “Generar con IA…” para
-                    que se ejecute y aparezcan aquí.)
-                  </div>
                 )}
 
                 {informeIA && (
                   <section className="mt-8">
-                    <strong>Informe IA (resumen):</strong>
+                    <strong>Informe IA:</strong>
                     <div className="mono mt-6">{informeIA}</div>
                   </section>
                 )}
 
-                {/* Acciones finales: pagar o descargar */}
                 {pagoRealizado ? (
                   <button
                     className="btn fullw mt-12"
                     onClick={handleDescargarPreop}
                     disabled={descargando}
-                    aria-busy={descargando}
-                    title={mensajeDescarga || "Verificar y descargar"}
                   >
                     {descargando
-                      ? mensajeDescarga || "Verificando…"
+                      ? mensajeDescarga || "Descargando…"
                       : "Descargar Documento"}
                   </button>
                 ) : (
@@ -821,7 +711,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
                     className="btn fullw mt-12"
                     onClick={handlePagarDesdePreview}
                   >
-                    Pagar ahora (Pre Op)
+                    Pagar ahora (Preop)
                   </button>
                 )}
               </>
