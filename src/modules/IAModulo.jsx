@@ -10,48 +10,80 @@ import logoIA from "../assets/logo_modulo_ia.png";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* =============== Helper ID PAGO (solo prefijo ia_ para IA) =============== */
+/* ============================================================
+   🔥 PARSE IA: extrae diagnóstico, explicación y exámenes IA
+   ============================================================ */
+function parseIA(texto = "") {
+  const out = {
+    diagnostico: [],
+    explicacion: "",
+    examenes: [],
+    texto: texto || "",
+  };
+  if (!texto) return out;
+
+  const secciones = texto.split(/\n\s*\n/);
+
+  for (const sec of secciones) {
+    const low = sec.toLowerCase();
+
+    if (low.includes("diagnóstico") || low.includes("diagnostico")) {
+      out.diagnostico = sec
+        .split("\n")
+        .slice(1)
+        .map((l) => l.replace(/^[•\-]\s*/, "").trim())
+        .filter(Boolean);
+    }
+
+    if (low.includes("explicación") || low.includes("explicacion")) {
+      out.explicacion = sec
+        .split("\n")
+        .slice(1)
+        .join(" ")
+        .trim();
+    }
+
+    if (low.includes("examen") || low.includes("exámenes")) {
+      out.examenes = sec
+        .split("\n")
+        .slice(1)
+        .map((l) => l.replace(/^[•\-]\s*/, "").trim())
+        .filter(Boolean);
+    }
+  }
+
+  return out;
+}
+
+/* ============================================================
+   ID Pago exclusivo IA
+   ============================================================ */
 function ensureIAIdPago() {
   try {
     let id = sessionStorage.getItem("idPago");
-
-    // 1) Solo reutilizamos si ya pertenece a IA
-    if (id && /^ia_/.test(id)) {
-      return id;
-    }
-
-    // 2) Si el id existente es de otro módulo, NO se reutiliza
+    if (id && /^ia_/.test(id)) return id;
     if (id && /^(trauma_|preop_|generales_|pago_)/.test(id)) {
       const nuevo = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
       sessionStorage.setItem("idPago", nuevo);
       return nuevo;
     }
-
-    // 3) Si no existe ningún idPago, crear uno nuevo
     const nuevo = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
     sessionStorage.setItem("idPago", nuevo);
     return nuevo;
-
   } catch {
-    // Fallback extremo
     return `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   }
 }
 
-
-/** JSON centralizado (similar a traumaJSON) */
-function buildIAJSON(
-  datos = {},
-  informeIA = "",
-  opciones = {},
-  marcadoresStruct = null
-) {
+/* ============================================================
+   JSON central IA
+   ============================================================ */
+function buildIAJSON(datos = {}, informeIA = "", opciones = {}, marcadoresStruct = null) {
   const edadNum = Number(datos.edad);
   const paciente = {
     ...datos,
     edad: Number.isFinite(edadNum) && edadNum > 0 ? edadNum : datos.edad,
   };
-
   const {
     resonanciaChecklist = null,
     resonanciaResumenTexto = "",
@@ -62,7 +94,7 @@ function buildIAJSON(
     paciente,
     consulta: datos.consulta || "",
     informeIA: informeIA || "",
-    marcadores: marcadoresStruct || null, // lo que devuelve construirMarcadores()
+    marcadores: marcadoresStruct || null,
     resonancia: {
       checklist: resonanciaChecklist,
       resumenTexto: resonanciaResumenTexto,
@@ -71,6 +103,9 @@ function buildIAJSON(
   };
 }
 
+/* ============================================================
+   COMPONENTE PRINCIPAL
+   ============================================================ */
 export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const T = getTheme();
   const S = makeStyles(T);
@@ -86,18 +121,16 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       lado: "",
     }
   );
+
   const [previewIA, setPreviewIA] = useState("");
   const [generando, setGenerando] = useState(false);
-
   const [requiereRM, setRequiereRM] = useState(false);
   const [bloqueaRM, setBloqueaRM] = useState(false);
   const [resonanciaChecklist, setResonanciaChecklist] = useState(null);
   const [resonanciaResumenTexto, setResonanciaResumenTexto] = useState("");
   const [ordenAlternativa, setOrdenAlternativa] = useState("");
-
   const [showRM, setShowRM] = useState(false);
   const [mostrarAviso, setMostrarAviso] = useState(false);
-
   const [pagoRealizado, setPagoRealizado] = useState(false);
   const [descargando, setDescargando] = useState(false);
   const [mensajeDescarga, setMensajeDescarga] = useState("");
@@ -106,20 +139,17 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const pollerRef = useRef(null);
 
   const zonasSoportadas = ["rodilla", "mano", "hombro", "codo", "tobillo"];
-  const capitalizar = (s = "") =>
-    s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+  const capitalizar = (s = "") => (s ? s.charAt(0).toUpperCase() + s.slice(1) : "");
 
-  // ==== RESUMEN MARCADORES ====
+  /* ============================================================
+     Resumen zonal
+     ============================================================ */
   const leerResumenZona = useCallback(
     (zona) => {
       try {
-        const data = JSON.parse(
-          sessionStorage.getItem(`${zona}_data`) || "null"
-        );
+        const data = JSON.parse(sessionStorage.getItem(`${zona}_data`) || "null");
         const lado = data?.lado || datos?.lado || "";
-        const extra = JSON.parse(
-          sessionStorage.getItem(`${zona}_seccionesExtra`) || "null"
-        );
+        const extra = JSON.parse(sessionStorage.getItem(`${zona}_seccionesExtra`) || "null");
         let lines = [];
 
         if (Array.isArray(extra)) {
@@ -169,24 +199,20 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     [datos?.lado]
   );
 
+  /* ============================================================
+     Construcción de marcadores
+     ============================================================ */
   const construirMarcadores = useCallback(() => {
     const marcadores = {};
     const porCompat = {};
 
     zonasSoportadas.forEach((z) => {
       try {
-        const data = JSON.parse(
-          sessionStorage.getItem(`${z}_data`) || "null"
-        );
-        const extra = JSON.parse(
-          sessionStorage.getItem(`${z}_seccionesExtra`) || "null"
-        );
+        const data = JSON.parse(sessionStorage.getItem(`${z}_data`) || "null");
+        const extra = JSON.parse(sessionStorage.getItem(`${z}_seccionesExtra`) || "null");
         const lado = data?.lado || "";
 
-        if (
-          data &&
-          (Array.isArray(data.puntosSeleccionados) || data.porVista)
-        ) {
+        if (data && (Array.isArray(data.puntosSeleccionados) || data.porVista)) {
           marcadores[z] = {
             lado: data.lado || "",
             porVista: data.porVista || null,
@@ -218,7 +244,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       } catch {}
     });
 
-    // Devolvemos TODO el paquete para guardarlo como JSON grande
     return { marcadores, ...porCompat };
   }, [datos?.lado]);
 
@@ -229,23 +254,23 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       if (sec && Array.isArray(sec.lines) && sec.lines.length) out.push(sec);
     }
     return out;
-  }, [leerResumenZona, previewIA, resonanciaChecklist, showRM]);
+  }, [leerResumenZona]);
 
-  // ======================================================
-  // Cargar data previa
-  // ======================================================
+  /* ============================================================
+     Cargar estado inicial
+     ============================================================ */
   useEffect(() => {
-    // Asegurar que exista un idPago coherente (único, igual patrón que Trauma)
     try {
       ensureIAIdPago();
     } catch {}
 
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
-      // AHORA los datos de sessionStorage NO pisan initialDatos (Guest, etc.) → se mezclan
       if (saved) setDatos((prev) => ({ ...JSON.parse(saved), ...prev }));
+
       const savedIA = sessionStorage.getItem("consultaIA");
       if (savedIA) setDatos((prev) => ({ ...prev, consulta: savedIA }));
+
       const savedPrev = sessionStorage.getItem("previewIA");
       if (savedPrev) setPreviewIA(savedPrev);
     } catch {}
@@ -265,29 +290,22 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
-    const idFromURL =
-      params.get("idPago") || sessionStorage.getItem("idPago");
+    const idFromURL = params.get("idPago") || sessionStorage.getItem("idPago");
 
     if (pago === "ok" && idFromURL) {
-      // Reforzar que sessionStorage use el mismo idPago que viene del pago
       try {
         sessionStorage.setItem("idPago", idFromURL);
       } catch {}
-
       setPagoRealizado(true);
 
-      // Solo poll de lectura (no volvemos a guardar datos vacíos)
       if (pollerRef.current) clearInterval(pollerRef.current);
-      let intentos = 0;
 
+      let intentos = 0;
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
-          await fetch(
-            `${BACKEND_BASE}/api/obtener-datos-ia/${idFromURL}`
-          );
+          await fetch(`${BACKEND_BASE}/api/obtener-datos-ia/${idFromURL}`);
         } catch {}
-
         if (intentos >= 30) {
           clearInterval(pollerRef.current);
           pollerRef.current = null;
@@ -303,24 +321,23 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     };
   }, []);
 
-  // ======================================================
-  // Aviso Legal
-  // ======================================================
+  /* ============================================================
+     Aviso legal
+     ============================================================ */
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
     try {
       sessionStorage.setItem("ia_aviso_ok", "1");
     } catch {}
   };
-
   const rechazarAviso = () => {
     setMostrarAviso(false);
     alert("Debes aceptar el aviso legal para continuar.");
   };
 
-  // ======================================================
-  // RM helpers
-  // ======================================================
+  /* ============================================================
+     Normalización texto y RM
+     ============================================================ */
   const normaliza = (t = "") =>
     String(t || "")
       .normalize("NFD")
@@ -330,7 +347,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   const contieneRMlocal = (texto = "") => {
     const s = normaliza(texto);
     if (!s) return false;
-
     const frases = [
       "resonancia magnetica",
       "resonancia nuclear",
@@ -365,13 +381,11 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     return contieneRMlocal(examenTexto);
   };
 
-  // === NUEVO: abrir modal RM (igual idea que en TraumaModulo) ===
   const lanzarChecklistRM = () => {
     if (!requiereRM) return;
     setShowRM(true);
   };
 
-  // === NUEVO: construir resumen texto RM (copiado de TraumaModulo) ===
   const construirResumenRM = (f = {}) => {
     const labels = {
       marcapasos: "Marcapasos/DAI",
@@ -403,41 +417,34 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     const obs = (f.observaciones || "").trim();
 
     const partes = [];
-    if (marcadas.length) {
-      partes.push(marcadas.join("\n"));
-    } else {
-      partes.push("• Sin alertas marcadas en checklist.");
-    }
+    if (marcadas.length) partes.push(marcadas.join("\n"));
+    else partes.push("• Sin alertas marcadas en checklist.");
+
     if (obs) partes.push(`Observaciones: ${obs}`);
 
     return partes.join("\n");
   };
 
-  // === NUEVO: guardar checklist RM en estado + sessionStorage + iaJSON ===
+  /* ============================================================
+     Guardar RM
+     ============================================================ */
   const handleSaveRM = (form) => {
     setBloqueaRM(false);
-
     const resumen = construirResumenRM(form);
-
     setResonanciaChecklist(form);
     setResonanciaResumenTexto(resumen);
 
     try {
-      // mismo nombre de claves que en trauma, para mantener compatibilidad
       sessionStorage.setItem("resonanciaChecklist", JSON.stringify(form));
       sessionStorage.setItem("resonanciaResumenTexto", resumen);
 
-      // reconstruimos iaJSON central actualizado
       const respaldo = sessionStorage.getItem("datosPacienteJSON");
-      const base = respaldo
-        ? JSON.parse(respaldo)
-        : { ...datos, edad: Number(datos.edad) || datos.edad };
+      const base = respaldo ? JSON.parse(respaldo) : { ...datos };
 
-      const edadNum = Number(base.edad) || base.edad;
       const marcadoresStruct = construirMarcadores();
 
       const iaJSON = buildIAJSON(
-        { ...base, edad: edadNum },
+        { ...base },
         previewIA || datos.consulta || "",
         {
           resonanciaChecklist: form,
@@ -453,36 +460,25 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     setShowRM(false);
   };
 
-  // ======================================================
-  // ⚡ GENERAR PREVIEW IA — ahora con iaJSON grande + examenes
-  // ======================================================
+  /* ============================================================
+     GENERAR PREVIEW IA
+     ============================================================ */
   const handleGenerarPreview = async () => {
     const edadNum = Number(datos.edad);
 
-    if (
-      !datos.nombre?.trim() ||
-      !datos.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0
-    ) {
+    if (!datos.nombre?.trim() || !datos.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
       alert("Completa nombre, RUT y edad (>0).");
       return;
     }
-
     if (!datos.consulta?.trim()) {
       alert("Escribe tus síntomas/indicaciones en el cuadro de texto.");
       return;
     }
 
-    // Asegurar idPago coherente (igual que Trauma y resto de módulos)
     const idPago = ensureIAIdPago();
-
     sessionStorage.setItem("idPago", idPago);
     sessionStorage.setItem("modulo", "ia");
-    sessionStorage.setItem(
-      "datosPacienteJSON",
-      JSON.stringify({ ...datos, edad: edadNum })
-    );
+    sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
     sessionStorage.setItem("consultaIA", datos.consulta);
 
     setGenerando(true);
@@ -508,38 +504,17 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       if (!j.ok) throw new Error(j.error || "No se pudo generar el preview");
 
       const resp = j.respuesta || "";
+      const parsed = parseIA(resp);
 
-      // 🔧 Capturar exámenes aunque vengan anidados
+      // Determinar lista de exámenes proveniente del backend o del parsing
       const listaExamenes = (() => {
         if (Array.isArray(j.examenes) && j.examenes.length) return j.examenes;
-        if (Array.isArray(j.examenesIA) && j.examenesIA.length)
-          return j.examenesIA;
-
-        if (Array.isArray(j.orden?.examenes) && j.orden.examenes.length) {
-          return j.orden.examenes;
-        }
-        if (typeof j.orden?.examen === "string" && j.orden.examen.trim()) {
-          return [j.orden.examen.trim()];
-        }
-        if (typeof j.examen === "string" && j.examen.trim()) {
-          return [j.examen.trim()];
-        }
+        if (parsed.examenes.length) return parsed.examenes;
         return [];
       })();
 
       setPreviewIA(resp);
       sessionStorage.setItem("previewIA", resp);
-
-      try {
-        console.log(
-          "preview-informe IA → respuesta backend",
-          j,
-          "listaExamenes=",
-          listaExamenes
-        );
-      } catch {}
-
-      window.scrollTo({ top: 0, behavior: "smooth" });
 
       const pideRM = await detectarRM(resp);
       setRequiereRM(!!pideRM);
@@ -548,57 +523,47 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       setResonanciaResumenTexto("");
       setOrdenAlternativa("");
 
-      try {
-        const marcadoresStruct = construirMarcadores();
-        const {
+      const marcadoresStruct = construirMarcadores();
+      const { marcadores, rodillaMarcadores, manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores } =
+        marcadoresStruct;
+
+      const iaJSON = buildIAJSON(
+        { ...datos, edad: edadNum },
+        resp,
+        { resonanciaChecklist, resonanciaResumenTexto, ordenAlternativa },
+        marcadoresStruct
+      );
+      iaJSON.examenes = listaExamenes;
+
+      sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
+
+      await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idPago,
+          iaJSON,
+          datosPaciente: iaJSON.paciente,
+
+          // 🔥 debugIA: LO QUE EL BACKEND NECESITA
+          debugIA: {
+            diagnostico: parsed.diagnostico,
+            explicacion: parsed.explicacion,
+            examenes: listaExamenes,
+            texto: resp,
+          },
+
+          examen: listaExamenes.join(" | "),
+          examenes: listaExamenes,
+
           marcadores,
           rodillaMarcadores,
           manoMarcadores,
           hombroMarcadores,
           codoMarcadores,
           tobilloMarcadores,
-        } = marcadoresStruct;
-
-        // JSON grande central (similar a traumaJSON)
-        const iaJSON = buildIAJSON(
-          { ...datos, edad: edadNum },
-          resp || datos.consulta || "",
-          {
-            resonanciaChecklist,
-            resonanciaResumenTexto,
-            ordenAlternativa,
-          },
-          marcadoresStruct
-        );
-
-        // 🔑 CLAVE REAL QUE USA EL BACKEND: "examenes"
-        if (listaExamenes.length) {
-          iaJSON.examenes = listaExamenes;
-        }
-
-        try {
-          sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
-        } catch {}
-
-        // ✅ Primera llamada a guardar-datos-ia (preview listo)
-        await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            idPago,
-            iaJSON, // ← Bloque grande con examenes
-            datosPaciente: iaJSON.paciente,
-            examen: listaExamenes.length ? listaExamenes.join(" | ") : "",
-            examenes: listaExamenes, // ← envío explícito en clave correcta
-            marcadores,
-            rodillaMarcadores,
-            manoMarcadores,
-            hombroMarcadores,
-            codoMarcadores,
-            tobilloMarcadores,
-          }),
-        });
-      } catch {}
+        }),
+      });
     } catch (err) {
       console.error("Preview IA error:", err);
       alert("Error al generar el preview de IA.");
@@ -607,108 +572,77 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
-  // ======================================================
-  // ⚡ PAGAR IA — también con iaJSON grande
-  // ======================================================
+  /* ============================================================
+     PAGAR IA
+     ============================================================ */
   const handlePagarIA = async () => {
     const saved = sessionStorage.getItem("datosPacienteJSON");
-    const base = saved
-      ? JSON.parse(saved)
-      : { ...datos, edad: Number(datos.edad) };
+    const base = saved ? JSON.parse(saved) : datos;
     const edadNum = Number(base.edad);
 
-    if (
-      !base.nombre?.trim() ||
-      !base.rut?.trim() ||
-      !Number.isFinite(edadNum) ||
-      edadNum <= 0
-    ) {
+    if (!base.nombre?.trim() || !base.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
       alert("Completa nombre, RUT y edad (>0).");
       return;
     }
 
-    // Asegurar idPago coherente para el flujo de pago (PantallaTres)
     const idPago = ensureIAIdPago();
+    sessionStorage.setItem("idPago", idPago);
+    sessionStorage.setItem("modulo", "ia");
+    sessionStorage.setItem("pantalla", "tres");
+    sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...base, edad: edadNum }));
 
     try {
-      sessionStorage.setItem("idPago", idPago);
-      sessionStorage.setItem("modulo", "ia");
-      sessionStorage.setItem("pantalla", "tres");
-      sessionStorage.setItem(
-        "datosPacienteJSON",
-        JSON.stringify({ ...base, edad: edadNum })
-      );
+      const marcadoresStruct = construirMarcadores();
+      const { marcadores, rodillaMarcadores, manoMarcadores, hombroMarcadores, codoMarcadores, tobilloMarcadores } =
+        marcadoresStruct;
 
+      const textoInforme = previewIA || datos.consulta || "";
+      const parsed = parseIA(textoInforme);
+
+      let examenesPrevios = [];
       try {
-        const marcadoresStruct = construirMarcadores();
-        const {
+        const prevIA = JSON.parse(sessionStorage.getItem("iaJSON") || "null");
+        if (prevIA && Array.isArray(prevIA.examenes)) examenesPrevios = prevIA.examenes;
+      } catch {}
+
+      const iaJSON = buildIAJSON(
+        { ...base, edad: edadNum },
+        textoInforme,
+        { resonanciaChecklist, resonanciaResumenTexto, ordenAlternativa },
+        marcadoresStruct
+      );
+      iaJSON.examenes = examenesPrevios;
+
+      sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
+
+      await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idPago,
+          iaJSON,
+          datosPaciente: iaJSON.paciente,
+
+          debugIA: {
+            diagnostico: parsed.diagnostico,
+            explicacion: parsed.explicacion,
+            examenes: iaJSON.examenes,
+            texto: textoInforme,
+          },
+
+          examen: (iaJSON.examenes || []).join(" | "),
+          examenes: iaJSON.examenes || [],
+
           marcadores,
           rodillaMarcadores,
           manoMarcadores,
           hombroMarcadores,
           codoMarcadores,
           tobilloMarcadores,
-        } = marcadoresStruct;
-
-        const textoInforme = previewIA || datos.consulta || "";
-
-        // Recuperar exámenes ya guardados en iaJSON (si existen)
-        let examenesPrevios = [];
-        try {
-          const prevIA = JSON.parse(
-            sessionStorage.getItem("iaJSON") || "null"
-          );
-          if (prevIA && Array.isArray(prevIA.examenes)) {
-            examenesPrevios = prevIA.examenes;
-          }
-        } catch {
-          examenesPrevios = [];
-        }
-
-        // JSON central iaJSON
-        const iaJSON = buildIAJSON(
-          { ...base, edad: edadNum },
-          textoInforme,
-          {
-            resonanciaChecklist,
-            resonanciaResumenTexto,
-            ordenAlternativa,
-          },
-          marcadoresStruct
-        );
-
-        // 🔑 mantiene la misma clave que lee el backend
-        if (examenesPrevios.length) {
-          iaJSON.examenes = examenesPrevios;
-        }
-
-        try {
-          sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
-        } catch {}
-
-        // ✅ Segunda llamada a guardar-datos-ia (antes de ir a PantallaTres)
-        await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            idPago,
-            iaJSON, // ← JSON central
-            datosPaciente: iaJSON.paciente,
-            examen: (iaJSON.examenes && iaJSON.examenes.length)
-  ? iaJSON.examenes.join(" | ")
-  : "",
-            examenes: iaJSON.examenes || examenesPrevios || [],
-            marcadores,
-            rodillaMarcadores,
-            manoMarcadores,
-            hombroMarcadores,
-            codoMarcadores,
-            tobilloMarcadores,
-            resonanciaChecklist,
-            resonanciaResumenTexto,
-          }),
-        });
-      } catch {}
+          resonanciaChecklist,
+          resonanciaResumenTexto,
+        }),
+      });
 
       if (typeof onIrPantallaTres === "function") {
         onIrPantallaTres({
@@ -723,9 +657,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
-  // ======================================================
-  // DESCARGAS (sin volver a guardar-datos-ia)
-  // ======================================================
+  /* ============================================================
+     DESCARGAR PDF INFORME IA
+     ============================================================ */
   const handleDescargarIA = async () => {
     const id = sessionStorage.getItem("idPago") || ensureIAIdPago();
     if (!id) {
@@ -761,17 +695,10 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     try {
       const r = await intentaDescarga();
       if (!r.ok) {
-        if (r.status === 402) {
-          alert(
-            "El pago aún no se confirma. Intenta nuevamente en unos segundos."
-          );
-        } else if (r.status === 404) {
-          alert(
-            "No se encontró el PDF del informe IA. Si ya pagaste, genera nuevamente el informe IA para reconstruirlo."
-          );
-        } else {
-          alert("No se pudo descargar el PDF.");
-        }
+        if (r.status === 402) alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
+        else if (r.status === 404)
+          alert("No se encontró el PDF del informe IA. Si ya pagaste, genera nuevamente el informe IA para reconstruirlo.");
+        else alert("No se pudo descargar el PDF.");
       }
     } catch (err) {
       console.error(err);
@@ -782,6 +709,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
+  /* ============================================================
+     DESCARGAR ORDEN IA
+     ============================================================ */
   const handleDescargarOrdenIA = async () => {
     const id = sessionStorage.getItem("idPago") || ensureIAIdPago();
     if (!id) {
@@ -817,17 +747,13 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     try {
       const r = await intentaDescarga();
       if (!r.ok) {
-        if (r.status === 402) {
-          alert(
-            "El pago aún no se confirma. Intenta nuevamente en unos segundos."
-          );
-        } else if (r.status === 404) {
+        if (r.status === 402)
+          alert("El pago aún no se confirma. Intenta nuevamente en unos segundos.");
+        else if (r.status === 404)
           alert(
             "No se encontró la orden de exámenes IA. Si ya pagaste, genera nuevamente el informe IA para reconstruirla."
           );
-        } else {
-          alert("No se pudo descargar la orden.");
-        }
+        else alert("No se pudo descargar la orden.");
       }
     } catch (err) {
       console.error(err);
@@ -838,9 +764,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
-  // ======================================================
-  // UI
-  // ======================================================
+  /* ============================================================
+     UI
+     ============================================================ */
   return (
     <ModuloLayout
       logo={logoIA}
@@ -872,9 +798,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             <input
               type="text"
               value={datos.nombre || ""}
-              onChange={(e) =>
-                setDatos((p) => ({ ...p, nombre: e.target.value }))
-              }
+              onChange={(e) => setDatos((p) => ({ ...p, nombre: e.target.value }))}
               placeholder="Nombre del paciente"
               style={S.input}
             />
@@ -885,9 +809,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             <input
               type="text"
               value={datos.rut || ""}
-              onChange={(e) =>
-                setDatos((p) => ({ ...p, rut: e.target.value }))
-              }
+              onChange={(e) => setDatos((p) => ({ ...p, rut: e.target.value }))}
               placeholder="11.111.111-1"
               style={S.input}
             />
@@ -898,9 +820,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             <input
               type="number"
               value={datos.edad || ""}
-              onChange={(e) =>
-                setDatos((p) => ({ ...p, edad: e.target.value }))
-              }
+              onChange={(e) => setDatos((p) => ({ ...p, edad: e.target.value }))}
               placeholder="Edad"
               style={S.input}
             />
@@ -928,9 +848,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
         <textarea
           rows={6}
           value={datos.consulta || ""}
-          onChange={(e) =>
-            setDatos((p) => ({ ...p, consulta: e.target.value }))
-          }
+          onChange={(e) => setDatos((p) => ({ ...p, consulta: e.target.value }))}
           placeholder="Escribe aquí tus síntomas."
           style={S.textarea}
         />
@@ -939,7 +857,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
           style={{ ...S.btnPrimary, marginTop: 12 }}
           onClick={handleGenerarPreview}
           disabled={generando}
-          aria-busy={generando}
         >
           {generando ? "Generando preview…" : "Generar PREVIEW IA"}
         </button>
@@ -954,8 +871,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
       {previewIA && requiereRM && !resonanciaChecklist && !bloqueaRM && (
         <div style={S.hint}>
-          La IA sugiere Resonancia Magnética. Presione “Continuar” para completar
-          el checklist.
+          La IA sugiere Resonancia Magnética. Presione “Continuar” para completar el checklist.
         </div>
       )}
 
@@ -968,19 +884,13 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       {!pagoRealizado && previewIA && (
         <>
           {requiereRM && !resonanciaChecklist && !bloqueaRM && (
-            <button
-              style={{ ...S.btnPrimary, marginTop: 12 }}
-              onClick={lanzarChecklistRM}
-            >
+            <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={lanzarChecklistRM}>
               Continuar
             </button>
           )}
 
           {(!requiereRM || resonanciaChecklist || bloqueaRM) && (
-            <button
-              style={{ ...S.btnPrimary, marginTop: 12 }}
-              onClick={handlePagarIA}
-            >
+            <button style={{ ...S.btnPrimary, marginTop: 12 }} onClick={handlePagarIA}>
               Pagar ahora (Informe IA)
             </button>
           )}
@@ -993,7 +903,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             style={{ ...S.btnPrimary, marginTop: 12 }}
             onClick={handleDescargarIA}
             disabled={descargando}
-            aria-busy={descargando}
             title={mensajeDescarga || "Verificar y descargar"}
           >
             {descargando ? mensajeDescarga : "Descargar Informe IA"}
@@ -1003,12 +912,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             style={{ ...S.btnPrimary, marginTop: 8 }}
             onClick={handleDescargarOrdenIA}
             disabled={descargandoOrden}
-            aria-busy={descargandoOrden}
             title={mensajeDescargaOrden || "Verificar y descargar"}
           >
-            {descargandoOrden
-              ? mensajeDescargaOrden
-              : "Descargar Orden de Exámenes (IA)"}
+            {descargandoOrden ? mensajeDescargaOrden : "Descargar Orden de Exámenes (IA)"}
           </button>
         </>
       )}
@@ -1016,9 +922,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
       {showRM && (
         <div style={S.modalBackdrop} role="dialog" aria-modal="true">
           <div style={S.modalCard}>
-            <h4 style={{ margin: 8, color: T.primary }}>
-              Checklist de Resonancia
-            </h4>
+            <h4 style={{ margin: 8, color: T.primary }}>Checklist de Resonancia</h4>
             <FormularioResonancia
               initial={resonanciaChecklist || {}}
               onSave={handleSaveRM}
@@ -1031,25 +935,17 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
   );
 }
 
+/* ============================================================
+   ESTILOS
+   ============================================================ */
 function makeStyles(T) {
   return {
-    card: {
-      background: T.surface ?? "#fff",
-      borderRadius: 12,
-      padding: 16,
-      boxShadow: T.shadowSm ?? "0 2px 10px rgba(0,0,0,0.08)",
-      border: `1px solid ${T.border ?? "#e8e8e8"}`,
-      color: T.text ?? "#1b1b1b",
-    },
-
     grid1: {
       display: "grid",
       gridTemplateColumns: "1fr",
       gap: 12,
     },
-
     label: { display: "flex", flexDirection: "column", gap: 6 },
-
     input: {
       width: "100%",
       padding: "10px",
@@ -1060,7 +956,6 @@ function makeStyles(T) {
       fontSize: 16,
       boxSizing: "border-box",
     },
-
     textarea: {
       width: "100%",
       padding: "10px",
@@ -1072,7 +967,6 @@ function makeStyles(T) {
       marginTop: 6,
       boxSizing: "border-box",
     },
-
     btnPrimary: {
       backgroundColor: T.primary ?? "#0072CE",
       color: T.onPrimary ?? "#fff",
@@ -1084,7 +978,6 @@ function makeStyles(T) {
       width: "100%",
       boxShadow: T.shadowSm ?? "0 1px 4px rgba(0,0,0,0.08)",
     },
-
     pre: {
       whiteSpace: "pre-wrap",
       background: T.codeBg ?? "#f7f7f7",
@@ -1094,15 +987,12 @@ function makeStyles(T) {
       border: `1px solid ${T.border ?? "#e8e8e8"}`,
       color: T.text ?? "#1b1b1b",
     },
-
     block: { marginTop: 12 },
-
     hint: {
       marginTop: 10,
       fontStyle: "italic",
       color: T.textMuted ?? "#666",
     },
-
     modalBackdrop: {
       position: "fixed",
       inset: 0,
@@ -1113,7 +1003,6 @@ function makeStyles(T) {
       padding: 16,
       zIndex: 50,
     },
-
     modalCard: {
       width: "min(920px, 100%)",
       maxHeight: "90vh",
