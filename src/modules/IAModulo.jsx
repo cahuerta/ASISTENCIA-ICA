@@ -618,7 +618,8 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
 
       sessionStorage.setItem("iaJSON", JSON.stringify(iaJSON));
 
-     await fetch(`${BACKEND_BASE}/api/preview-informe`, {
+     await fetch(`${BACKEND_BASE}/api/guardar-datos-ia`, {
+
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
