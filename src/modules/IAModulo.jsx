@@ -10,25 +10,34 @@ import logoIA from "../assets/logo_modulo_ia.png";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* =============== Helper ID PAGO (único id pago_ para todo IA) =============== */
+/* =============== Helper ID PAGO (solo prefijo ia_ para IA) =============== */
 function ensureIAIdPago() {
   try {
     let id = sessionStorage.getItem("idPago");
 
-    // Si ya existe cualquier idPago (venga de Trauma, Preop, Generales o IA), lo reutilizamos
-    if (id && typeof id === "string" && id.trim()) {
+    // 1) Solo reutilizamos si ya pertenece a IA
+    if (id && /^ia_/.test(id)) {
       return id;
     }
 
-    // Si no hay nada, creamos UNO global tipo pago_
-    id = `pago_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-    sessionStorage.setItem("idPago", id);
-    return id;
+    // 2) Si el id existente es de otro módulo, NO se reutiliza
+    if (id && /^(trauma_|preop_|generales_|pago_)/.test(id)) {
+      const nuevo = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+      sessionStorage.setItem("idPago", nuevo);
+      return nuevo;
+    }
+
+    // 3) Si no existe ningún idPago, crear uno nuevo
+    const nuevo = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    sessionStorage.setItem("idPago", nuevo);
+    return nuevo;
+
   } catch {
-    // fallback extremo si sessionStorage falla
-    return `pago_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    // Fallback extremo
+    return `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   }
 }
+
 
 /** JSON centralizado (similar a traumaJSON) */
 function buildIAJSON(
