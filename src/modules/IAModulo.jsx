@@ -61,19 +61,22 @@ function parseIA(texto = "") {
 function ensureIAIdPago() {
   try {
     let id = sessionStorage.getItem("idPago");
-    if (id && /^ia_/.test(id)) return id;
-    if (id && /^(trauma_|preop_|generales_|pago_)/.test(id)) {
-      const nuevo = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-      sessionStorage.setItem("idPago", nuevo);
-      return nuevo;
+
+    // Si ya existe cualquiera → REUTILIZARLO SIEMPRE
+    if (id && typeof id === "string" && id.trim()) {
+      return id;
     }
+
+    // Si no existe, crear uno nuevo
     const nuevo = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
     sessionStorage.setItem("idPago", nuevo);
     return nuevo;
   } catch {
-    return `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    const nuevo = `ia_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    return nuevo;
   }
 }
+
 
 /* ============================================================
    JSON central IA
