@@ -479,8 +479,15 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const j = await resp.json();
-      const ex = Array.isArray(j?.examenesIA) ? j.examenesIA : [];
-      const inf = typeof j?.informeIA === "string" ? j.informeIA : "";
+     // Acepta examenesIA o examenes (según lo que envíe el backend)
+const exRaw = Array.isArray(j?.examenesIA)
+  ? j.examenesIA
+  : Array.isArray(j?.examenes)
+  ? j.examenes
+  : [];
+
+const ex = exRaw;
+const inf = typeof j?.informeIA === "string" ? j.informeIA : "";
 
       try {
         sessionStorage.setItem("generales_ia_examenes", JSON.stringify(ex));
