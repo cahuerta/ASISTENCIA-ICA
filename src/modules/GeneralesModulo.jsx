@@ -4,14 +4,17 @@ import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 
+/* NUEVO: avisos y comorbilidades */
 import AvisoLegal from "../components/AvisoLegal.jsx";
 import FormularioComorbilidades from "../components/FormularioComorbilidades.jsx";
 
+/* NUEVO: Layout común de módulos + logo Generales */
 import ModuloLayout from "../components/ModuloLayout.jsx";
 import logoGenerales from "../assets/logo_generales.png";
 
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
+/* Etiquetas amigables para el preview de comorbilidades */
 const LABELS_COMORB = {
   hta: "Hipertensión arterial",
   dm2: "Diabetes mellitus tipo 2",
@@ -30,6 +33,11 @@ const LABELS_COMORB = {
   anticoagulantes_detalle: "Detalle anticoagulantes",
 };
 
+/**
+ * Igual filosofía que Trauma:
+ * - Si YA hay idPago en sessionStorage, se reutiliza (sea "pago_", "trauma_", "preop_", "ia_", etc.).
+ * - Si no hay, se crea uno nuevo con prefijo "generales_".
+ */
 function ensureGeneralesIdPago() {
   let id = null;
   try {
@@ -58,7 +66,11 @@ function prettyComorb(c = {}) {
         if (v) bullets.push(label);
         continue;
       }
-      if (typeof v === "object" && v !== null && (v.tiene || v.usa || v.detalle)) {
+      if (
+        typeof v === "object" &&
+        v !== null &&
+        (v.tiene || v.usa || v.detalle)
+      ) {
         let t = label;
         if (v.detalle) t += ` — ${v.detalle}`;
         bullets.push(t);
@@ -74,6 +86,7 @@ function prettyComorb(c = {}) {
   }
 }
 
+/* ===== Helpers para el resumen inicial ===== */
 function sexoPalabra(genero = "") {
   const s = String(genero).toUpperCase();
   return s === "FEMENINO" ? "mujer" : "hombre";
@@ -89,6 +102,7 @@ function resumenInicialGenerales(datos = {}, comorb = {}) {
   return `${sexo} ${edad}, ${antecedentes}. Solicita exámenes para chequeo general.`;
 }
 
+/* ============================== Componente ============================== */
 export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
   const T = getTheme();
   const styles = makeStyles(T);
@@ -99,24 +113,30 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
   const [mensajeDescarga, setMensajeDescarga] = useState("");
   const pollerRef = useRef(null);
 
+  // Paso previo (Continuar → IA → luego pago)
   const [stepStarted, setStepStarted] = useState(false);
   const [loadingIA, setLoadingIA] = useState(false);
 
+  // IA y comorbilidades
   const [examenesIA, setExamenesIA] = useState([]);
-  ￼const [informeIA, setInformeIA] = useState("");
+  const [informeIA, setInformeIA] = useState("");
   const [comorbilidades, setComorbilidades] = useState({});
 
+  // Texto libre (SOLO en segundo preview)
   const [examenLibre, setExamenLibre] = useState("");
 
+  /* ===== NUEVO: gating por Aviso Legal y Comorbilidades ===== */
   const [mostrarAviso, setMostrarAviso] = useState(false);
   const [mostrarComorbilidades, setMostrarComorbilidades] = useState(false);
 
   useEffect(() => {
+    // Datos base
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((prev) => ({ ...prev, ...JSON.parse(saved) }));
     } catch {}
 
+    // Solo cargar examen previo si YA estabas en step 2
     let wasStep2 = false;
     try {
       wasStep2 = sessionStorage.getItem("generales_step") === "2";
@@ -124,7 +144,9 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
     if (wasStep2) {
       try {
-        const ex = JSON.parse(sessionStorage.getItem("generales_ia_examenes") || "[]");
+        const ex = JSON.parse(
+          sessionStorage.getItem("generales_ia_examenes") || "[]"
+        );
         const inf = sessionStorage.getItem("generales_ia_resumen") || "";
 
         setExamenesIA(Array.isArray(ex) ? ex : []);
@@ -132,15 +154,20 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
         setStepStarted(true);
       } catch {}
     } else {
+      // limpiar cualquier lista previa obsoleta
       setExamenesIA([]);
       setInformeIA("");
     }
 
+    // Comorbilidades (para mostrar en resumen si ya existen)
     try {
-      const c = JSON.parse(sessionStorage.getItem("generales_comorbilidades_data") || "{}");
+      const c = JSON.parse(
+        sessionStorage.getItem("generales_comorbilidades_data") || "{}"
+      );
       setComorbilidades(c || {});
     } catch {}
 
+    // NUEVO: verificación Aviso Legal
     const avisoOk = (() => {
       try {
         return sessionStorage.getItem("generales_aviso_ok") === "1";
@@ -153,6 +180,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       return;
     }
 
+    // Verificación comorbilidades
     const comorbOk = (() => {
       try {
         return sessionStorage.getItem("generales_comorbilidades_ok") === "1";
@@ -162,6 +190,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
     })();
     if (!comorbOk) setMostrarComorbilidades(true);
 
+    // retorno de pago
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
     const idPago = params.get("idPago") || sessionStorage.getItem("idPago");
@@ -175,17 +204,23 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
       if (pollerRef.current) clearInterval(pollerRef.current);
       let intentos = 0;
-
       pollerRef.current = setInterval(async () => {
         intentos++;
         try {
-          const res = await fetch(`${BACKEND_BASE}/obtener-datos-generales/${idPago}`);
+          const res = await fetch(
+            `${BACKEND_BASE}/obtener-datos-generales/${idPago}`
+          );
           if (res.ok) {
             const j = await res.json();
 
-            if (Array.isArray(j.examenesIA)) setExamenesIA(j.examenesIA);
-            if (typeof j.informeIA === "string") setInformeIA(j.informeIA);
+            if (Array.isArray(j.examenesIA)) {
+              setExamenesIA(j.examenesIA);
+            }
+            if (typeof j.informeIA === "string") {
+              setInformeIA(j.informeIA);
+            }
 
+            // si ya cargamos los datos, dejamos de consultar
             clearInterval(pollerRef.current);
             pollerRef.current = null;
           }
@@ -208,6 +243,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  /* ===== NUEVO: handlers Aviso & Comorbilidades ===== */
   const continuarTrasAviso = () => {
     setMostrarAviso(false);
     try {
@@ -232,25 +268,37 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
     setMostrarComorbilidades(false);
     try {
       sessionStorage.setItem("generales_comorbilidades_ok", "1");
-      sessionStorage.setItem("generales_comorbilidades_data", JSON.stringify(payload || {}));
+      sessionStorage.setItem(
+        "generales_comorbilidades_data",
+        JSON.stringify(payload || {})
+      );
     } catch {}
   };
 
+  /* ------------------------------ Pago ------------------------------ */
   const handlePagarGenerales = async () => {
     const edadNum = Number(datos.edad);
-    if (!datos.nombre?.trim() || !datos.rut?.trim() || !Number.isFinite(edadNum) || edadNum <= 0) {
+    if (
+      !datos.nombre?.trim() ||
+      !datos.rut?.trim() ||
+      !Number.isFinite(edadNum) ||
+      edadNum <= 0
+    ) {
       alert("Complete nombre, RUT y edad (>0) antes de pagar.");
       return;
     }
     if (!datos.genero) {
-      alert("Seleccione el sexo.");
+      alert("Seleccione el sexo (MASCULINO/FEMENINO) en el formulario.");
       return;
     }
 
     try {
       const idPago = ensureGeneralesIdPago();
       sessionStorage.setItem("modulo", "generales");
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify({ ...datos, edad: edadNum }));
+      sessionStorage.setItem(
+        "datosPacienteJSON",
+        JSON.stringify({ ...datos, edad: edadNum })
+      );
       sessionStorage.setItem("pantalla", "tres");
 
       const examenPaciente = (examenLibre || "").trim();
@@ -273,35 +321,47 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
       });
 
       if (typeof onIrPantallaTres === "function") {
-        sessionStorage.setItem("idPago", idPago);
+        try {
+          sessionStorage.setItem("idPago", idPago);
+        } catch {}
         onIrPantallaTres({ ...datos, edad: edadNum, idPago });
       } else {
-        await irAPagoKhipu({ ...datos, edad: edadNum }, { idPago, modulo: "generales" });
+        await irAPagoKhipu(
+          { ...datos, edad: edadNum },
+          { idPago, modulo: "generales" }
+        );
       }
     } catch (err) {
-      alert("No se pudo preparar el pago.");
+      console.error("No se pudo preparar el pago (generales):", err);
+      alert(`No se pudo preparar el pago.\n${err?.message || err}`);
     }
   };
 
+  /* --------------------------- Descargar PDF --------------------------- */
   const handleDescargarGenerales = async () => {
     const idPago = sessionStorage.getItem("idPago");
-    if (!idPago) return alert("ID de pago no encontrado");
+    if (!idPago) {
+      alert("ID de pago no encontrado");
+      return;
+    }
 
     const intentaDescarga = async () => {
-      const res = await fetch(`${BACKEND_BASE}/pdf-generales/${idPago}`, { cache: "no-store" });
+      const res = await fetch(`${BACKEND_BASE}/pdf-generales/${idPago}`, {
+        cache: "no-store",
+      });
       if (res.status === 404) return { ok: false, status: 404 };
       if (res.status === 402) return { ok: false, status: 402 };
-      if (!res.ok) throw new Error("Error PDF");
-
+      if (!res.ok) throw new Error("Error al obtener el PDF");
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `generales_${(datos?.nombre || "paciente").replace(/ /g, "_")}.pdf`;
+      const baseName = (datos?.nombre || "paciente").replace(/ /g, "_");
+      a.download = `generales_${baseName}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
+      window.URL.revokeObjectURL(url);
       return { ok: true };
     };
 
@@ -309,22 +369,25 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
     setMensajeDescarga("Verificando pago…");
 
     let reinyectado = false;
-
     try {
-      for (let i = 1; i <= 30; i++) {
+      const maxIntentos = 30;
+      for (let i = 1; i <= maxIntentos; i++) {
         const r = await intentaDescarga();
         if (r.ok) break;
 
         if (r.status === 402) {
-          setMensajeDescarga(`Verificando pago… (${i}/30)`);
+          setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
           await sleep(1500);
+          if (i === maxIntentos)
+            alert(
+              "El pago aún no se confirma. Intenta nuevamente en unos segundos."
+            );
           continue;
         }
 
         if (r.status === 404) {
           if (!reinyectado) {
             setMensajeDescarga("Restaurando datos…");
-
             const respaldo = sessionStorage.getItem("datosPacienteJSON");
             const datosReinyectar = respaldo ? JSON.parse(respaldo) : datos;
 
@@ -337,7 +400,9 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
                 comorbilidades,
                 examenesIA: [
                   ...(Array.isArray(examenesIA) ? examenesIA : []),
-                  ...((examenLibre || "").trim() ? [examenLibre.trim()] : []),
+                  ...((examenLibre || "").trim()
+                    ? [examenLibre.trim()]
+                    : []),
                 ],
                 informeIA,
                 examenLibre: (examenLibre || "").trim(),
@@ -348,7 +413,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
             await sleep(500);
             continue;
           } else {
-            alert("No se pudo descargar el PDF.");
+            alert("No se pudo descargar el PDF después de reintentar.");
             break;
           }
         }
@@ -356,11 +421,16 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
         alert("No se pudo descargar el PDF.");
         break;
       }
+    } catch (error) {
+      console.error(error);
+      alert("No se pudo descargar el PDF.");
     } finally {
       setDescargando(false);
       setMensajeDescarga("");
     }
   };
+
+  /* ------------------------------ Preview ------------------------------ */
 
   const handleContinuar = async () => {
     try {
@@ -371,7 +441,9 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
       let c = {};
       try {
-        c = JSON.parse(sessionStorage.getItem("generales_comorbilidades_data") || "{}");
+        c = JSON.parse(
+          sessionStorage.getItem("generales_comorbilidades_data") || "{}"
+        );
       } catch {}
       setComorbilidades(c || {});
 
@@ -390,50 +462,64 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
         body: JSON.stringify(body),
       });
 
-      if (!resp.ok)
+      if (!resp.ok) {
         resp = await fetch(`${BACKEND_BASE}/preop-ia`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...body, tipoCirugia: "" }),
         });
-
-      if (!resp.ok)
+      }
+      if (!resp.ok) {
         resp = await fetch(`${BACKEND_BASE}/ia-preop`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ...body, tipoCirugia: "" }),
         });
-
+      }
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const j = await resp.json();
-
-      // 🔥 CAMBIO APLICADO AQUÍ
       const ex = Array.isArray(j?.examenesIA) ? j.examenesIA : [];
       const inf = typeof j?.informeIA === "string" ? j.informeIA : "";
 
-      sessionStorage.setItem("generales_ia_examenes", JSON.stringify(ex));
-      sessionStorage.setItem("generales_ia_resumen", inf || "");
-      sessionStorage.setItem("generales_step", "2");
+      try {
+        sessionStorage.setItem("generales_ia_examenes", JSON.stringify(ex));
+        sessionStorage.setItem("generales_ia_resumen", inf || "");
+        sessionStorage.setItem("generales_step", "2");
+      } catch {}
 
       setExamenesIA(ex);
       setInformeIA(inf);
       setStepStarted(true);
     } catch (e) {
-      alert("No fue posible obtener IA (Generales).");
+      alert(
+        "No fue posible obtener la información de IA (Generales). Intenta nuevamente."
+      );
     } finally {
       setLoadingIA(false);
     }
   };
 
+  /* ===== SUBTÍTULO dinámico para el layout ===== */
   const subtitleLayout = stepStarted
-    ? "Revise la propuesta de exámenes, agregue un examen opcional y continúe al pago."
-    : "Indique enfermedades previas para generar la propuesta de exámenes.";
+    ? "Revise la propuesta de exámenes, agregue un examen opcional si lo desea y continúe al pago."
+    : "Indique enfermedades previas y comorbilidades para generar una propuesta de exámenes generales.";
 
+  /* ============================== RENDER ============================== */
   return (
-    <ModuloLayout logo={logoGenerales} title="Asistente Generales" subtitle={subtitleLayout} variant="generales">
+    <ModuloLayout
+      logo={logoGenerales}
+      title="Asistente Generales"
+      subtitle={subtitleLayout}
+      variant="generales"
+    >
       <div className="card" style={styles.card}>
-        <AvisoLegal visible={mostrarAviso} persist={false} onAccept={continuarTrasAviso} onReject={rechazarAviso} />
+        <AvisoLegal
+          visible={mostrarAviso}
+          persist={false}
+          onAccept={continuarTrasAviso}
+          onReject={rechazarAviso}
+        />
 
         {mostrarComorbilidades && (
           <div style={styles.modalOverlay}>
@@ -449,15 +535,23 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
 
         <h3 style={{ marginTop: 0, color: T.primaryDark || T.primary }}>
           {stepStarted
-            ? "Revise la propuesta de exámenes y agregue un examen opcional si lo requiere."
-            : "Seleccione enfermedades previas."}
+            ? "Revise la propuesta de exámenes y agregue un examen opcional si lo requiere. Luego continúe al pago."
+            : "Seleccione los datos e indique enfermedades previas."}
         </h3>
 
         <div style={{ marginBottom: 10 }}>
-          <div><strong>Paciente:</strong> {datos?.nombre || "—"}</div>
-          <div><strong>RUT:</strong> {datos?.rut || "—"}</div>
-          <div><strong>Edad:</strong> {datos?.edad || "—"}</div>
-          <div><strong>Sexo:</strong> {datos?.genero || "—"}</div>
+          <div>
+            <strong>Paciente:</strong> {datos?.nombre || "—"}
+          </div>
+          <div>
+            <strong>RUT:</strong> {datos?.rut || "—"}
+          </div>
+          <div>
+            <strong>Edad:</strong> {datos?.edad || "—"}
+          </div>
+          <div>
+            <strong>Sexo:</strong> {datos?.genero || "—"}
+          </div>
         </div>
 
         {!stepStarted && !mostrarComorbilidades && (
@@ -466,7 +560,13 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
               {resumenInicialGenerales(datos, comorbilidades)}
             </div>
 
-            <button className="btn" style={styles.btnPrimary} onClick={handleContinuar} disabled={loadingIA}>
+            <button
+              className="btn"
+              style={styles.btnPrimary}
+              onClick={handleContinuar}
+              disabled={loadingIA}
+              aria-busy={loadingIA}
+            >
               {loadingIA ? "Generando con IA…" : "Continuar"}
             </button>
           </>
@@ -479,7 +579,9 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
                 <strong>Comorbilidades:</strong>
                 <div style={{ marginTop: 6 }}>
                   {prettyComorb(comorbilidades).map((t, i) => (
-                    <span key={i} style={styles.tag}>{t}</span>
+                    <span key={i} style={styles.tag}>
+                      {t}
+                    </span>
                   ))}
                 </div>
               </div>
@@ -494,12 +596,18 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
                   ))}
                 </ul>
               ) : (
-                <div style={styles.hint}>Aún no hay lista generada por IA.</div>
+                <div style={styles.hint}>
+                  Aún no hay lista generada por IA. Desde el formulario
+                  principal, pulsa<strong> “Generar Informe”</strong> para
+                  ejecutar la IA y ver el resultado aquí.
+                </div>
               )}
             </div>
 
             <div style={styles.block}>
-              <label><strong>Agregar examen opcional:</strong></label>
+              <label>
+                <strong>Agregar examen opcional:</strong>
+              </label>
               <input
                 type="text"
                 value={examenLibre}
@@ -517,7 +625,11 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
             )}
 
             {!pagoRealizado ? (
-              <button className="btn" style={{ ...styles.btnPrimary, marginTop: 12 }} onClick={handlePagarGenerales}>
+              <button
+                className="btn"
+                style={{ ...styles.btnPrimary, marginTop: 12 }}
+                onClick={handlePagarGenerales}
+              >
                 Pagar ahora (Generales)
               </button>
             ) : (
@@ -529,7 +641,9 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
                 aria-busy={descargando}
                 title={mensajeDescarga || "Verificar y descargar"}
               >
-                {descargando ? mensajeDescarga || "Verificando…" : "Descargar Documento"}
+                {descargando
+                  ? mensajeDescarga || "Verificando…"
+                  : "Descargar Documento"}
               </button>
             )}
           </>
@@ -539,6 +653,7 @@ export default function GeneralesModulo({ initialDatos, onIrPantallaTres }) {
   );
 }
 
+/* ============================== UI (desde theme.json) ============================== */
 function makeStyles(T) {
   return {
     card: {
@@ -561,11 +676,25 @@ function makeStyles(T) {
       cursor: "pointer",
       width: "100%",
       boxShadow: "var(--shadow-sm, 0 1px 4px rgba(0,0,0,0.08))",
+      transition: "transform .12s ease",
+    },
+    btnSecondary: {
+      backgroundColor: "var(--muted, #777)",
+      color: "var(--on-primary, #fff)",
+      border: "1px solid var(--muted, #777)",
+      padding: "12px",
+      borderRadius: 8,
+      fontSize: 16,
+      cursor: "pointer",
+      width: "100%",
+      boxShadow: "var(--shadow-sm, 0 1px 4px rgba(0,0,0,0.08))",
+      transition: "transform .12s ease",
     },
     block: { marginTop: 12 },
     mono: {
       whiteSpace: "pre-wrap",
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+      fontFamily:
+        "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
       background: "var(--code-bg, #f7f7f7)",
       borderRadius: 8,
       padding: 10,
@@ -607,6 +736,7 @@ function makeStyles(T) {
       placeItems: "center",
       zIndex: 2147483000,
       padding: 12,
+      pointerEvents: "auto",
     },
   };
 }
