@@ -579,7 +579,7 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             idPago,
             iaJSON, // ← Bloque grande con examenes
             datosPaciente: iaJSON.paciente,
-            examen: iaJSON.informeIA || iaJSON.consulta || "",
+            examen: listaExamenes.length ? listaExamenes.join(" | ") : "",
             examenes: listaExamenes, // ← envío explícito en clave correcta
             marcadores,
             rodillaMarcadores,
@@ -685,7 +685,9 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             idPago,
             iaJSON, // ← JSON central
             datosPaciente: iaJSON.paciente,
-            examen: iaJSON.informeIA || iaJSON.consulta || "",
+            examen: (iaJSON.examenes && iaJSON.examenes.length)
+  ? iaJSON.examenes.join(" | ")
+  : "",
             examenes: iaJSON.examenes || examenesPrevios || [],
             marcadores,
             rodillaMarcadores,
