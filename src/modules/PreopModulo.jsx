@@ -1,33 +1,43 @@
+// ==============================
 // src/modules/PreopModulo.jsx
+// MÓDULO PREOP — VERSIÓN COMPLETA
+// Con flujo de idPago idéntico a Trauma pero con prefijo preop_
+// ==============================
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { irAPagoKhipu } from "../PagoKhipu.jsx";
 import { getTheme } from "../theme.js";
 
-/* Aviso legal (gating) */
+/* Aviso legal */
 import AvisoLegal from "../components/AvisoLegal.jsx";
 
-/* Paso “esquema” (SIN mapper) */
+/* Paso “esquema” */
 import EsquemaAnterior from "../EsquemaAnterior.jsx";
 import EsquemaPosterior from "../EsquemaPosterior.jsx";
 import EsquemaToggleTabs from "../EsquemaToggleTabs.jsx";
 
-/* Formularios PREOP */
+/* Formularios */
 import FormularioTipoCirugia from "../FormularioTipoCirugia.jsx";
 import FormularioComorbilidades from "../components/FormularioComorbilidades.jsx";
 
-/* NUEVO: Layout común de módulos + logo PREOP */
+/* Layout */
 import ModuloLayout from "../components/ModuloLayout.jsx";
 import logoPreop from "../assets/logo_examenes_pre.png";
 
-const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
+const T = getTheme();
 
-/* ===== ID PAGO — un solo idPago por módulo, igual a trauma ===== */
+/* ============================================================
+   ID PAGO — MISMA LÓGICA QUE TRAUMA, SOLO CAMBIA EL PREFIJO
+   ============================================================ */
 function ensurePreopIdPago() {
   try {
     let id = sessionStorage.getItem("idPago");
+
+    // Si ya existe un idPago válido del módulo → NO LO TOCAMOS
     if (id && (/^preop_/.test(id) || /^pago_/.test(id))) return id;
+
+    // si no existe o es de otro módulo → crear uno propio
     id = `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
     sessionStorage.setItem("idPago", id);
     return id;
@@ -36,13 +46,13 @@ function ensurePreopIdPago() {
   }
 }
 
-/* Etiquetas amigables */
+/* Etiquetas */
 const LABELS_COMORB = {
   hta: "Hipertensión arterial",
   dm2: "Diabetes mellitus tipo 2",
   dislipidemia: "Dislipidemia",
   obesidad: "Obesidad",
-  tabaquismo: "Tabaco",
+  tabaquismo: "Tabaquismo",
   epoc_asma: "EPOC / Asma",
   cardiopatia: "Cardiopatía",
   erc: "Enfermedad renal crónica",
@@ -55,25 +65,17 @@ const LABELS_COMORB = {
   anticoagulantes_detalle: "Detalle anticoagulantes",
 };
 
-function prettyComorb(c = {}) {
+function prettyComorb(obj = {}) {
   try {
-    const keys = Object.keys(c);
-    if (!keys.length) return [];
     const out = [];
-    for (const k of keys) {
-      const v = c[k];
+    for (const k of Object.keys(obj)) {
+      const v = obj[k];
       const label = LABELS_COMORB[k] || k.replace(/_/g, " ");
-      if (typeof v === "boolean") {
-        if (v) out.push(label);
-        continue;
-      }
-      if (typeof v === "object" && v !== null && (v.tiene || v.usa || v.detalle)) {
-        let t = label;
-        if (v.detalle) t += ` — ${v.detalle}`;
-        out.push(t);
-        continue;
-      }
-      if (typeof v === "string" && v.trim()) out.push(`${label}: ${v.trim()}`);
+
+      if (typeof v === "boolean" && v) out.push(label);
+      else if (typeof v === "string" && v.trim()) out.push(`${label}: ${v}`);
+      else if (typeof v === "object" && v?.detalle)
+        out.push(`${label}: ${v.detalle}`);
     }
     return out;
   } catch {
@@ -81,110 +83,96 @@ function prettyComorb(c = {}) {
   }
 }
 
-function generoPalabra(g) {
-  const s = String(g).toUpperCase();
-  if (s === "MASCULINO") return "Hombre";
-  if (s === "FEMENINO") return "Mujer";
+function generoPalabra(s) {
+  const g = String(s || "").toLowerCase();
+  if (g.includes("fem")) return "Mujer";
+  if (g.includes("mas")) return "Hombre";
   return "Paciente";
 }
 
-function resumenInicialPreop({ datos, comorb, tipoCirugia }) {
+function resumenInicial({ datos, comorb, tipoCirugia }) {
   const sujeto = generoPalabra(datos?.genero);
   const edad = datos?.edad ? `${datos.edad} años` : "";
-  const lista = prettyComorb(comorb);
-  const antecedentes = lista.length
-    ? `con antecedentes de: ${lista.join(", ")}`
-    : "sin comorbilidades relevantes registradas";
-  const cir = (tipoCirugia || "").trim() || "la cirugía indicada";
+  const antecedentes =
+    prettyComorb(comorb).length > 0
+      ? `con antecedentes de: ${prettyComorb(comorb).join(", ")}`
+      : "sin comorbilidades relevantes";
+  const cir = tipoCirugia || "la cirugía indicada";
+
   return `${sujeto} ${edad}, ${antecedentes}. Solicita exámenes prequirúrgicos para operarse de ${cir}.`;
 }
 
+/* ===================================================================
+   COMPONENTE PRINCIPAL
+   =================================================================== */
 export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
   const [fase, setFase] = useState("esquema");
+  const [vista, setVista] = useState("anterior");
+
   const [datos, setDatos] = useState(initialDatos || {});
-  const [pagoRealizado, setPagoRealizado] = useState(false);
-
-  const [loadingIA, setLoadingIA] = useState(false);
-  const [examenesIA, setExamenesIA] = useState([]);
-  const [informeIA, setInformeIA] = useState("");
-
   const [comorbilidades, setComorbilidades] = useState({});
   const [tipoCirugia, setTipoCirugia] = useState("");
 
+  const [examenesIA, setExamenesIA] = useState([]);
+  const [informeIA, setInformeIA] = useState("");
   const [stepStarted, setStepStarted] = useState(false);
-  const [vista, setVista] = useState("anterior");
+
+  const [pagoRealizado, setPagoRealizado] = useState(false);
+
+  const [mostrarAviso, setMostrarAviso] = useState(false);
+  const pollerRef = useRef(null);
 
   const [descargando, setDescargando] = useState(false);
   const [mensajeDescarga, setMensajeDescarga] = useState("");
-  const pollerRef = useRef(null);
 
-  const [mostrarAviso, setMostrarAviso] = useState(false);
-  const continuarTrasAviso = () => {
-    setMostrarAviso(false);
-    try {
-      sessionStorage.setItem("preop_aviso_ok", "1");
-    } catch {}
-  };
-  const rechazarAviso = () => {
-    setMostrarAviso(false);
-    alert("Debes aceptar el aviso legal para continuar.");
-  };
-
+  /* ============================================================
+     INIT — RECUPERA DATOS + RESPETA idPago EXACTO COMO TRAUMA
+     ============================================================ */
   useEffect(() => {
-    /* Aviso legal */
-    const avisoOk = (() => {
-      try {
-        return sessionStorage.getItem("preop_aviso_ok") === "1";
-      } catch {
-        return false;
-      }
-    })();
-    if (!avisoOk) setMostrarAviso(true);
+    // Aviso legal
+    const ok =
+      sessionStorage.getItem("preop_aviso_ok") &&
+      sessionStorage.getItem("preop_aviso_ok") === "1";
+    if (!ok) setMostrarAviso(true);
 
-    /* Datos básicos */
+    // Datos básicos
     try {
-      const saved = sessionStorage.getItem("datosPacienteJSON");
-      if (saved) setDatos((p) => ({ ...p, ...JSON.parse(saved) }));
+      const raw = sessionStorage.getItem("datosPacienteJSON");
+      if (raw) setDatos((p) => ({ ...p, ...JSON.parse(raw) }));
     } catch {}
 
-    /* Tipo cirugía */
+    // Tipo cirugía
     try {
-      const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
-      const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
-      const final = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
-      setTipoCirugia(final || "");
+      const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").trim();
+      const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").trim();
+      const final =
+        fijo.toUpperCase().startsWith("OTRO") && otro ? otro : fijo;
+      setTipoCirugia(final);
     } catch {}
 
-    /* Comorbilidades */
+    // Comorbilidades
     try {
       const raw = sessionStorage.getItem("preop_comorbilidades_data");
       if (raw) setComorbilidades(JSON.parse(raw));
     } catch {}
 
-    /* IA previa */
+    // IA previa
     try {
       const ex = JSON.parse(sessionStorage.getItem("preop_ia_examenes") || "[]");
       const inf = sessionStorage.getItem("preop_ia_resumen") || "";
-      setExamenesIA(Array.isArray(ex) ? ex : []);
-      setInformeIA(inf);
-      if ((Array.isArray(ex) && ex.length) || inf) {
+      if (ex.length || inf) {
+        setExamenesIA(ex);
+        setInformeIA(inf);
         setStepStarted(true);
         setFase("preview");
       }
     } catch {}
 
-    /* ===== Retorno de pago — sin reemplazar idPago ===== */
+    // Retorno de pago — NO toques idPago → exacto como Trauma
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
 
-    /* usamos SIEMPRE el idPago existente */
-    const idPago = (() => {
-      try {
-        return sessionStorage.getItem("idPago") || "";
-      } catch {
-        return "";
-      }
-    })();
+    const idPago = sessionStorage.getItem("idPago") || "";
 
     if (pago === "ok" && idPago) {
       setPagoRealizado(true);
@@ -192,16 +180,15 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
       setFase("preview");
 
       if (pollerRef.current) clearInterval(pollerRef.current);
-      let intentos = 0;
+      let i = 0;
 
       pollerRef.current = setInterval(async () => {
-        intentos++;
+        i++;
         try {
           await fetch(`${BACKEND_BASE}/obtener-datos-preop/${idPago}`);
         } catch {}
-        if (intentos >= 30) {
+        if (i >= 30) {
           clearInterval(pollerRef.current);
-          pollerRef.current = null;
         }
       }, 2000);
     }
@@ -213,122 +200,93 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /* ===== Selección zona ===== */
+  /* ============================================================
+     ESQUEMA
+     ============================================================ */
   const onSeleccionZona = (zona) => {
     let dolor = "",
       lado = "";
-    const zl = String(zona || "").toLowerCase();
+    const z = (zona || "").toLowerCase();
 
-    if (zl.includes("columna cervical")) dolor = "Columna cervical";
-    else if (zl.includes("columna dorsal")) dolor = "Columna dorsal";
-    else if (zl.includes("columna lumbar")) dolor = "Columna lumbar";
-    else if (zl.includes("cadera")) {
+    if (z.includes("cadera")) {
       dolor = "Cadera";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zl.includes("rodilla")) {
+      lado = z.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (z.includes("rodilla")) {
       dolor = "Rodilla";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zl.includes("hombro")) {
+      lado = z.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (z.includes("hombro")) {
       dolor = "Hombro";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zl.includes("codo")) {
+      lado = z.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (z.includes("codo")) {
       dolor = "Codo";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zl.includes("mano")) {
+      lado = z.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (z.includes("mano")) {
       dolor = "Mano";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    } else if (zl.includes("tobillo")) {
+      lado = z.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (z.includes("tobillo")) {
       dolor = "Tobillo";
-      lado = zl.includes("izquierda") ? "Izquierda" : "Derecha";
-    }
+      lado = z.includes("izquierda") ? "Izquierda" : "Derecha";
+    } else if (z.includes("columna cervical")) dolor = "Columna cervical";
+    else if (z.includes("columna dorsal")) dolor = "Columna dorsal";
+    else if (z.includes("columna lumbar")) dolor = "Columna lumbar";
 
     const next = { ...datos, dolor, lado };
+
     setDatos(next);
-    try {
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
-    } catch {}
+    sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
   };
 
-  /* ===== IA ===== */
+  /* ============================================================
+     IA PREOP
+     ============================================================ */
   const handleGenerarIA = async () => {
     try {
-      setLoadingIA(true);
-
-      try {
-        const saved = sessionStorage.getItem("datosPacienteJSON");
-        if (saved) setDatos((p) => ({ ...p, ...JSON.parse(saved) }));
-      } catch {}
-
-      let rawComorb = {};
-      try {
-        rawComorb = JSON.parse(
-          sessionStorage.getItem("preop_comorbilidades_data") || "{}"
-        );
-      } catch {}
-      setComorbilidades(rawComorb || {});
-
-      let fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
-      let otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
-      const cir = fijo.startsWith("OTRO") ? (otro || "").trim() : fijo.trim();
-      setTipoCirugia(cir || "");
-
       const idPago = ensurePreopIdPago();
-      try {
-        sessionStorage.setItem("modulo", "preop");
-      } catch {}
+      sessionStorage.setItem("modulo", "preop");
 
       const payload = {
         idPago,
-        paciente: { ...datos },
-        comorbilidades: rawComorb || {},
-        tipoCirugia: cir || "",
+        paciente: datos,
+        comorbilidades,
+        tipoCirugia,
       };
 
-      let r = await fetch(`${BACKEND_BASE}/preop-ia`, {
+      const r = await fetch(`${BACKEND_BASE}/preop-ia`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!r.ok) {
-        r = await fetch(`${BACKEND_BASE}/ia-preop`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-      }
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+      if (!r.ok) throw new Error("Error IA Preop");
 
       const j = await r.json();
-      const ex = Array.isArray(j?.examenes) ? j.examenes : [];
-      const inf = typeof j?.informeIA === "string" ? j.informeIA : "";
 
-      try {
-        sessionStorage.setItem("preop_ia_examenes", JSON.stringify(ex));
-        sessionStorage.setItem("preop_ia_resumen", inf || "");
-      } catch {}
+      const ex = Array.isArray(j?.examenes) ? j.examenes : [];
+      const inf = j?.informeIA || "";
+
+      sessionStorage.setItem("preop_ia_examenes", JSON.stringify(ex));
+      sessionStorage.setItem("preop_ia_resumen", inf);
 
       setExamenesIA(ex);
       setInformeIA(inf);
       setStepStarted(true);
       setFase("preview");
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      console.error(err);
       alert("Error al generar IA.");
-    } finally {
-      setLoadingIA(false);
     }
   };
 
-  /* ===== Pago ===== */
-  const handlePagarDesdePreview = async () => {
+  /* ============================================================
+     PAGO — IDÉNTICO A TRAUMA
+     ============================================================ */
+  const handlePagar = async () => {
     const idPago = ensurePreopIdPago();
 
-    try {
-      sessionStorage.setItem("idPago", idPago);
-      sessionStorage.setItem("modulo", "preop");
-      sessionStorage.setItem("pantalla", "tres");
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
-    } catch {}
+    sessionStorage.setItem("idPago", idPago);
+    sessionStorage.setItem("modulo", "preop");
+    sessionStorage.setItem("pantalla", "tres");
+    sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
 
     const payload = {
       idPago,
@@ -340,19 +298,11 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     };
 
     try {
-      let r = await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
+      await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
-      if (!r.ok) {
-        await fetch(`${BACKEND_BASE}/guardar-datos`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idPago, datosPaciente: datos }),
-        });
-      }
 
       if (typeof onIrPantallaTres === "function") {
         onIrPantallaTres({ ...datos, idPago });
@@ -365,322 +315,265 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
-  /* ===== Descargar ===== */
-  const handleDescargarPreop = async () => {
-    const idPago = ensurePreopIdPago();
+  /* ============================================================
+     DESCARGAR — igual que Trauma
+     ============================================================ */
+  const handleDescargar = async () => {
+    const idPago = sessionStorage.getItem("idPago") || "";
+
     if (!idPago) return alert("ID de pago no encontrado");
 
-    const intentaDescarga = async () => {
-      let res = await fetch(`${BACKEND_BASE}/pdf-preop/${idPago}`, {
+    const intenta = async () => {
+      let r = await fetch(`${BACKEND_BASE}/pdf-preop/${idPago}`, {
         cache: "no-store",
       });
-      if (!res.ok) {
-        res = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, {
-          cache: "no-store",
-        });
-      }
+      if (!r.ok)
+        r = await fetch(`${BACKEND_BASE}/pdf/${idPago}`, { cache: "no-store" });
 
-      if (res.status === 404) return { ok: false, status: 404 };
-      if (res.status === 402) return { ok: false, status: 402 };
-      if (!res.ok) throw new Error("Error al obtener el PDF");
+      if (r.status === 404) return { ok: false, status: 404 };
+      if (r.status === 402) return { ok: false, status: 402 };
+      if (!r.ok) throw new Error("Fallo descarga");
 
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
+
       a.href = url;
       a.download = `preop_${(datos?.nombre || "paciente").replace(/ /g, "_")}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      window.URL.revokeObjectURL(url);
+      URL.revokeObjectURL(url);
+
       return { ok: true };
     };
 
     setDescargando(true);
-    setMensajeDescarga("Verificando pago…");
+    setMensajeDescarga("Verificando…");
 
     let reinyectado = false;
-    try {
-      const maxIntentos = 30;
-      for (let i = 1; i <= maxIntentos; i++) {
-        const r = await intentaDescarga();
-        if (r.ok) break;
 
-        if (r.status === 402) {
-          setMensajeDescarga(`Verificando pago… (${i}/${maxIntentos})`);
-          await sleep(1500);
+    for (let i = 1; i <= 30; i++) {
+      const r = await intenta();
+
+      if (r.ok) break;
+
+      if (r.status === 402) {
+        setMensajeDescarga(`Verificando pago… (${i}/30)`);
+        await sleep(1500);
+        continue;
+      }
+
+      if (r.status === 404) {
+        if (!reinyectado) {
+          await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              idPago,
+              paciente: datos,
+              comorbilidades,
+              tipoCirugia,
+              examenesIA,
+              informeIA,
+            }),
+          }).catch(() => {});
+          reinyectado = true;
+          await sleep(500);
           continue;
         }
-
-        if (r.status === 404) {
-          if (!reinyectado) {
-            await fetch(`${BACKEND_BASE}/guardar-datos-preop`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                idPago,
-                paciente: datos,
-                comorbilidades,
-                tipoCirugia,
-                examenesIA,
-                informeIA,
-              }),
-            }).catch(() => {});
-            reinyectado = true;
-            await sleep(500);
-            continue;
-          }
-          alert("No se pudo descargar el PDF.");
-          break;
-        }
-
-        alert("No se pudo descargar el PDF.");
         break;
       }
-    } catch {
-      alert("No se pudo descargar el PDF.");
-    } finally {
-      setDescargando(false);
-      setMensajeDescarga("");
     }
+
+    setDescargando(false);
+    setMensajeDescarga("");
   };
 
-  const comorbChips = prettyComorb(comorbilidades);
+  /* ============================================================
+     UI
+     ============================================================ */
+  const chipsComorb = prettyComorb(comorbilidades);
 
   const tituloFase = {
-    esquema: "Seleccione la zona relacionada con su cirugía.",
-    tipo: "Indique el tipo de cirugía propuesta.",
-    comorb: "Consigne enfermedades previas, tratamientos y alergias relevantes.",
-    preview:
-      "Revise y confirme la orden; exámenes preoperatorios sugeridos por IA.",
+    esquema: "Seleccione la zona de la cirugía",
+    tipo: "Tipo de cirugía",
+    comorb: "Comorbilidades",
+    preview: stepStarted
+      ? "Exámenes sugeridos por IA"
+      : "Resumen preoperatorio",
   }[fase];
 
-  const subtitleLayout = {
-    esquema:
-      "Revise el esquema corporal y marque la zona donde se realizará la cirugía.",
-    tipo:
-      "Confirme el tipo de cirugía para ajustar la indicación de exámenes preoperatorios.",
-    comorb:
-      "Registre comorbilidades, tratamientos y alergias antes de generar la orden preoperatoria.",
+  const subtitle = {
+    esquema: "Seleccione la zona en el esquema corporal",
+    tipo: "Determine el tipo de cirugía planificada",
+    comorb: "Registre condiciones médicas relevantes",
     preview: stepStarted
-      ? "Revise los exámenes sugeridos por IA y continúe al pago o descarga del documento."
-      : "Revise el resumen preoperatorio y genere la propuesta de exámenes con IA.",
+      ? "Revise y continúe al pago"
+      : "Genere la propuesta de exámenes",
   }[fase];
 
   return (
     <ModuloLayout
-      logo={logoPreop}
       title="Asistente Preoperatorio"
-      subtitle={subtitleLayout}
+      subtitle={subtitle}
+      logo={logoPreop}
       variant="preop"
     >
-      <div className="card" aria-live="polite">
+      <div className="card">
+
         <AvisoLegal
           visible={mostrarAviso}
-          persist={false}
-          onAccept={continuarTrasAviso}
-          onReject={rechazarAviso}
+          onAccept={() => {
+            sessionStorage.setItem("preop_aviso_ok", "1");
+            setMostrarAviso(false);
+          }}
         />
 
-        <h3 className="h1" style={{ color: T.primary }}>
-          {tituloFase}
-        </h3>
+        <h3 style={{ color: T.primary }}>{tituloFase}</h3>
 
-        {/* ESQUEMA */}
+        {/* === ESQUEMA === */}
         {fase === "esquema" && (
-          <div className="card" style={{ marginTop: 8 }}>
+          <div className="card">
             <EsquemaToggleTabs vista={vista} onChange={setVista} />
+
             {vista === "anterior" ? (
               <EsquemaAnterior onSeleccionZona={onSeleccionZona} width={400} />
             ) : (
               <EsquemaPosterior onSeleccionZona={onSeleccionZona} width={400} />
             )}
+
             <div className="mt-8 muted">
               {datos?.dolor ? (
                 <>
-                  Zona:{" "}
-                  <strong>
-                    {datos.dolor}
-                    {datos.lado ? ` — ${datos.lado}` : ""}
-                  </strong>
+                  Zona: <strong>{datos.dolor}{datos?.lado ? ` — ${datos.lado}` : ""}</strong>
                 </>
               ) : (
-                "Seleccione una zona del esquema para continuar"
+                "Seleccione una zona"
               )}
             </div>
-            <div className="toolbar right mt-16">
-              <button
-                className="btn"
-                disabled={!datos?.dolor}
-                onClick={() => setFase("tipo")}
-              >
-                Continuar → Tipo de cirugía
-              </button>
-            </div>
+
+            <button
+              className="btn mt-12"
+              disabled={!datos?.dolor}
+              onClick={() => setFase("tipo")}
+            >
+              Continuar → Tipo de cirugía
+            </button>
           </div>
         )}
 
-        {/* TIPO CIRUGÍA */}
+        {/* === TIPO CIRUGÍA === */}
         {fase === "tipo" && (
-          <div className="card" style={{ marginTop: 12 }}>
-            <div className="section">
-              <h2 className="h1" style={{ margin: 0 }}>
-                Tipo de cirugía
-              </h2>
-              <div className="muted">
-                {datos?.dolor ? (
-                  <>
-                    Zona:{" "}
-                    <strong>
-                      {datos.dolor}
-                      {datos.lado ? ` — ${datos.lado}` : ""}
-                    </strong>
-                  </>
-                ) : (
-                  "Seleccione una zona en el paso anterior"
-                )}
-              </div>
-            </div>
-            <div className="divider" />
+          <div className="card">
             <FormularioTipoCirugia
               datos={datos}
               onTipoCirugiaChange={() => {
                 try {
-                  const fijo = (
-                    sessionStorage.getItem("preop_tipoCirugia") || ""
-                  ).toUpperCase();
-                  const otro = (
-                    sessionStorage.getItem("preop_tipoCirugia_otro") || ""
-                  ).toUpperCase();
-                  const final = fijo.startsWith("OTRO")
-                    ? (otro || "").trim()
-                    : fijo.trim();
-                  setTipoCirugia(final || "");
+                  const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
+                  const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+                  const final =
+                    fijo.toUpperCase().startsWith("OTRO") && otro
+                      ? otro
+                      : fijo.trim();
+                  setTipoCirugia(final);
                 } catch {}
               }}
             />
-            <div className="toolbar right mt-16">
-              <button
-                className="btn"
-                onClick={() => {
-                  const fijo =
-                    sessionStorage.getItem("preop_tipoCirugia") || "";
-                  const otro =
-                    sessionStorage.getItem("preop_tipoCirugia_otro") || "";
-                  const isOtro = fijo.trim().toUpperCase().startsWith("OTRO");
-                  const ok =
-                    (fijo && !isOtro) || (isOtro && (otro || "").trim());
-                  if (!ok) {
-                    alert("Seleccione el tipo de cirugía o especifique 'OTRO'.");
-                    return;
-                  }
-                  setFase("comorb");
-                }}
-              >
-                Continuar → Comorbilidades
-              </button>
-            </div>
+
+            <button
+              className="btn mt-16"
+              onClick={() => {
+                const fijo = sessionStorage.getItem("preop_tipoCirugia") || "";
+                const otro = sessionStorage.getItem("preop_tipoCirugia_otro") || "";
+                const isOtro = fijo.toUpperCase().startsWith("OTRO");
+                const ok =
+                  (fijo && !isOtro) ||
+                  (isOtro && otro.trim());
+
+                if (!ok) {
+                  alert("Seleccione un tipo de cirugía válido.");
+                  return;
+                }
+
+                setFase("comorb");
+              }}
+            >
+              Continuar → Comorbilidades
+            </button>
           </div>
         )}
 
-        {/* COMORBILIDADES */}
+        {/* === COMORBILIDADES === */}
         {fase === "comorb" && (
-          <div className="card" style={{ marginTop: 12 }}>
-            <div className="section">
-              <h2 className="h1" style={{ margin: 0 }}>
-                Comorbilidades
-              </h2>
-            </div>
-            <div className="divider" />
+          <div className="card">
             <FormularioComorbilidades
-              initial={comorbilidades || {}}
-              onSave={(payload) => {
-                try {
-                  sessionStorage.setItem(
-                    "preop_comorbilidades_data",
-                    JSON.stringify(payload || {})
-                  );
-                  sessionStorage.setItem("preop_comorbilidades_ok", "1");
-                  sessionStorage.removeItem("preop_ia_examenes");
-                  sessionStorage.removeItem("preop_ia_resumen");
-                } catch {}
-                setComorbilidades(payload || {});
-                setStepStarted(false);
+              initial={comorbilidades}
+              onSave={(c) => {
+                sessionStorage.setItem(
+                  "preop_comorbilidades_data",
+                  JSON.stringify(c)
+                );
+                sessionStorage.removeItem("preop_ia_examenes");
+                sessionStorage.removeItem("preop_ia_resumen");
+                setComorbilidades(c);
                 setFase("preview");
               }}
             />
           </div>
         )}
 
-        {/* PREVIEW */}
+        {/* === PREVIEW === */}
         {fase === "preview" && (
           <>
+            {/* Datos básicos */}
             <section style={{ marginBottom: 10 }}>
+              <div><strong>Paciente:</strong> {datos?.nombre}</div>
+              <div><strong>RUT:</strong> {datos?.rut}</div>
+              <div><strong>Edad:</strong> {datos?.edad}</div>
+              <div><strong>Sexo:</strong> {datos?.genero}</div>
               <div>
-                <strong>Paciente:</strong> {datos?.nombre || "—"}
-              </div>
-              <div>
-                <strong>RUT:</strong> {datos?.rut || "—"}
-              </div>
-              <div>
-                <strong>Edad:</strong> {datos?.edad || "—"}
-              </div>
-              <div>
-                <strong>Sexo:</strong> {datos?.genero || "—"}
-              </div>
-              <div>
-                <strong>Motivo/Área:</strong>{" "}
-                {`Dolor en ${(datos?.dolor || "")}${
-                  datos?.lado ? ` ${datos.lado}` : ""
-                }`.trim()}
+                <strong>Área:</strong>{" "}
+                {`${datos?.dolor || ""} ${datos?.lado || ""}`.trim()}
               </div>
               {tipoCirugia && (
-                <div>
-                  <strong>Tipo de cirugía:</strong> {tipoCirugia}
-                </div>
+                <div><strong>Cirugía:</strong> {tipoCirugia}</div>
               )}
             </section>
 
-            {/* PREVIEW ORDEN */}
+            {/* Resumen sin IA */}
             {!stepStarted && (
               <>
                 <div className="mono">
-                  {resumenInicialPreop({
-                    datos,
-                    comorb: comorbilidades,
-                    tipoCirugia,
-                  })}
+                  {resumenInicial({ datos, comorb: comorbilidades, tipoCirugia })}
                 </div>
+
                 <button
-                  className="btn fullw"
-                  style={{ marginTop: 10 }}
+                  className="btn fullw mt-12"
                   onClick={handleGenerarIA}
-                  disabled={loadingIA}
                 >
-                  {loadingIA ? "Generando con IA…" : "Aceptar y continuar"}
+                  Aceptar y continuar
                 </button>
               </>
             )}
 
-            {/* PREVIEW IA */}
+            {/* Con IA */}
             {stepStarted && (
               <>
-                {prettyComorb(comorbilidades).length > 0 && (
+                {chipsComorb.length > 0 && (
                   <section className="mt-8">
                     <strong>Comorbilidades:</strong>
                     <div className="chips mt-6">
-                      {prettyComorb(comorbilidades).map((t, i) => (
-                        <span className="chip" key={i}>
-                          {t}
-                        </span>
+                      {chipsComorb.map((t, i) => (
+                        <span key={i} className="chip">{t}</span>
                       ))}
                     </div>
                   </section>
                 )}
 
-                {Array.isArray(examenesIA) && examenesIA.length > 0 && (
+                {examenesIA.length > 0 && (
                   <section className="mt-12">
-                    <strong>Exámenes a solicitar (IA):</strong>
+                    <strong>Exámenes sugeridos (IA):</strong>
                     <ul className="mt-6">
                       {examenesIA.map((e, i) => (
                         <li key={i}>{typeof e === "string" ? e : e?.nombre}</li>
@@ -690,7 +583,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
                 )}
 
                 {informeIA && (
-                  <section className="mt-8">
+                  <section className="mt-12">
                     <strong>Informe IA:</strong>
                     <div className="mono mt-6">{informeIA}</div>
                   </section>
@@ -698,8 +591,8 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
 
                 {pagoRealizado ? (
                   <button
-                    className="btn fullw mt-12"
-                    onClick={handleDescargarPreop}
+                    className="btn fullw mt-16"
+                    onClick={handleDescargar}
                     disabled={descargando}
                   >
                     {descargando
@@ -708,8 +601,8 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
                   </button>
                 ) : (
                   <button
-                    className="btn fullw mt-12"
-                    onClick={handlePagarDesdePreview}
+                    className="btn fullw mt-16"
+                    onClick={handlePagar}
                   >
                     Pagar ahora (Preop)
                   </button>
