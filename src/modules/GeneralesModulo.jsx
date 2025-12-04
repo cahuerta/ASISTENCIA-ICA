@@ -39,19 +39,27 @@ const LABELS_COMORB = {
  * - Si no hay, se crea uno nuevo con prefijo "generales_".
  */
 function ensureGeneralesIdPago() {
-  let id = null;
   try {
-    id = sessionStorage.getItem("idPago");
-  } catch {
-    id = null;
-  }
-  if (!id) {
+    let id = sessionStorage.getItem("idPago");
+
+    // reutilizar idPago existente si viene de este módulo o de pago_
+    if (id && (/^generales_/.test(id) || /^pago_/.test(id))) {
+      return id;
+    }
+
+    // si viene de otro módulo (trauma_, preop_, ia_) también se respeta
+    if (id && (/^(trauma_|preop_|ia_)/.test(id))) {
+      return id;
+    }
+
+    // si no existe, crear uno nuevo con prefijo del módulo
     id = `generales_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-    try {
-      sessionStorage.setItem("idPago", id);
-    } catch {}
+    sessionStorage.setItem("idPago", id);
+    return id;
+
+  } catch {
+    return `generales_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   }
-  return id;
 }
 
 function prettyComorb(c = {}) {
