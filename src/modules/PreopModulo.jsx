@@ -23,17 +23,23 @@ import logoPreop from "../assets/logo_examenes_pre.png";
 const T = getTheme();
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
-/* ===== ID PAGO — un solo idPago por módulo, igual a trauma ===== */
+/* ===== ID PAGO — flujo idéntico al módulo Trauma ===== */
 function ensurePreopIdPago() {
+  let id = null;
   try {
-    let id = sessionStorage.getItem("idPago");
-    if (id && (/^preop_/.test(id) || /^pago_/.test(id))) return id;
-    id = `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-    sessionStorage.setItem("idPago", id);
-    return id;
+    id = sessionStorage.getItem("idPago");
   } catch {
-    return `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    id = null;
   }
+
+  if (!id || !/^preop_|^pago_/.test(id)) {
+    id = `preop_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+    try {
+      sessionStorage.setItem("idPago", id);
+    } catch {}
+  }
+
+  return id;
 }
 
 /* Etiquetas amigables */
@@ -131,7 +137,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
   };
 
   useEffect(() => {
-    /* Aviso legal */
     const avisoOk = (() => {
       try {
         return sessionStorage.getItem("preop_aviso_ok") === "1";
@@ -141,13 +146,11 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     })();
     if (!avisoOk) setMostrarAviso(true);
 
-    /* Datos básicos */
     try {
       const saved = sessionStorage.getItem("datosPacienteJSON");
       if (saved) setDatos((p) => ({ ...p, ...JSON.parse(saved) }));
     } catch {}
 
-    /* Tipo cirugía */
     try {
       const fijo = (sessionStorage.getItem("preop_tipoCirugia") || "").toUpperCase();
       const otro = (sessionStorage.getItem("preop_tipoCirugia_otro") || "").toUpperCase();
@@ -155,13 +158,11 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
       setTipoCirugia(final || "");
     } catch {}
 
-    /* Comorbilidades */
     try {
       const raw = sessionStorage.getItem("preop_comorbilidades_data");
       if (raw) setComorbilidades(JSON.parse(raw));
     } catch {}
 
-    /* IA previa */
     try {
       const ex = JSON.parse(sessionStorage.getItem("preop_ia_examenes") || "[]");
       const inf = sessionStorage.getItem("preop_ia_resumen") || "";
@@ -173,11 +174,9 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
       }
     } catch {}
 
-    /* ===== Retorno de pago — sin reemplazar idPago ===== */
     const params = new URLSearchParams(window.location.search);
     const pago = params.get("pago");
 
-    /* usamos SIEMPRE el idPago existente */
     const idPago = (() => {
       try {
         return sessionStorage.getItem("idPago") || "";
@@ -213,7 +212,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  /* ===== Selección zona ===== */
   const onSeleccionZona = (zona) => {
     let dolor = "",
       lado = "";
@@ -249,7 +247,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     } catch {}
   };
 
-  /* ===== IA ===== */
   const handleGenerarIA = async () => {
     try {
       setLoadingIA(true);
@@ -319,7 +316,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
-  /* ===== Pago ===== */
   const handlePagarDesdePreview = async () => {
     const idPago = ensurePreopIdPago();
 
@@ -365,7 +361,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     }
   };
 
-  /* ===== Descargar ===== */
   const handleDescargarPreop = async () => {
     const idPago = ensurePreopIdPago();
     if (!idPago) return alert("ID de pago no encontrado");
@@ -486,7 +481,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
           {tituloFase}
         </h3>
 
-        {/* ESQUEMA */}
         {fase === "esquema" && (
           <div className="card" style={{ marginTop: 8 }}>
             <EsquemaToggleTabs vista={vista} onChange={setVista} />
@@ -520,7 +514,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
           </div>
         )}
 
-        {/* TIPO CIRUGÍA */}
         {fase === "tipo" && (
           <div className="card" style={{ marginTop: 12 }}>
             <div className="section">
@@ -583,7 +576,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
           </div>
         )}
 
-        {/* COMORBILIDADES */}
         {fase === "comorb" && (
           <div className="card" style={{ marginTop: 12 }}>
             <div className="section">
@@ -612,7 +604,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
           </div>
         )}
 
-        {/* PREVIEW */}
         {fase === "preview" && (
           <>
             <section style={{ marginBottom: 10 }}>
@@ -641,7 +632,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
               )}
             </section>
 
-            {/* PREVIEW ORDEN */}
             {!stepStarted && (
               <>
                 <div className="mono">
@@ -662,7 +652,6 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
               </>
             )}
 
-            {/* PREVIEW IA */}
             {stepStarted && (
               <>
                 {prettyComorb(comorbilidades).length > 0 && (
