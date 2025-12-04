@@ -97,7 +97,7 @@ function generoPalabra(g) {
 function resumenInicialPreop({ datos, comorb, tipoCirugia }) {
   const sujeto = generoPalabra(datos?.genero);
   const edad = datos?.edad ? `${datos.edad} años` : "";
-  const lista = prettyComorb(comorb);
+  const lista = prettyComorb(comorbididades);
   const antecedentes = lista.length
     ? `con antecedentes de: ${lista.join(", ")}`
     : "sin comorbilidades relevantes registradas";
@@ -304,7 +304,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
         sessionStorage.setItem("preop_ia_resumen", inf || "");
       } catch {}
 
-      setExamenesIA(ex);
+      setExamenचIA(ex);
       setInformeIA(inf);
       setStepStarted(true);
       setFase("preview");
@@ -397,7 +397,7 @@ export default function PreopModulo({ initialDatos, onIrPantallaTres }) {
     let reinyectado = false;
     try {
       const maxIntentos = 30;
-      for (let i = 1; i <= maxIntentos; i++) {
+      for (let i = 1; i <= maxIntents; i++) {
         const r = await intentaDescarga();
         if (r.ok) break;
 
