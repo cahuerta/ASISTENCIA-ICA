@@ -74,23 +74,19 @@ function FormularioPaciente({
   const [rutMsg, setRutMsg] = useState("");
   const [rutValido, setRutValido] = useState(true);
 
-  // Detecta modo invitado por prop o por sessionStorage ("guest" = "1")
   const modoInvitado =
     typeof modoInvitadoProp === "boolean"
       ? modoInvitadoProp
       : (typeof window !== "undefined" && sessionStorage.getItem("guest") === "1");
 
-  // === Mostrar "Tipo de cirugía" SOLO en PREOP
   const isPreop =
     moduloActual === "preop" ||
     (typeof window !== "undefined" && sessionStorage.getItem("modulo") === "preop");
 
-  // === En GENERALES no se piden Dolor ni Lado
   const isGenerales =
     moduloActual === "generales" ||
     (typeof window !== "undefined" && sessionStorage.getItem("modulo") === "generales");
 
-  // Tipo de cirugía (persistido)
   const [tipoCirugia, setTipoCirugia] = useState(() => {
     try {
       return sessionStorage.getItem("preop_tipoCirugia") || "";
@@ -125,15 +121,15 @@ function FormularioPaciente({
       sessionStorage.setItem("preop_tipoCirugia", tipoCirugia || "");
     } catch {}
   }, [tipoCirugia]);
+
   useEffect(() => {
     try {
       sessionStorage.setItem("preop_tipoCirugia_otro", tipoCirugiaLibre || "");
     } catch {}
   }, [tipoCirugiaLibre]);
 
-  /* ======= RUT en vivo ======= */
+  /* ======= RUT ======= */
   const handleRutChange = (e) => {
-    // En modo invitado: no forzamos limpieza/longitud, solo guardamos lo que escribe
     if (modoInvitado) {
       onCambiarDato("rut", e.target.value);
       setRutValido(true);
@@ -167,7 +163,7 @@ function FormularioPaciente({
   };
 
   const handleRutBlur = () => {
-    if (modoInvitado) return; // En guest no autoformateamos ni validamos
+    if (modoInvitado) return;
 
     const s = limpiarRut(datos?.rut || "");
     if (!s) {
@@ -188,10 +184,7 @@ function FormularioPaciente({
     setRutMsg("RUT formateado.");
   };
 
-  /* ======= Submit =======
-     - En guest: no bloqueamos por RUT ni por tipo de cirugía
-     - En normal: validamos RUT, y si PREOP exigimos tipo de cirugía
-  */
+  /* ======= Submit ======= */
   const handleSubmit = (e) => {
     if (!modoInvitado) {
       const v = validarRut(datos?.rut || "");
@@ -219,7 +212,6 @@ function FormularioPaciente({
     onSubmit(e);
   };
 
-  // === Lado no aplica en zonas de columna ===
   const isZonaColumna = useMemo(() => {
     const d = (datos?.dolor || "").toLowerCase();
     return d.includes("columna");
@@ -229,18 +221,19 @@ function FormularioPaciente({
     const v = e.target.value;
     onCambiarDato("dolor", v);
     if (v.toLowerCase().includes("columna")) {
-      // borrar lado si la zona no tiene lateralidad
       onCambiarDato("lado", "");
     }
   };
 
-  const showCirugia = isPreop && !modoInvitado; // en Guest no exigimos ni mostramos ese bloque
+  const showCirugia = isPreop && !modoInvitado;
   const listaOpciones =
     opcionesCirugia.length > 0 ? opcionesCirugia : ["OTRO (ESPECIFICAR)"];
 
-  // Helpers de "required": en modo invitado, nunca requerimos
   const req = (v) => (modoInvitado ? undefined : v);
 
+  /* ============================================================
+     RENDER
+  ============================================================ */
   return (
     <form onSubmit={handleSubmit} noValidate={modoInvitado}>
       <h1 className="h1 center mb-12">Asistente Virtual para Pacientes</h1>
@@ -254,6 +247,18 @@ function FormularioPaciente({
         autoComplete="name"
         autoCapitalize="words"
       />
+
+      {/* ⭐⭐⭐ NUEVO CAMPO – CORREO ELECTRÓNICO ⭐⭐⭐ */}
+      <label>Correo electrónico:</label>
+      <input
+        type="email"
+        value={String(datos?.emailPaciente ?? "")}
+        onChange={(e) => onCambiarDato("emailPaciente", e.target.value)}
+        required={req(true)}
+        placeholder="nombre@correo.com"
+        autoComplete="email"
+      />
+      {/* ⭐⭐⭐ FIN CAMPO NUEVO ⭐⭐⭐ */}
 
       <label>RUT:</label>
       <input
@@ -299,12 +304,10 @@ function FormularioPaciente({
         required={req(true)}
       >
         <option value="">{modoInvitado ? "Opcional…" : "Seleccione…"}</option>
-        {/* Valores COMPATIBLES con tu app: MASCULINO / FEMENINO */}
         <option value="MASCULINO">MASCULINO</option>
         <option value="FEMENINO">FEMENINO</option>
       </select>
 
-      {/* Dolor/Lado: se ocultan en GENERALES; en guest también opcionales */}
       {!isGenerales && (
         <>
           <label>Dolor:</label>
@@ -314,14 +317,11 @@ function FormularioPaciente({
             required={req(true)}
           >
             <option value="">{modoInvitado ? "Opcional…" : "Seleccione..."}</option>
-            {/* existentes */}
             <option value="Rodilla">Rodilla</option>
             <option value="Cadera">Cadera</option>
             <option value="Columna lumbar">Columna lumbar</option>
-            {/* nuevos de columna SIN lado */}
             <option value="Columna cervical">Columna cervical</option>
             <option value="Columna dorsal">Columna dorsal</option>
-            {/* nuevos puntos agregados al esquema */}
             <option value="Hombro">Hombro</option>
             <option value="Codo">Codo</option>
             <option value="Mano">Mano</option>
@@ -348,7 +348,6 @@ function FormularioPaciente({
         </>
       )}
 
-      {/* TIPO DE CIRUGÍA (solo en PREOP y no en guest) */}
       {showCirugia && (
         <>
           <label>TIPO DE CIRUGÍA:</label>
