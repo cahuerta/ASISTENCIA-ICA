@@ -178,6 +178,8 @@ function FormularioPacienteBasico({
           rut: String(curr?.rut ?? "").trim(),
           edad: String(curr?.edad ?? "").trim(),
           genero: String(curr?.genero ?? "").trim(),
+          emailPaciente: String(curr?.emailPaciente ?? "").trim(),
+
         })
       );
     } catch {}
@@ -257,6 +259,15 @@ function FormularioPacienteBasico({
         <option value="Masculino">Masculino</option>
         <option value="Femenino">Femenino</option>
       </select>
+<label>Correo electrónico:</label>
+<input
+  type="email"
+  value={String(curr?.emailPaciente ?? "")}
+  onChange={(e) => setCampo("emailPaciente", e.target.value)}
+  required={req(true)}
+  placeholder="nombre@correo.com"
+  autoComplete="email"
+/>
 
       <button className="btn fullw mt-16" type="submit">
         {modoInvitado ? "Continuar (modo invitado)" : "Continuar"}
