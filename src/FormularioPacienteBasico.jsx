@@ -263,7 +263,7 @@ function FormularioPacienteBasico({
 <input
   type="email"
   value={String(curr?.email ?? "")}
-  onChange={(e) => setCampo("emai", e.target.value)}
+  onChange={(e) => setCampo("email", e.target.value)}
   required={req(true)}
   placeholder="nombre@correo.com"
   autoComplete="email"
