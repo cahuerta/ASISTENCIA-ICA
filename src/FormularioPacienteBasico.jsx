@@ -178,7 +178,7 @@ function FormularioPacienteBasico({
           rut: String(curr?.rut ?? "").trim(),
           edad: String(curr?.edad ?? "").trim(),
           genero: String(curr?.genero ?? "").trim(),
-          emailPaciente: String(curr?.emailPaciente ?? "").trim(),
+          email: String(curr?.email ?? "").trim(),
 
         })
       );
@@ -262,8 +262,8 @@ function FormularioPacienteBasico({
 <label>Correo electrónico:</label>
 <input
   type="email"
-  value={String(curr?.emailPaciente ?? "")}
-  onChange={(e) => setCampo("emailPaciente", e.target.value)}
+  value={String(curr?.email ?? "")}
+  onChange={(e) => setCampo("emai", e.target.value)}
   required={req(true)}
   placeholder="nombre@correo.com"
   autoComplete="email"
