@@ -1,12 +1,14 @@
 // src/PagoFlow.jsx
 // Frontend: inicia pago Flow llamando al backend y redirige a la URL que éste responda.
-// Mismo patrón y helpers que en PagoKhipu.jsx para mantener compatibilidad.
+// ❗ NO genera idPago. Usa el idPago ya creado por los módulos.
 
 const BACKEND_BASE =
   (typeof window !== "undefined" && window.__ENV__?.BACKEND_BASE) ||
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_BACKEND_BASE) ||
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BACKEND_BASE) ||
   "https://asistencia-ica-backend.onrender.com";
+
+/* ================= Utils ================= */
 
 function joinURL(base, path) {
   if (!base) return path;
@@ -29,76 +31,21 @@ async function fetchJSON(url, options = {}, { timeoutMs = 30000 } = {}) {
         ...(options.headers || {}),
       },
     });
+
     const raw = await r.text();
     let data = null;
     try {
       data = JSON.parse(raw);
     } catch {}
+
     return { ok: r.ok, status: r.status, data, raw };
   } finally {
     clearTimeout(t);
   }
 }
 
-export function generarIdPago(prefix = "pago") {
-  return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1_000_000)}`;
-}
+/* ================= Guest ================= */
 
-export async function guardarDatos(idPago, datosPaciente, modulo = "trauma") {
-  const route =
-    modulo === "preop"
-      ? "/guardar-datos-preop"
-      : modulo === "generales"
-      ? "/guardar-datos-generales"
-      : "/guardar-datos";
-
-  const url = joinURL(BACKEND_BASE, route);
-  const { ok, data, status, raw } = await fetchJSON(url, {
-    method: "POST",
-    body: JSON.stringify({ idPago, datosPaciente }),
-  });
-
-  if (!ok || !data?.ok) {
-    const msg = data?.error || `Error ${status}${raw ? `: ${raw}` : ""}`;
-    throw new Error(`No se pudieron guardar los datos antes del pago. ${msg}`);
-  }
-  return true;
-}
-
-export async function crearPagoFlow({
-  idPago,
-  datosPaciente,
-  modulo = "trauma",
-  modoGuest = false,
-}) {
-  // ⬅️ Endpoint gemelo al de Khipu, pero para Flow
-  const url = joinURL(BACKEND_BASE, "/crear-pago-flow");
-  const { ok, status, data, raw } = await fetchJSON(url, {
-    method: "POST",
-    body: JSON.stringify({ idPago, datosPaciente, modulo, modoGuest }),
-  });
-
-  // 👇 OJO: ya NO exigimos data.ok; solo que el HTTP esté OK y haya url+token
-  if (!ok || !data?.url || !data?.token) {
-    const det =
-      data?.detail && typeof data.detail === "object"
-        ? `\n${JSON.stringify(data.detail)}`
-        : raw
-        ? `\n${raw}`
-        : "";
-    const msg = data?.error || `Fallo HTTP ${status}`;
-    throw new Error(`${msg}${det}`);
-  }
-
-  // Devolvemos todo lo necesario para construir la URL final
-  return {
-    url: data.url,
-    token: data.token,
-    flowOrder: data.flowOrder ?? null,
-  };
-}
-
-/* ==================== Detección de GUEST ==================== */
 const GUEST_PERFIL = {
   nombre: "Guest",
   rut: "11.111.111-1",
@@ -115,103 +62,63 @@ function esGuest(datos) {
   return nombreOk && rutOk;
 }
 
-/* ================= Helpers de lectura y validación ================= */
-async function obtenerDatosExistentes(idPago, modulo = "trauma") {
-  if (!idPago) return null;
-  try {
-    let url;
-    if (modulo === "preop") {
-      url = joinURL(
-        BACKEND_BASE,
-        `/obtener-datos-preop/${encodeURIComponent(idPago)}`
-      );
-    } else if (modulo === "generales") {
-      url = joinURL(
-        BACKEND_BASE,
-        `/obtener-datos-generales/${encodeURIComponent(idPago)}`
-      );
-    } else {
-      url = joinURL(
-        BACKEND_BASE,
-        `/obtener-datos/${encodeURIComponent(idPago)}`
-      );
-    }
-    const { ok, data } = await fetchJSON(url, { method: "GET" });
-    if (!ok || !data?.ok) return null;
-    return data.datos || null;
-  } catch {
-    return null;
+/* ================= Backend helpers ================= */
+
+async function guardarDatos(idPago, datosPaciente, modulo = "trauma") {
+  const route =
+    modulo === "preop"
+      ? "/guardar-datos-preop"
+      : modulo === "generales"
+      ? "/guardar-datos-generales"
+      : "/guardar-datos";
+
+  const url = joinURL(BACKEND_BASE, route);
+  const { ok, data, status, raw } = await fetchJSON(url, {
+    method: "POST",
+    body: JSON.stringify({ idPago, datosPaciente }),
+  });
+
+  if (!ok || !data?.ok) {
+    const msg = data?.error || `Error ${status}${raw ? `: ${raw}` : ""}`;
+    throw new Error(
+      `No se pudieron guardar los datos antes del pago. ${msg}`
+    );
   }
 }
 
-// ¿El cliente intenta borrar algo que ya existe en el server?
-function esParcheDestructivo(server = {}, cliente = {}) {
-  for (const [k, vCliente] of Object.entries(cliente || {})) {
-    const vServer = server?.[k];
-    if (vServer === undefined || vServer === null) continue;
+async function crearPagoFlow({
+  idPago,
+  datosPaciente,
+  modulo = "trauma",
+  modoGuest = false,
+}) {
+  const url = joinURL(BACKEND_BASE, "/crear-pago-flow");
+  const { ok, status, data, raw } = await fetchJSON(url, {
+    method: "POST",
+    body: JSON.stringify({ idPago, datosPaciente, modulo, modoGuest }),
+  });
 
-    if (
-      typeof vCliente === "string" &&
-      vCliente.trim() === "" &&
-      typeof vServer === "string" &&
-      vServer.trim() !== ""
-    )
-      return true;
-
-    if (
-      Array.isArray(vCliente) &&
-      vCliente.length === 0 &&
-      Array.isArray(vServer) &&
-      vServer.length > 0
-    )
-      return true;
-
-    if (
-      vCliente &&
-      typeof vCliente === "object" &&
-      !Array.isArray(vCliente) &&
-      Object.keys(vCliente).length === 0 &&
-      vServer &&
-      typeof vServer === "object" &&
-      !Array.isArray(vServer) &&
-      Object.keys(vServer).length > 0
-    )
-      return true;
+  // Flow devuelve url + token
+  if (!ok || !data?.url || !data?.token) {
+    const det =
+      data?.detail && typeof data.detail === "object"
+        ? `\n${JSON.stringify(data.detail)}`
+        : raw
+        ? `\n${raw}`
+        : "";
+    const msg = data?.error || `Fallo HTTP ${status}`;
+    throw new Error(`${msg}${det}`);
   }
-  return false;
+
+  return {
+    url: data.url,
+    token: data.token,
+    flowOrder: data.flowOrder ?? null,
+  };
 }
 
-// Tomar SOLO campos no vacíos del cliente (para aplicar sobre server sin borrar)
-function soloCamposNoVacios(obj = {}) {
-  const out = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v === undefined) continue;
+/* ==================== FLUJO PRINCIPAL ==================== */
 
-    if (typeof v === "string") {
-      if (v.trim() === "") continue;
-      out[k] = v;
-      continue;
-    }
-
-    if (Array.isArray(v)) {
-      if (v.length === 0) continue;
-      out[k] = v;
-      continue;
-    }
-
-    if (v && typeof v === "object") {
-      if (Object.keys(v).length === 0) continue;
-      out[k] = v;
-      continue;
-    }
-
-    // number, boolean, null explícito
-    out[k] = v;
-  }
-  return out;
-}
-
-/* ==================== Flujo principal ==================== */
 export async function irAPagoFlow(datosPaciente, opts = {}) {
   const modulo = (
     opts?.modulo ||
@@ -219,9 +126,26 @@ export async function irAPagoFlow(datosPaciente, opts = {}) {
     "trauma"
   ).toLowerCase();
 
+  /* ======================================================
+     🔒 idPago: ÚNICA FUENTE DE VERDAD
+     ====================================================== */
+  const idPago =
+    opts?.idPago ||
+    (typeof window !== "undefined"
+      ? sessionStorage.getItem("idPago")
+      : null);
+
+  if (!idPago) {
+    throw new Error(
+      "idPago NO existe. Debe ser generado por el módulo antes de pagar."
+    );
+  }
+
+  /* ======================================================
+     Validaciones mínimas
+     ====================================================== */
   const edadNum = Number(datosPaciente?.edad);
 
-  // Requisitos mínimos (idéntico a Khipu)
   const baseIncompleto =
     !datosPaciente?.nombre?.trim() ||
     !datosPaciente?.rut?.trim() ||
@@ -235,52 +159,27 @@ export async function irAPagoFlow(datosPaciente, opts = {}) {
     return;
   }
 
-  // ✅ IMPORTANTE: respetar idPago existente (PantallaTres / Generales) antes de generar uno nuevo
-  const idPago =
-    opts?.idPago ||
-    datosPaciente?.idPago ||
-    (typeof window !== "undefined" && sessionStorage.getItem("idPago")) ||
-    generarIdPago(
-      modulo === "preop" ? "preop" : modulo === "generales" ? "generales" : "pago"
-    );
+  /* ======================================================
+     Normalización payload
+     ====================================================== */
+  const payload = {
+    ...datosPaciente,
+    edad: edadNum,
+  };
 
-  // Setear id/modulo para flujos posteriores
-  if (typeof window !== "undefined") {
-    sessionStorage.setItem("idPago", idPago);
-    sessionStorage.setItem("modulo", modulo);
-  }
-
-  // 1) Leer lo que ya existe en backend (si existe)
-  const server = await obtenerDatosExistentes(idPago, modulo);
-
-  // 2) Preparar datos del cliente (normalizamos edad a número)
-  const cliente = { ...datosPaciente, edad: edadNum };
-
-  // 3) Validar que el cliente NO borre campos ya guardados (si existe server)
-  if (server && esParcheDestructivo(server, cliente)) {
-    alert(
-      "Detectamos datos vacíos que borrarían información ya guardada. Corrige y vuelve a intentar."
-    );
-    return;
-  }
-
-  // 4) Construir payload final
-  const payload = server ? { ...server, ...soloCamposNoVacios(cliente) } : cliente;
-
-  // 5) Persistir ANTES de crear el pago
+  /* ======================================================
+     Persistir ANTES del pago
+     ====================================================== */
   await guardarDatos(idPago, payload, modulo);
 
-  // 6) Cachear versión final
-  if (typeof window !== "undefined") {
-    try {
-      sessionStorage.setItem("datosPacienteJSON", JSON.stringify(payload));
-    } catch {}
-  }
-
-  // 7) Guest
+  /* ======================================================
+     Guest
+     ====================================================== */
   const modoGuest = esGuest(payload);
 
-  // 8) Crear pago (Flow) y redirigir
+  /* ======================================================
+     Crear pago Flow
+     ====================================================== */
   const pagoFlow = await crearPagoFlow({
     idPago,
     datosPaciente: payload,
@@ -290,8 +189,10 @@ export async function irAPagoFlow(datosPaciente, opts = {}) {
 
   const { url, token } = pagoFlow;
 
+  /* ======================================================
+     Redirección
+     ====================================================== */
   if (typeof window !== "undefined") {
-    // Flow exige que la URL de pay.php reciba el token por querystring
     window.location.href = `${url}?token=${encodeURIComponent(token)}`;
   } else {
     return `${url}?token=${encodeURIComponent(token)}`;
