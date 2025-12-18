@@ -43,7 +43,12 @@ function parseIA(texto = "") {
         .trim();
     }
 
-    if (low.includes("examen") || low.includes("exámenes")) {
+    const head = sec.trim().toLowerCase();
+if (
+  head.startsWith("exámenes sugeridos:") ||
+  head.startsWith("examenes sugeridos:")
+) {
+
       out.examenes = sec
         .split("\n")
         .slice(1)
