@@ -556,9 +556,6 @@ export default function IAModulo({ initialDatos, onIrPantallaTres }) {
             texto: resp,
           },
 
-          examen: listaExamenes.join(" | "),
-          examenes: listaExamenes,
-
           marcadores,
           rodillaMarcadores,
           manoMarcadores,
