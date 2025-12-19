@@ -3,6 +3,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import "./app.css";
 
+const BACKEND_BASE =
+  import.meta?.env?.VITE_BACKEND_URL ||
+  "https://asistencia-ica-backend.onrender.com";
+
 import PantallaUno from "./screens/PantallaUno.jsx";
 import PantallaDos from "./screens/PantallaDos.jsx";
 import PantallaTres from "./screens/PantallaTres.jsx";
@@ -24,6 +28,22 @@ import PagoOkBanner from "./components/PagoOkBanner.jsx";
  */
 
 export default function App() {
+    // ===== Ping backend + GEO silencioso (AL INICIO DE LA APP) =====
+  useEffect(() => {
+    const pingBackend = async () => {
+      try {
+        await fetch(`${BACKEND_BASE}/geo-ping`, {
+          method: "GET",
+          cache: "no-store",
+        });
+      } catch {
+        // silencio absoluto: no romper UX
+      }
+    };
+
+    pingBackend();
+  }, []);
+
   // ===== Helpers =====
   const getQuery = () => {
     try {
