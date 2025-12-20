@@ -1,4 +1,3 @@
-// src/App.jsx
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import "./app.css";
@@ -13,38 +12,79 @@ import PantallaTres from "./screens/PantallaTres.jsx";
 import PagoOkBanner from "./components/PagoOkBanner.jsx";
 
 /**
- * APP con 3 pantallas:
- * - PantallaUno: ingreso de datos básicos
- * - PantallaDos: módulos y previews (Preop / Generales / IA / Trauma)
- * - PantallaTres: elección de medio de pago (Flow / Khipu)
- *
- * Reglas clave:
- * - Si volvemos del pago con ?pago=ok, vamos directo a PantallaDos y dejamos
- *   que el módulo correspondiente detecte el pago y habilite descargas.
- * - Si volvemos del pago con ?pago=cancelado|error|rechazado (o cualquier valor ≠ "ok"),
- *   limpiamos todo y reiniciamos en PantallaUno.
- * - Solo se preserva lo guardado si el retorno trae ?pago=ok. Si no, se limpian
- *   restos de sesiones anteriores para partir desde cero.
+ * APP con 3 pantallas
+ * + GEO silencioso al inicio (GPS → IP → DEFAULT)
  */
 
 export default function App() {
-    // ===== Ping backend + GEO silencioso (AL INICIO DE LA APP) =====
+  /* ======================================================
+     GEO INICIAL (GPS → IP → DEFAULT)
+     ====================================================== */
   useEffect(() => {
-    const pingBackend = async () => {
+    let timeoutId;
+
+    const enviarGeo = async (geo) => {
+      try {
+        await fetch(`${BACKEND_BASE}/geo-ping`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ geo }),
+        });
+      } catch {
+        // silencio total
+      }
+    };
+
+    const fallbackIP = async () => {
       try {
         await fetch(`${BACKEND_BASE}/geo-ping`, {
           method: "GET",
           cache: "no-store",
         });
       } catch {
-        // silencio absoluto: no romper UX
+        // silencio total
       }
     };
 
-    pingBackend();
+    // Intento GPS
+    if ("geolocation" in navigator) {
+      timeoutId = setTimeout(() => {
+        // si el usuario no responde → fallback IP
+        fallbackIP();
+      }, 8000);
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          clearTimeout(timeoutId);
+          enviarGeo({
+            source: "gps",
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+          });
+        },
+        () => {
+          clearTimeout(timeoutId);
+          fallbackIP();
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 7000,
+          maximumAge: 60000,
+        }
+      );
+    } else {
+      fallbackIP();
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
-  // ===== Helpers =====
+  /* ======================================================
+     HELPERS
+     ====================================================== */
   const getQuery = () => {
     try {
       return new URLSearchParams(window.location.search);
@@ -55,7 +95,6 @@ export default function App() {
 
   const resetAppHard = async () => {
     try {
-      // Detener timers
       const maxId = setTimeout(() => {}, 0);
       for (let i = 0; i <= maxId; i++) {
         clearTimeout(i);
@@ -65,8 +104,6 @@ export default function App() {
 
     try {
       sessionStorage.clear();
-    } catch {}
-    try {
       localStorage.clear();
     } catch {}
 
@@ -84,38 +121,30 @@ export default function App() {
       }
     } catch {}
 
-    // URL limpia (sin ?pago=...)
-    let cleanUrl = window.location.href;
     try {
       const url = new URL(window.location.href);
       url.search = "";
       url.hash = "";
-      cleanUrl = url.toString();
-      window.history.replaceState(null, "", cleanUrl);
-    } catch {}
-
-    // Recarga dura
-    try {
-      window.location.replace(cleanUrl);
+      window.location.replace(url.toString());
     } catch {
       window.location.reload();
     }
   };
 
-  // ===== Pantalla inicial =====
+  /* ======================================================
+     STATE INICIAL
+     ====================================================== */
   const initPantalla = () => {
     try {
       const q = getQuery();
       if (q.get("pago") === "ok") return "dos";
-      const saved = sessionStorage.getItem("pantalla");
-      return saved || "uno";
+      return sessionStorage.getItem("pantalla") || "uno";
     } catch {
       return "uno";
     }
   };
 
-  // ===== State =====
-  const [pantalla, setPantalla] = useState(initPantalla); // "uno" | "dos" | "tres"
+  const [pantalla, setPantalla] = useState(initPantalla);
   const [datosPaciente, setDatosPaciente] = useState(() => {
     try {
       const raw = sessionStorage.getItem("datosPacienteJSON");
@@ -124,6 +153,7 @@ export default function App() {
       return null;
     }
   });
+
   const [pagoOk, setPagoOk] = useState(false);
   const [idPago, setIdPago] = useState(() => {
     try {
@@ -132,6 +162,7 @@ export default function App() {
       return "";
     }
   });
+
   const [moduloActual, setModuloActual] = useState(() => {
     try {
       return sessionStorage.getItem("modulo") || "trauma";
@@ -142,14 +173,18 @@ export default function App() {
 
   const handledReturnRef = useRef(false);
 
-  // ===== Persistir pantalla =====
+  /* ======================================================
+     PERSISTIR PANTALLA
+     ====================================================== */
   useEffect(() => {
     try {
       sessionStorage.setItem("pantalla", pantalla);
     } catch {}
   }, [pantalla]);
 
-  // ===== Procesar retorno de pago (OK o NO OK) + limpieza si hay restos sin ?pago =====
+  /* ======================================================
+     RETORNO DE PAGO
+     ====================================================== */
   useEffect(() => {
     if (handledReturnRef.current) return;
 
@@ -158,7 +193,6 @@ export default function App() {
     const idFromURL = q.get("idPago") || "";
     const moduloFromURL = q.get("modulo") || "";
 
-    // Si hay idPago en URL, persistirlo (los módulos lo usan para descargar)
     if (idFromURL) {
       try {
         sessionStorage.setItem("idPago", idFromURL);
@@ -166,50 +200,33 @@ export default function App() {
       setIdPago(idFromURL);
     }
 
-    // Si viene el módulo en la URL lo respetamos; si no, usamos lo que ya estaba
     if (moduloFromURL) {
       try {
         sessionStorage.setItem("modulo", moduloFromURL);
       } catch {}
       setModuloActual(moduloFromURL);
-    } else {
-      try {
-        const savedModulo = sessionStorage.getItem("modulo");
-        if (savedModulo) setModuloActual(savedModulo);
-      } catch {}
     }
 
-    // Caso 1: retorno OK -> preservar y pasar a PantallaDos
     if (pago === "ok") {
       setPagoOk(true);
       setPantalla("dos");
       handledReturnRef.current = true;
-      // No limpiamos los parámetros aquí: los módulos leen ?pago=ok para habilitar descargas.
       return;
     }
 
-    // Caso 2: retorno explícito NO OK -> limpiar todo
     if (pago && pago !== "ok") {
       handledReturnRef.current = true;
       resetAppHard();
       return;
     }
 
-    // Caso 3: NO hay parámetro ?pago (navegación "normal")
-    // Si hay restos de una sesión de pago previa, limpiar todo y reiniciar.
     const hayRestosPrevios = (() => {
       try {
-        const keys = [
+        return [
           "idPago",
-          "modulo",
           "trauma_ia_examenes",
           "trauma_ia_diagnostico",
-          "trauma_ia_justificacion",
-          "resonanciaChecklist",
-          "resonanciaResumenTexto",
-          "ordenAlternativa",
-        ];
-        return keys.some((k) => sessionStorage.getItem(k) !== null);
+        ].some((k) => sessionStorage.getItem(k));
       } catch {
         return false;
       }
@@ -218,41 +235,22 @@ export default function App() {
     if (hayRestosPrevios) {
       handledReturnRef.current = true;
       resetAppHard();
-      return;
     }
   }, []);
 
-  // ===== Hidratar datos si estamos en PantallaDos y no hay estado =====
-  useEffect(() => {
-    if (pantalla === "dos" && !datosPaciente) {
-      try {
-        const raw = sessionStorage.getItem("datosPacienteJSON");
-        if (raw) setDatosPaciente(JSON.parse(raw));
-      } catch {}
-    }
-  }, [pantalla, datosPaciente]);
-
-  // ===== Navegación básica =====
+  /* ======================================================
+     NAVEGACIÓN
+     ====================================================== */
   const irPantallaDos = (datos) => {
-    let next = datos;
-    if (!next) {
+    if (datos) {
+      setDatosPaciente(datos);
       try {
-        const raw = sessionStorage.getItem("datosPacienteJSON");
-        next = raw ? JSON.parse(raw) : null;
-      } catch {
-        next = null;
-      }
-    }
-    if (next) {
-      setDatosPaciente(next);
-      try {
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(next));
+        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
       } catch {}
     }
     setPantalla("dos");
   };
 
-  // Ahora SÍ usamos PantallaTres real.
   const irPantallaTres = (datos) => {
     if (datos) {
       setDatosPaciente(datos);
@@ -263,18 +261,17 @@ export default function App() {
     setPantalla("tres");
   };
 
-  // Volver desde PantallaTres: restaurar módulo actual desde sessionStorage y volver a PantallaDos
   const handleVolverDesdePago = () => {
     try {
       const savedModulo = sessionStorage.getItem("modulo");
-      if (savedModulo) {
-        setModuloActual(savedModulo);
-      }
+      if (savedModulo) setModuloActual(savedModulo);
     } catch {}
     setPantalla("dos");
   };
 
-  // ===== Render =====
+  /* ======================================================
+     RENDER
+     ====================================================== */
   if (pantalla === "uno") {
     return <PantallaUno onIrPantallaDos={irPantallaDos} />;
   }
@@ -288,7 +285,6 @@ export default function App() {
     );
   }
 
-  // pantalla === "dos"
   const moduloFromURL = (() => {
     try {
       return getQuery().get("modulo") || "";
@@ -296,6 +292,7 @@ export default function App() {
       return "";
     }
   })();
+
   const shouldShowBanner =
     pagoOk &&
     Boolean(idPago) &&
@@ -306,7 +303,6 @@ export default function App() {
       {shouldShowBanner && <PagoOkBanner />}
       <PantallaDos
         initialDatos={datosPaciente}
-        // Props informativas para coordinar la UI de módulos dentro de PantallaDos:
         pagoOk={pagoOk}
         idPago={idPago}
         moduloActual={moduloActual}
