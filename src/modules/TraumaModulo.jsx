@@ -27,6 +27,15 @@ import logoTrauma from "../assets/logo_traumamodulo.png";
 const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
 
 /* ================= Helpers ================= */
+function leerGeo() {
+  try {
+    const raw = sessionStorage.getItem("geo");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 function ensureTraumaIdPago() {
   let id = sessionStorage.getItem("idPago");
   if (!id || !/^pago_|^trauma_/.test(id)) {
@@ -452,7 +461,7 @@ export default function TraumaModulo({
       const resp = await fetch(`${BACKEND_BASE}/ia-trauma`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idPago, traumaJSON }),
+       body: JSON.stringify({  idPago,  traumaJSON,  geo: leerGeo(),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
@@ -681,10 +690,7 @@ export default function TraumaModulo({
       const resp = await fetch(`${BACKEND_BASE}/guardar-datos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idPago,
-          traumaJSON, // ← UN SOLO JSON como línea de comunicación
-        }),
+       body: JSON.stringify({  idPago,  traumaJSON,  geo: leerGeo(),
       });
 
       if (!resp.ok) {
@@ -807,10 +813,9 @@ export default function TraumaModulo({
             await fetch(`${BACKEND_BASE}/guardar-datos`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                idPago,
-                traumaJSON,
-              }),
+             body: JSON.stringify({  idPago,  traumaJSON,  geo: leerGeo(),
+}),
+
             });
 
             reinyectado = true;
