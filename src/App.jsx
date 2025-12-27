@@ -23,28 +23,36 @@ export default function App() {
   useEffect(() => {
     let timeoutId;
 
-    const enviarGeo = async (geo) => {
-      try {
-        await fetch(`${BACKEND_BASE}/geo-ping`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ geo }),
-        });
-      } catch {
-        // silencio total
-      }
-    };
+   const enviarGeo = async (geo) => {
+  try {
+    const res = await fetch(`${BACKEND_BASE}/geo-ping`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ geo }),
+    });
+
+    const data = await res.json();
+
+    if (data?.geo) {
+      sessionStorage.setItem("geo", JSON.stringify(data.geo));
+    }
+  } catch {}
+};
 
     const fallbackIP = async () => {
-      try {
-        await fetch(`${BACKEND_BASE}/geo-ping`, {
-          method: "GET",
-          cache: "no-store",
-        });
-      } catch {
-        // silencio total
-      }
-    };
+  try {
+    const res = await fetch(`${BACKEND_BASE}/geo-ping`, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+
+    if (data?.geo) {
+      sessionStorage.setItem("geo", JSON.stringify(data.geo));
+    }
+  } catch {}
+};
 
     // Intento GPS
     if ("geolocation" in navigator) {
