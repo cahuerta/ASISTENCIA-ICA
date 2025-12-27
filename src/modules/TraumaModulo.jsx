@@ -458,11 +458,16 @@ export default function TraumaModulo({
         sessionStorage.setItem("traumaJSON", JSON.stringify(traumaJSON));
       } catch {}
 
-      const resp = await fetch(`${BACKEND_BASE}/ia-trauma`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({  idPago,  traumaJSON,  geo: leerGeo(),
-      });
+     const resp = await fetch(`${BACKEND_BASE}/ia-trauma`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    idPago,
+    traumaJSON,
+    geo: leerGeo(),
+  }),
+});
+
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
       const j = await resp.json();
@@ -688,10 +693,15 @@ export default function TraumaModulo({
 
       // Guardar datos + IA + checklist para que el PDF quede consistente
       const resp = await fetch(`${BACKEND_BASE}/guardar-datos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({  idPago,  traumaJSON,  geo: leerGeo(),
-      });
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    idPago,
+    traumaJSON,
+    geo: leerGeo(),
+  }),
+});
+
 
       if (!resp.ok) {
         const txt = await resp.text().catch(() => "");
@@ -809,14 +819,17 @@ export default function TraumaModulo({
                 );
               } catch {}
             }
+           
+await fetch(`${BACKEND_BASE}/guardar-datos`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    idPago,
+    traumaJSON,
+    geo: leerGeo(),
+  }),
+});
 
-            await fetch(`${BACKEND_BASE}/guardar-datos`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-             body: JSON.stringify({  idPago,  traumaJSON,  geo: leerGeo(),
-}),
-
-            });
 
             reinyectado = true;
             await sleep(500);
