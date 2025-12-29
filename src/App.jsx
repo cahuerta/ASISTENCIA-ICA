@@ -20,121 +20,96 @@ export default function App() {
   /* ======================================================
      GEO INICIAL (GPS → IP → DEFAULT)
      ====================================================== */
-  useEffect(() => {
-    let timeoutId;
+ useEffect(() => {
+  let timeoutId;
 
-   const enviarGeo = async (geo) => {
-  try {
-    const res = await fetch(`${BACKEND_BASE}/geo-ping`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ geo }),
-    });
+  const enviarGeo = async (geo) => {
+    try {
+      const res = await fetch(`${BACKEND_BASE}/geo-ping`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ geo }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    // 🔎 LOG CLAVE
-    console.log("📥 GEO recibido (POST /geo-ping):", data);
+      console.log("📥 GEO recibido (POST /geo-ping):", data);
 
-    if (data?.geo) {
-      sessionStorage.setItem("geo", JSON.stringify(data.geo));
-      console.log(
-        "💾 GEO guardado en sessionStorage:",
-        sessionStorage.getItem("geo")
-      );
-    } else {
-      console.warn("⚠️ Backend respondió sin geo:", data);
+      if (data?.geo) {
+        sessionStorage.setItem("geo", JSON.stringify(data.geo));
+        console.log(
+          "💾 GEO guardado en sessionStorage:",
+          sessionStorage.getItem("geo")
+        );
+      } else {
+        console.warn("⚠️ Backend respondió sin geo:", data);
+      }
+    } catch (e) {
+      console.error("❌ Error enviando GEO (POST):", e);
     }
-  } catch (e) {
-    console.error("❌ Error enviando GEO (POST):", e);
-  }
-};
-🔹 Modifica fallbackIP así:
-js
-Copiar código
-const fallbackIP = async () => {
-  try {
-    const res = await fetch(`${BACKEND_BASE}/geo-ping`, {
-      method: "GET",
-      cache: "no-store",
-    });
+  };
 
-    const data = await res.json();
+  const fallbackIP = async () => {
+    try {
+      const res = await fetch(`${BACKEND_BASE}/geo-ping`, {
+        method: "GET",
+        cache: "no-store",
+      });
 
-    // 🔎 LOG CLAVE
-    console.log("📥 GEO recibido (GET /geo-ping):", data);
+      const data = await res.json();
 
-    if (data?.geo) {
-      sessionStorage.setItem("geo", JSON.stringify(data.geo));
-      console.log(
-        "💾 GEO guardado en sessionStorage:",
-        sessionStorage.getItem("geo")
-      );
-    } else {
-      console.warn("⚠️ Backend respondió sin geo (IP):", data);
+      console.log("📥 GEO recibido (GET /geo-ping):", data);
+
+      if (data?.geo) {
+        sessionStorage.setItem("geo", JSON.stringify(data.geo));
+        console.log(
+          "💾 GEO guardado en sessionStorage:",
+          sessionStorage.getItem("geo")
+        );
+      } else {
+        console.warn("⚠️ Backend respondió sin geo (IP):", data);
+      }
+    } catch (e) {
+      console.error("❌ Error enviando GEO (GET):", e);
     }
-  } catch (e) {
-    console.error("❌ Error enviando GEO (GET):", e);
-  }
-};
+  };
 
-
-    if (data?.geo) {
-      sessionStorage.setItem("geo", JSON.stringify(data.geo));
-    }
-  } catch {}
-};
-
-    const fallbackIP = async () => {
-  try {
-    const res = await fetch(`${BACKEND_BASE}/geo-ping`, {
-      method: "GET",
-      cache: "no-store",
-    });
-
-    const data = await res.json();
-
-    if (data?.geo) {
-      sessionStorage.setItem("geo", JSON.stringify(data.geo));
-    }
-  } catch {}
-};
-
-    // Intento GPS
-    if ("geolocation" in navigator) {
-      timeoutId = setTimeout(() => {
-        // si el usuario no responde → fallback IP
-        fallbackIP();
-      }, 8000);
-
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          clearTimeout(timeoutId);
-          enviarGeo({
-            source: "gps",
-            lat: pos.coords.latitude,
-            lon: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-          });
-        },
-        () => {
-          clearTimeout(timeoutId);
-          fallbackIP();
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 7000,
-          maximumAge: 60000,
-        }
-      );
-    } else {
+  // Intento GPS
+  if ("geolocation" in navigator) {
+    timeoutId = setTimeout(() => {
+      // si el usuario no responde → fallback IP
       fallbackIP();
-    }
+    }, 8000);
 
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, []);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        clearTimeout(timeoutId);
+        enviarGeo({
+          source: "gps",
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        });
+      },
+      () => {
+        clearTimeout(timeoutId);
+        fallbackIP();
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 7000,
+        maximumAge: 60000,
+      }
+    );
+  } else {
+    fallbackIP();
+  }
+
+  return () => {
+    if (timeoutId) clearTimeout(timeoutId);
+  };
+}, []);
+
 
   /* ======================================================
      HELPERS
