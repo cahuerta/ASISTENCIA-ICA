@@ -33,6 +33,52 @@ export default function App() {
 
     const data = await res.json();
 
+    // 🔎 LOG CLAVE
+    console.log("📥 GEO recibido (POST /geo-ping):", data);
+
+    if (data?.geo) {
+      sessionStorage.setItem("geo", JSON.stringify(data.geo));
+      console.log(
+        "💾 GEO guardado en sessionStorage:",
+        sessionStorage.getItem("geo")
+      );
+    } else {
+      console.warn("⚠️ Backend respondió sin geo:", data);
+    }
+  } catch (e) {
+    console.error("❌ Error enviando GEO (POST):", e);
+  }
+};
+🔹 Modifica fallbackIP así:
+js
+Copiar código
+const fallbackIP = async () => {
+  try {
+    const res = await fetch(`${BACKEND_BASE}/geo-ping`, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    const data = await res.json();
+
+    // 🔎 LOG CLAVE
+    console.log("📥 GEO recibido (GET /geo-ping):", data);
+
+    if (data?.geo) {
+      sessionStorage.setItem("geo", JSON.stringify(data.geo));
+      console.log(
+        "💾 GEO guardado en sessionStorage:",
+        sessionStorage.getItem("geo")
+      );
+    } else {
+      console.warn("⚠️ Backend respondió sin geo (IP):", data);
+    }
+  } catch (e) {
+    console.error("❌ Error enviando GEO (GET):", e);
+  }
+};
+
+
     if (data?.geo) {
       sessionStorage.setItem("geo", JSON.stringify(data.geo));
     }
