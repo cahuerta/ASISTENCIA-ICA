@@ -215,7 +215,7 @@ export default function App() {
   };
 
   const [pantalla, setPantalla]           = useState(initPantalla);
-  const [fichaLista, setFichaLista]       = useState(!_origenReserva.esReserva); // ← NUEVO
+  const [fichaLista, setFichaLista]       = useState(!_origenReserva.esReserva);
   const [datosPaciente, setDatosPaciente] = useState(() => {
     try {
       if (_origenReserva.esReserva && _origenReserva.rut) {
@@ -272,7 +272,8 @@ export default function App() {
             rut:    admin.rut,
             nombre,
             edad:   _calcularEdad(admin.fecha_nacimiento),
-            genero: admin.sexo || undefined,
+            genero: admin.sexo   || undefined,
+            email:  admin.email  || undefined,  // ← NUEVO
             origen: "reserva",
           };
 
@@ -285,7 +286,7 @@ export default function App() {
       } catch (e) {
         console.warn("⚠️ No se pudo cargar ficha admin desde ICA:", e);
       } finally {
-        setFichaLista(true); // ← renderizar PantallaDos solo después de esto
+        setFichaLista(true);
       }
     }
 
@@ -447,3 +448,4 @@ export default function App() {
     </>
   );
       }
+            
