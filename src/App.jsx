@@ -77,7 +77,6 @@ export default function App() {
   // Intento GPS
   if ("geolocation" in navigator) {
     timeoutId = setTimeout(() => {
-      // si el usuario no responde → fallback IP
       fallbackIP();
     }, 8000);
 
@@ -166,6 +165,8 @@ export default function App() {
   const initPantalla = () => {
     try {
       const q = getQuery();
+      // ← NUEVO: si viene de reserva, saltar PantallaUno
+      if (q.get("origen") === "reserva") return "dos";
       if (q.get("pago") === "ok") return "dos";
       return sessionStorage.getItem("pantalla") || "uno";
     } catch {
@@ -174,8 +175,23 @@ export default function App() {
   };
 
   const [pantalla, setPantalla] = useState(initPantalla);
+
   const [datosPaciente, setDatosPaciente] = useState(() => {
     try {
+      const q      = getQuery();
+      const origen = q.get("origen") || "";
+      const nombre = q.get("nombre") || "";
+      const rut    = q.get("rut")    || "";
+
+      // ← NUEVO: si viene de reserva, pre-llenar con datos de la URL
+      if (origen === "reserva" && (nombre || rut)) {
+        const datos = { nombre, rut, origen };
+        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
+        sessionStorage.setItem("origen", "reserva");
+        sessionStorage.setItem("modulo", "trauma");
+        return datos;
+      }
+
       const raw = sessionStorage.getItem("datosPacienteJSON");
       return raw ? JSON.parse(raw) : null;
     } catch {
@@ -194,6 +210,9 @@ export default function App() {
 
   const [moduloActual, setModuloActual] = useState(() => {
     try {
+      // ← NUEVO: si viene de reserva, forzar trauma
+      const origen = getQuery().get("origen") || "";
+      if (origen === "reserva") return "trauma";
       return sessionStorage.getItem("modulo") || "trauma";
     } catch {
       return "trauma";
@@ -221,6 +240,13 @@ export default function App() {
     const pago = q.get("pago");
     const idFromURL = q.get("idPago") || "";
     const moduloFromURL = q.get("modulo") || "";
+    const origenFromURL = q.get("origen") || "";
+
+    // ← NUEVO: si viene de reserva ya fue manejado arriba
+    if (origenFromURL === "reserva") {
+      handledReturnRef.current = true;
+      return;
+    }
 
     if (idFromURL) {
       try {
