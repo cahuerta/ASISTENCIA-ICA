@@ -22,7 +22,7 @@ import logoIA from "../assets/logo_modulo_ia.png";
  * - Muestra los botones de módulos.
  * - Si venimos del pago (?pago=ok) o ya hay idPago, abre automáticamente el módulo
  *   que corresponde (por URL, por sessionStorage, o inferido del estado).
- * - Al seleccionar un módulo, lo monta directamente (PantallaDos “desaparece”).
+ * - Al seleccionar un módulo, lo monta directamente (PantallaDos "desaparece").
  */
 export default function PantallaDos({
   initialDatos,
@@ -30,6 +30,7 @@ export default function PantallaDos({
   idPago = "",
   moduloActual = null, // opcional, puede venir desde App
   onIrPantallaTres, // ⬅️ NUEVO: viene desde App.jsx
+  autoModulo = null, // ⬅️ NUEVO: fuerza módulo sin necesitar pago previo (ej: origen=reserva)
 }) {
   const T = getTheme();
 
@@ -103,6 +104,9 @@ export default function PantallaDos({
   // ¿Debemos autoabrir?
   const [modulo, setModulo] = useState(() => {
     try {
+      // ⬅️ NUEVO: si viene autoModulo (origen=reserva), abrir directo sin pago previo
+      if (autoModulo) return autoModulo;
+
       const q = getQuery();
       const returnedOk = q.get("pago") === "ok";
       const moduloFromURL = q.get("modulo");
