@@ -74,6 +74,17 @@ export default function App() {
     }
   };
 
+  // ← Si viene de reserva con geo en URL, usarla directamente sin pedir GPS
+  try {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("origen") === "reserva" && q.get("geo")) {
+      const geoFromURL = JSON.parse(decodeURIComponent(q.get("geo")));
+      sessionStorage.setItem("geo", JSON.stringify(geoFromURL));
+      console.log("💾 GEO desde URL (reserva):", geoFromURL);
+      return; // no pedir GPS
+    }
+  } catch {}
+
   if ("geolocation" in navigator) {
     timeoutId = setTimeout(() => {
       fallbackIP();
@@ -167,9 +178,11 @@ export default function App() {
       const origen = q.get("origen") || "";
       const nombre = q.get("nombre") || "";
       const rut    = q.get("rut")    || "";
-      return { esReserva: origen === "reserva", nombre, rut };
+      const edad   = q.get("edad")   || "";   // ← NUEVO
+      const genero = q.get("genero") || "";   // ← NUEVO
+      return { esReserva: origen === "reserva", nombre, rut, edad, genero };
     } catch {
-      return { esReserva: false, nombre: "", rut: "" };
+      return { esReserva: false, nombre: "", rut: "", edad: "", genero: "" };
     }
   })();
 
@@ -179,7 +192,7 @@ export default function App() {
   const initPantalla = () => {
     try {
       const q = getQuery();
-      // ← NUEVO: si viene de reserva, saltar PantallaUno
+      // ← si viene de reserva, saltar PantallaUno
       if (q.get("origen") === "reserva") return "dos";
       if (q.get("pago") === "ok") return "dos";
       return sessionStorage.getItem("pantalla") || "uno";
@@ -192,11 +205,13 @@ export default function App() {
 
   const [datosPaciente, setDatosPaciente] = useState(() => {
     try {
-      // ← NUEVO: si viene de reserva, pre-llenar con datos URL
+      // ← si viene de reserva, pre-llenar con todos los datos URL
       if (_origenReserva.esReserva && (_origenReserva.nombre || _origenReserva.rut)) {
         const datos = {
           nombre: _origenReserva.nombre,
           rut:    _origenReserva.rut,
+          edad:   _origenReserva.edad ? Number(_origenReserva.edad) : undefined,  // ← NUEVO
+          genero: _origenReserva.genero || undefined,                             // ← NUEVO
           origen: "reserva",
         };
         sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
@@ -222,7 +237,7 @@ export default function App() {
 
   const [moduloActual, setModuloActual] = useState(() => {
     try {
-      // ← NUEVO: si viene de reserva, forzar trauma
+      // ← si viene de reserva, forzar trauma
       if (_origenReserva.esReserva) return "trauma";
       return sessionStorage.getItem("modulo") || "trauma";
     } catch {
@@ -253,7 +268,7 @@ export default function App() {
     const moduloFromURL = q.get("modulo") || "";
     const origenFromURL = q.get("origen") || "";
 
-    // ← NUEVO: si viene de reserva ya fue manejado arriba
+    // ← si viene de reserva ya fue manejado arriba
     if (origenFromURL === "reserva") {
       handledReturnRef.current = true;
       return;
@@ -374,10 +389,8 @@ export default function App() {
         moduloActual={moduloActual}
         onIrPantallaTres={irPantallaTres}
         onReset={resetAppHard}
-        // ← NUEVO: fuerza módulo trauma sin necesitar pago previo
         autoModulo={_origenReserva.esReserva ? "trauma" : null}
       />
     </>
   );
 }
-  
