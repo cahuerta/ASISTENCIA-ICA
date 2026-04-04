@@ -6,6 +6,10 @@ const BACKEND_BASE =
   import.meta?.env?.VITE_BACKEND_URL ||
   "https://asistencia-ica-backend.onrender.com";
 
+const ICA_API =
+  import.meta?.env?.VITE_ICA_API_URL ||
+  "https://services.icarticular.cl";
+
 import PantallaUno from "./screens/PantallaUno.jsx";
 import PantallaDos from "./screens/PantallaDos.jsx";
 import PantallaTres from "./screens/PantallaTres.jsx";
@@ -15,6 +19,19 @@ import PagoOkBanner from "./components/PagoOkBanner.jsx";
  * APP con 3 pantallas
  * + GEO silencioso al inicio (GPS → IP → DEFAULT)
  */
+
+// ── Calcula edad desde fecha_nacimiento ──────────────────────
+function _calcularEdad(fechaNacimiento) {
+  if (!fechaNacimiento) return undefined;
+  try {
+    const hoy    = new Date();
+    const nacido = new Date(fechaNacimiento);
+    let edad = hoy.getFullYear() - nacido.getFullYear();
+    const m  = hoy.getMonth() - nacido.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < nacido.getDate())) edad--;
+    return edad > 0 ? edad : undefined;
+  } catch { return undefined; }
+}
 
 export default function App() {
   /* ======================================================
@@ -81,7 +98,7 @@ export default function App() {
       const geoFromURL = JSON.parse(decodeURIComponent(q.get("geo")));
       sessionStorage.setItem("geo", JSON.stringify(geoFromURL));
       console.log("💾 GEO desde URL (reserva):", geoFromURL);
-      return; // no pedir GPS
+      return;
     }
   } catch {}
 
@@ -176,13 +193,10 @@ export default function App() {
     try {
       const q      = getQuery();
       const origen = q.get("origen") || "";
-      const nombre = q.get("nombre") || "";
       const rut    = q.get("rut")    || "";
-      const edad   = q.get("edad")   || "";   // ← NUEVO
-      const genero = q.get("genero") || "";   // ← NUEVO
-      return { esReserva: origen === "reserva", nombre, rut, edad, genero };
+      return { esReserva: origen === "reserva", rut };
     } catch {
-      return { esReserva: false, nombre: "", rut: "", edad: "", genero: "" };
+      return { esReserva: false, rut: "" };
     }
   })();
 
@@ -192,7 +206,6 @@ export default function App() {
   const initPantalla = () => {
     try {
       const q = getQuery();
-      // ← si viene de reserva, saltar PantallaUno
       if (q.get("origen") === "reserva") return "dos";
       if (q.get("pago") === "ok") return "dos";
       return sessionStorage.getItem("pantalla") || "uno";
@@ -205,19 +218,10 @@ export default function App() {
 
   const [datosPaciente, setDatosPaciente] = useState(() => {
     try {
-      // ← si viene de reserva, pre-llenar con todos los datos URL
-      if (_origenReserva.esReserva && (_origenReserva.nombre || _origenReserva.rut)) {
-        const datos = {
-          nombre: _origenReserva.nombre,
-          rut:    _origenReserva.rut,
-          edad:   _origenReserva.edad ? Number(_origenReserva.edad) : undefined,  // ← NUEVO
-          genero: _origenReserva.genero || undefined,                             // ← NUEVO
-          origen: "reserva",
-        };
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
-        sessionStorage.setItem("origen", "reserva");
-        sessionStorage.setItem("modulo", "trauma");
-        return datos;
+      // Si viene de reserva con rut, empezar con rut solo
+      // Los datos completos se cargan en useEffect abajo
+      if (_origenReserva.esReserva && _origenReserva.rut) {
+        return { rut: _origenReserva.rut, origen: "reserva" };
       }
       const raw = sessionStorage.getItem("datosPacienteJSON");
       return raw ? JSON.parse(raw) : null;
@@ -237,7 +241,6 @@ export default function App() {
 
   const [moduloActual, setModuloActual] = useState(() => {
     try {
-      // ← si viene de reserva, forzar trauma
       if (_origenReserva.esReserva) return "trauma";
       return sessionStorage.getItem("modulo") || "trauma";
     } catch {
@@ -246,6 +249,49 @@ export default function App() {
   });
 
   const handledReturnRef = useRef(false);
+
+  /* ======================================================
+     CARGAR FICHA ADMIN DESDE ICA CUANDO VIENE DE RESERVA
+     ====================================================== */
+  useEffect(() => {
+    if (!_origenReserva.esReserva || !_origenReserva.rut) return;
+
+    async function cargarFichaAdmin() {
+      try {
+        const res = await fetch(
+          `${ICA_API}/api/fichas/admin/${_origenReserva.rut}`,
+          { headers: { "X-Internal-User": "public_web" } }
+        );
+        if (!res.ok) return;
+        const admin = await res.json();
+
+        const nombre = [
+          admin.nombre,
+          admin.apellido_paterno,
+          admin.apellido_materno
+        ].filter(Boolean).join(" ");
+
+        const datos = {
+          rut:    admin.rut,
+          nombre,
+          edad:   _calcularEdad(admin.fecha_nacimiento),
+          genero: admin.sexo || undefined,
+          origen: "reserva",
+        };
+
+        setDatosPaciente(datos);
+        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
+        sessionStorage.setItem("origen", "reserva");
+        sessionStorage.setItem("modulo", "trauma");
+
+        console.log("💾 Ficha admin cargada desde ICA:", datos);
+      } catch (e) {
+        console.warn("⚠️ No se pudo cargar ficha admin desde ICA:", e);
+      }
+    }
+
+    cargarFichaAdmin();
+  }, []);
 
   /* ======================================================
      PERSISTIR PANTALLA
@@ -268,7 +314,6 @@ export default function App() {
     const moduloFromURL = q.get("modulo") || "";
     const origenFromURL = q.get("origen") || "";
 
-    // ← si viene de reserva ya fue manejado arriba
     if (origenFromURL === "reserva") {
       handledReturnRef.current = true;
       return;
