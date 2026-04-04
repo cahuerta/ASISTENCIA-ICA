@@ -74,7 +74,6 @@ export default function App() {
     }
   };
 
-  // Intento GPS
   if ("geolocation" in navigator) {
     timeoutId = setTimeout(() => {
       fallbackIP();
@@ -160,6 +159,21 @@ export default function App() {
   };
 
   /* ======================================================
+     LEER origen=reserva DESDE URL
+     ====================================================== */
+  const _origenReserva = (() => {
+    try {
+      const q      = getQuery();
+      const origen = q.get("origen") || "";
+      const nombre = q.get("nombre") || "";
+      const rut    = q.get("rut")    || "";
+      return { esReserva: origen === "reserva", nombre, rut };
+    } catch {
+      return { esReserva: false, nombre: "", rut: "" };
+    }
+  })();
+
+  /* ======================================================
      STATE INICIAL
      ====================================================== */
   const initPantalla = () => {
@@ -178,20 +192,18 @@ export default function App() {
 
   const [datosPaciente, setDatosPaciente] = useState(() => {
     try {
-      const q      = getQuery();
-      const origen = q.get("origen") || "";
-      const nombre = q.get("nombre") || "";
-      const rut    = q.get("rut")    || "";
-
-      // ← NUEVO: si viene de reserva, pre-llenar con datos de la URL
-      if (origen === "reserva" && (nombre || rut)) {
-        const datos = { nombre, rut, origen };
+      // ← NUEVO: si viene de reserva, pre-llenar con datos URL
+      if (_origenReserva.esReserva && (_origenReserva.nombre || _origenReserva.rut)) {
+        const datos = {
+          nombre: _origenReserva.nombre,
+          rut:    _origenReserva.rut,
+          origen: "reserva",
+        };
         sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
         sessionStorage.setItem("origen", "reserva");
         sessionStorage.setItem("modulo", "trauma");
         return datos;
       }
-
       const raw = sessionStorage.getItem("datosPacienteJSON");
       return raw ? JSON.parse(raw) : null;
     } catch {
@@ -211,8 +223,7 @@ export default function App() {
   const [moduloActual, setModuloActual] = useState(() => {
     try {
       // ← NUEVO: si viene de reserva, forzar trauma
-      const origen = getQuery().get("origen") || "";
-      if (origen === "reserva") return "trauma";
+      if (_origenReserva.esReserva) return "trauma";
       return sessionStorage.getItem("modulo") || "trauma";
     } catch {
       return "trauma";
@@ -236,9 +247,9 @@ export default function App() {
   useEffect(() => {
     if (handledReturnRef.current) return;
 
-    const q = getQuery();
-    const pago = q.get("pago");
-    const idFromURL = q.get("idPago") || "";
+    const q             = getQuery();
+    const pago          = q.get("pago");
+    const idFromURL     = q.get("idPago") || "";
     const moduloFromURL = q.get("modulo") || "";
     const origenFromURL = q.get("origen") || "";
 
@@ -363,7 +374,10 @@ export default function App() {
         moduloActual={moduloActual}
         onIrPantallaTres={irPantallaTres}
         onReset={resetAppHard}
+        // ← NUEVO: fuerza módulo trauma sin necesitar pago previo
+        autoModulo={_origenReserva.esReserva ? "trauma" : null}
       />
     </>
   );
 }
+  
