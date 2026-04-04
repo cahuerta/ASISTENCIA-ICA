@@ -214,12 +214,10 @@ export default function App() {
     }
   };
 
-  const [pantalla, setPantalla] = useState(initPantalla);
-
+  const [pantalla, setPantalla]           = useState(initPantalla);
+  const [fichaLista, setFichaLista]       = useState(!_origenReserva.esReserva); // ← NUEVO
   const [datosPaciente, setDatosPaciente] = useState(() => {
     try {
-      // Si viene de reserva con rut, empezar con rut solo
-      // Los datos completos se cargan en useEffect abajo
       if (_origenReserva.esReserva && _origenReserva.rut) {
         return { rut: _origenReserva.rut, origen: "reserva" };
       }
@@ -251,7 +249,7 @@ export default function App() {
   const handledReturnRef = useRef(false);
 
   /* ======================================================
-     CARGAR FICHA ADMIN DESDE ICA CUANDO VIENE DE RESERVA
+     CARGAR FICHA ADMIN DESDE ICA — esperar antes de renderizar
      ====================================================== */
   useEffect(() => {
     if (!_origenReserva.esReserva || !_origenReserva.rut) return;
@@ -262,31 +260,32 @@ export default function App() {
           `${ICA_API}/api/fichas/admin/${_origenReserva.rut}`,
           { headers: { "X-Internal-User": "public_web" } }
         );
-        if (!res.ok) return;
-        const admin = await res.json();
+        if (res.ok) {
+          const admin = await res.json();
+          const nombre = [
+            admin.nombre,
+            admin.apellido_paterno,
+            admin.apellido_materno
+          ].filter(Boolean).join(" ");
 
-        const nombre = [
-          admin.nombre,
-          admin.apellido_paterno,
-          admin.apellido_materno
-        ].filter(Boolean).join(" ");
+          const datos = {
+            rut:    admin.rut,
+            nombre,
+            edad:   _calcularEdad(admin.fecha_nacimiento),
+            genero: admin.sexo || undefined,
+            origen: "reserva",
+          };
 
-        const datos = {
-          rut:    admin.rut,
-          nombre,
-          edad:   _calcularEdad(admin.fecha_nacimiento),
-          genero: admin.sexo || undefined,
-          origen: "reserva",
-        };
-
-        setDatosPaciente(datos);
-        sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
-        sessionStorage.setItem("origen", "reserva");
-        sessionStorage.setItem("modulo", "trauma");
-
-        console.log("💾 Ficha admin cargada desde ICA:", datos);
+          setDatosPaciente(datos);
+          sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
+          sessionStorage.setItem("origen", "reserva");
+          sessionStorage.setItem("modulo", "trauma");
+          console.log("💾 Ficha admin cargada desde ICA:", datos);
+        }
       } catch (e) {
         console.warn("⚠️ No se pudo cargar ficha admin desde ICA:", e);
+      } finally {
+        setFichaLista(true); // ← renderizar PantallaDos solo después de esto
       }
     }
 
@@ -411,6 +410,15 @@ export default function App() {
     );
   }
 
+  // ← Esperar ficha antes de renderizar PantallaDos
+  if (!fichaLista) {
+    return (
+      <div className="app" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100svh" }}>
+        <p style={{ color: "#475569", fontSize: 15 }}>Cargando…</p>
+      </div>
+    );
+  }
+
   const moduloFromURL = (() => {
     try {
       return getQuery().get("modulo") || "";
@@ -438,4 +446,4 @@ export default function App() {
       />
     </>
   );
-}
+      }
