@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import "./app.css";
 
 const BACKEND_BASE =
-  import.meta?.env?.VITE_BACKEND_URL ||
+  import.meta?.env?.VITE_BACKEND_BASE||
   "https://asistencia-ica-backend.onrender.com";
 
 const ICA_API =
