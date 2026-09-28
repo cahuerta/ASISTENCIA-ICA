@@ -11,6 +11,7 @@ const ICA_API =
   "https://services.icarticular.cl";
 
 import PantallaUno from "./screens/PantallaUno.jsx";
+import PantallaAvatar from "./screens/PantallaAvatar.jsx";
 import PantallaDos from "./screens/PantallaDos.jsx";
 import PantallaTres from "./screens/PantallaTres.jsx";
 import PagoOkBanner from "./components/PagoOkBanner.jsx";
@@ -208,9 +209,10 @@ export default function App() {
       const q = getQuery();
       if (q.get("origen") === "reserva") return "dos";
       if (q.get("pago") === "ok") return "dos";
-      return sessionStorage.getItem("pantalla") || "uno";
+      // Sin estado previo: la asistente de voz es la entrada principal
+      return sessionStorage.getItem("pantalla") || "avatar";
     } catch {
-      return "uno";
+      return "avatar";
     }
   };
 
@@ -398,6 +400,10 @@ export default function App() {
   /* ======================================================
      RENDER
      ====================================================== */
+  if (pantalla === "avatar") {
+    return <PantallaAvatar onUsarFormulario={() => setPantalla("uno")} />;
+  }
+
   if (pantalla === "uno") {
     return <PantallaUno onIrPantallaDos={irPantallaDos} />;
   }
@@ -448,4 +454,3 @@ export default function App() {
     </>
   );
       }
-            
