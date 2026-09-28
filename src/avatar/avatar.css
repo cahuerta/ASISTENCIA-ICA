@@ -1,0 +1,120 @@
+/* src/avatar/avatar.css — animaciones de la médica (traídas del proyecto del avatar) */
+.avatar { width: 100%; height: 100%; display: block; }
+
+/* Halo según estado */
+.avatar__halo {
+  opacity: 0.25;
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: opacity 0.3s ease;
+}
+
+.avatar--escuchando .avatar__halo {
+  opacity: 1;
+  animation: pulso 1.6s ease-in-out infinite;
+}
+
+.avatar--hablando .avatar__halo {
+  opacity: 0.9;
+}
+
+.avatar--pensando .avatar__halo {
+  opacity: 0.6;
+  stroke-dasharray: 30 18;
+  animation: girar 3s linear infinite;
+}
+
+@keyframes pulso {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.975);
+    opacity: 0.55;
+  }
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Parpadeo */
+.avatar__ojos {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: parpadeo 4.8s infinite;
+}
+
+@keyframes parpadeo {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.08);
+  }
+}
+
+/* Cejas levantadas al escuchar */
+.avatar__ceja {
+  transition: transform 0.3s ease;
+}
+
+.avatar--escuchando .avatar__ceja {
+  transform: translateY(-3px);
+}
+
+/* Pensando: puntos */
+.avatar__pensando circle {
+  animation: rebote 1s ease-in-out infinite;
+}
+
+.avatar__pensando circle:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.avatar__pensando circle:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes rebote {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+/* Hablando: ondas */
+.avatar__ondas path {
+  animation: onda 0.9s ease-in-out infinite;
+}
+
+.avatar__ondas path:nth-child(2),
+.avatar__ondas path:nth-child(4) {
+  animation-delay: 0.3s;
+}
+
+@keyframes onda {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar * { animation: none !important; transition: none !important; }
+}
