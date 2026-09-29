@@ -16,6 +16,10 @@
  *  - bandera: "grave" (si responde SI -> se detiene y deriva) | "aviso" (continua con aviso)
  *  - resumen: como se escribe la respuesta en la consulta enviada al backend
  *  - opcional: en abiertas, si responde "no"/"nada" se omite
+ *
+ * Ademas del dolor (PREGUNTAS), aqui estan el menu inicial, las enfermedades
+ * previas por grupos (examenes generales y preoperatorios), los tipos de
+ * cirugia y las frases de cada flujo.
  */
 
 export const ZONAS = [
@@ -26,10 +30,85 @@ export const ZONAS = [
 export const esColumna = (zona) => String(zona || "").toLowerCase().startsWith("columna");
 const esExtremidadInferior = (zona) => ["Rodilla", "Cadera", "Tobillo"].includes(zona);
 
+// ---------------- Menu inicial ----------------
+export const MENU = {
+  texto:
+    "Hola, soy la asistente del Instituto de Cirugía Articular. ¿En qué te ayudo? Puedes decirme si tienes un dolor, " +
+    "si necesitas exámenes generales, exámenes antes de una cirugía, o si quieres hora con un traumatólogo.",
+  repregunta: "Perdón, no te entendí. ¿Tienes un dolor, necesitas exámenes generales, exámenes para una cirugía, o quieres hora con un traumatólogo?",
+  opciones: [
+    { etiqueta: "Tengo un dolor", valor: "dolor" },
+    { etiqueta: "Exámenes generales", valor: "generales" },
+    { etiqueta: "Exámenes para una cirugía", valor: "preop" },
+    { etiqueta: "Hora con traumatólogo", valor: "derivacion" },
+  ],
+};
+
+// Inicio del flujo de dolor (antes era el saludo)
 export const SALUDO =
-  "Hola, soy la asistente del Instituto de Cirugía Articular. Te voy a hacer algunas preguntas, " +
-  "como en una consulta, para orientarte y, si lo necesitas, entregarte una orden de exámenes. " +
-  "Responde hablando con naturalidad.";
+  "Muy bien. Te voy a hacer algunas preguntas, como en una consulta, para orientarte y, si lo necesitas, " +
+  "entregarte una orden de exámenes. Responde hablando con naturalidad.";
+
+// ---------------- Enfermedades previas (generales y preoperatorio) ----------------
+// Claves iguales a las del formulario de comorbilidades de ICA (FormularioComorbilidades):
+// el backend (ia-generales / ia-preop) las lee tal cual.
+export const GRUPOS_COMORBILIDAD = [
+  {
+    id: "g_metabolico",
+    texto: "¿Tienes presión alta, diabetes o colesterol alto?",
+    items: [
+      { key: "hta", etiqueta: "Presión alta" },
+      { key: "dm2", etiqueta: "Diabetes" },
+      { key: "dislipidemia", etiqueta: "Colesterol alto" },
+    ],
+  },
+  {
+    id: "g_habitos",
+    texto: "¿Tienes sobrepeso importante, fumas, o tienes asma o EPOC?",
+    items: [
+      { key: "obesidad", etiqueta: "Sobrepeso u obesidad" },
+      { key: "tabaquismo", etiqueta: "Fumo" },
+      { key: "epoc_asma", etiqueta: "Asma o EPOC" },
+    ],
+  },
+  {
+    id: "g_organos",
+    texto: "¿Tienes alguna enfermedad del corazón, de los riñones o de la tiroides?",
+    items: [
+      { key: "cardiopatia", etiqueta: "Corazón" },
+      { key: "erc", etiqueta: "Riñones" },
+      { key: "hipotiroidismo", etiqueta: "Tiroides" },
+    ],
+  },
+  {
+    id: "g_farmacos",
+    texto: "¿Tomas anticoagulantes o aspirina todos los días, o tienes artritis reumatoide u otra enfermedad autoinmune?",
+    items: [
+      { key: "anticoagulantes", etiqueta: "Anticoagulantes o aspirina" },
+      { key: "artritis_reumatoide", etiqueta: "Artritis reumatoide o autoinmune" },
+    ],
+  },
+];
+
+export const PREGUNTAS_EXTRA = {
+  cual: "¿Cuál o cuáles? Puedes decírmelo o marcarlos abajo.",
+  alergias: "¿Eres alérgico a algún medicamento o alimento?",
+  alergiasCual: "¿A qué eres alérgico?",
+  otras: "¿Tienes alguna otra enfermedad importante que deba saber?",
+};
+
+// ---------------- Cirugias (preoperatorio) ----------------
+// Mismos nombres que FormularioTipoCirugia de ICA (van tal cual a la orden)
+export const CIRUGIAS = [
+  { etiqueta: "Prótesis de cadera", valor: "ARTROPLASTIA TOTAL DE CADERA (ATC)", zona: "Cadera" },
+  { etiqueta: "Artroscopia de cadera", valor: "ARTROSCOPIA DE CADERA", zona: "Cadera" },
+  { etiqueta: "Osteotomía de cadera", valor: "OSTEOTOMÍA DE CADERA", zona: "Cadera" },
+  { etiqueta: "Prótesis de rodilla", valor: "ARTROPLASTIA TOTAL DE RODILLA (ATR)", zona: "Rodilla" },
+  { etiqueta: "Artroscopia de rodilla", valor: "ARTROSCOPIA DE RODILLA", zona: "Rodilla" },
+  { etiqueta: "Osteotomía de rodilla", valor: "OSTEOTOMÍA DE RODILLA", zona: "Rodilla" },
+  { etiqueta: "Cirugía menor de partes blandas", valor: "CIRUGÍA MENOR DE PARTES BLANDAS", zona: null },
+  { etiqueta: "Otra", valor: "OTRA", zona: null },
+];
 
 export const PREGUNTAS = [
   // ---------------- Ubicacion y datos basicos ----------------
@@ -137,6 +216,23 @@ export const PREGUNTAS = [
 ];
 
 export const FRASES = {
+  // ---- generales y preoperatorio ----
+  inicioGenerales:
+    "Perfecto. Para proponerte exámenes generales te haré unas preguntas sobre tu salud. Puedes responder hablando o tocando los botones.",
+  inicioPreop:
+    "Perfecto. Para tus exámenes antes de la cirugía te haré unas preguntas. Puedes responder hablando o tocando los botones.",
+  cirugia: "¿Qué cirugía te van a hacer?",
+  repreguntaCirugia: "¿Me repites qué cirugía? Por ejemplo, prótesis de cadera o artroscopia de rodilla. También puedes tocarla abajo.",
+  cirugiaOtra: "¿Cómo se llama la cirugía?",
+  ladoCirugia: "¿Es del lado derecho o del izquierdo?",
+  enfermedades: "Ahora te preguntaré por algunas enfermedades.",
+  analizandoExamenes: "Gracias. Estoy preparando tu propuesta de exámenes, dame un momento.",
+  errorExamenes: "Tuve un problema para preparar tus exámenes. Intenta de nuevo en un momento.",
+  // ---- derivacion ----
+  derivacionZona: "Claro. ¿En qué parte del cuerpo es tu problema? Así te recomiendo al especialista que corresponde.",
+  buscandoEspecialista: "Déjame ver qué especialista te corresponde.",
+  derivacionError: "No pude buscar el especialista en este momento. Puedes agendar en icarticular punto ce ele.",
+
   puntos: "Ahora muéstrame en el dibujo dónde te duele. Marca los puntos y luego toca guardar.",
   analizando: "Gracias. Estoy revisando todo lo que me contaste, dame un momento.",
   urgencia:
