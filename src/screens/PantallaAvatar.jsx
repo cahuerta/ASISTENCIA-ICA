@@ -161,7 +161,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
   const ctxRef = useRef({});
   const registroRef = useRef([]);
   const idPagoRef = useRef("");
-  const avisoRef = useRef(false);
+  const avisosRef = useRef([]);   // mensajes de las alarmas "aviso" respondidas con si
   const escuchaRef = useRef(null);
   const conCorreoRef = useRef(false);
   const vozOkRef = useRef(escuchaSoportada);   // false si no hay permiso/microfono
@@ -565,7 +565,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
           await decir(sesion, FRASES.urgencia);
           return;
         }
-        if (valor === true && p.bandera === "aviso") avisoRef.current = true;
+        if (valor === true && p.bandera === "aviso" && p.mensaje) avisosRef.current.push(p.mensaje);
       }
     }
     setProgreso(100);
@@ -616,13 +616,13 @@ export default function PantallaAvatar({ onUsarFormulario }) {
       return;
     }
     vigente(sesion);
-    setInforme({ ...resultado, marcadores });
+    setInforme({ ...resultado, marcadores, avisos: [...avisosRef.current] });
     // Especialista que corresponde por zona y ubicacion (mismo resolver del backend)
     const deriv = await recomendarEspecialista(ctx.zona);
     vigente(sesion);
     setFase("resultado");
 
-    const voz = [avisoRef.current ? FRASES.avisoColumna : "", vozResultado(resultado), deriv?.nota || "", FRASES.cierre]
+    const voz = [...avisosRef.current, vozResultado(resultado), deriv?.nota || "", FRASES.cierre]
       .filter(Boolean)
       .join(" ");
     await decir(sesion, voz);
@@ -638,7 +638,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     limpiarPuntosPrevios();
     ctxRef.current = {};
     registroRef.current = [];
-    avisoRef.current = false;
+    avisosRef.current = [];
     esperaRef.current = null;
     setEsperando(false);
     puntosRef.current = null;
@@ -960,6 +960,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
                 <ul style={S.lista}>{informe.examenes.map((e, i) => <li key={i}>{e}</li>)}</ul>
               </>
             )}
+            {informe.avisos?.map((m, i) => <p key={i} style={{ ...S.aviso, marginTop: 10 }}>{m}</p>)}
             {derivacion && <TarjetaDerivacion d={derivacion} />}
             <p style={S.legal}>{FRASES.cierre}</p>
 
