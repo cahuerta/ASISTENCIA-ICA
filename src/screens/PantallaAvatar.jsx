@@ -1,6 +1,10 @@
 // src/screens/PantallaAvatar.jsx
 // Asistente de voz de ICA: la medica dirige la consulta.
 //
+// 0. Menu (voz o botones): dolor | examenes generales | examenes para cirugia
+//    (preoperatorio) | hora con traumatologo (derivacion por zona + ubicacion).
+//
+// DOLOR:
 // 1. Anamnesis oral guiada (avatar/bancoPreguntas.js): zona, lado, edad, sexo,
 //    banderas rojas (grave -> se detiene y deriva a urgencia) y preguntas abiertas.
 //    Si no entiende, repregunta una vez; si vuelve a fallar, ofrece botones.
@@ -10,17 +14,34 @@
 // 4. La medica dice el diagnostico presuntivo, el fundamento y los examenes.
 // 5. "¿Quieres la orden?" -> formulario escrito (nombre, RUT, correo) ->
 //    checklist de resonancia si corresponde -> /api/pdf-ia-orden (gratis por ahora).
+// 6. Recomienda el especialista con /resolver-derivacion (zona + ubicacion GPS que
+//    ICA guarda al abrir), y la ubicacion va a la orden para que salga la derivacion.
+//
+// EXAMENES GENERALES / PREOPERATORIO (mismos endpoints que los modulos de ICA):
+//    edad, sexo, (cirugia y lado), enfermedades por grupos con botones abajo,
+//    alergias y otras -> /ia-generales o /ia-preop -> la medica dice los examenes ->
+//    "¿quieres la orden?" -> datos -> /guardar-datos-generales|preop -> /pdf-generales|preop.
+//
+// HORA CON TRAUMATOLOGO: zona -> /resolver-derivacion -> medico y sede.
+//
+// MICROFONO: al tocar "Comenzar" se pide permiso con getUserMedia (dentro del toque,
+// como exige el navegador). Si no hay permiso o microfono, se avisa en pantalla y
+// todo sigue con botones y texto. Si el paciente no responde en 10 s, aparecen
+// los botones igual.
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import "../app.css";
 import Avatar from "../avatar/Avatar.jsx";
 import useVoz, { vozSoportada } from "../avatar/useVoz.js";
 import useEscucha, { escuchaSoportada } from "../avatar/useEscucha.js";
-import { PREGUNTAS, FRASES, SALUDO, ZONAS, esColumna } from "../avatar/bancoPreguntas.js";
+import {
+  PREGUNTAS, FRASES, SALUDO, ZONAS, esColumna,
+  MENU, GRUPOS_COMORBILIDAD, PREGUNTAS_EXTRA, CIRUGIAS,
+} from "../avatar/bancoPreguntas.js";
 import {
   interpretarZona, interpretarLado, interpretarEdad, interpretarSexo, interpretarSiNo,
   esRespuestaVacia, construirConsulta, leerInforme, vozResultado, incluyeResonancia,
-  formatearRut, validarRut,
+  formatearRut, validarRut, interpretarMenu, interpretarItems, interpretarCirugia, vozExamenes,
 } from "../avatar/interpretar.js";
 import GenericMapper from "../mappers/GenericMapper.jsx";
 import { resolveZonaKey } from "../mappers/mapperRegistry.js";
@@ -31,6 +52,42 @@ const BACKEND_BASE =
   import.meta?.env?.VITE_BACKEND_BASE || "https://asistencia-ica-backend.onrender.com";
 
 const ZONAS_MAPPER = ["rodilla", "mano", "hombro", "codo", "cadera", "tobillo"];
+
+// Sin respuesta en este tiempo, aparecen los botones aunque haya voz
+const BOTONES_TRAS_MS = 10000;
+
+// Endpoints de cada tipo de orden (los mismos de los modulos de ICA)
+const ORDEN = {
+  trauma: { pdf: (id) => `/api/pdf-ia-orden/${id}`, archivo: "orden_examenes_ICA.pdf" },
+  generales: { pdf: (id) => `/pdf-generales/${id}`, archivo: "orden_examenes_generales_ICA.pdf" },
+  preop: { pdf: (id) => `/pdf-preop/${id}`, archivo: "orden_preoperatoria_ICA.pdf" },
+};
+
+// Ubicacion que ICA guarda al abrir (GPS -> IP), la misma que usa el resto de ICA
+function leerGeo() {
+  try {
+    const g = JSON.parse(sessionStorage.getItem("geo") || "null");
+    return g && typeof g === "object" ? g : null;
+  } catch {
+    return null;
+  }
+}
+
+// Pide permiso de microfono dentro del toque del usuario. Devuelve "" o el motivo.
+async function pedirMicrofono() {
+  if (!navigator.mediaDevices?.getUserMedia) return "";
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((t) => t.stop());
+    return "";
+  } catch (e) {
+    if (e?.name === "NotAllowedError" || e?.name === "SecurityError") {
+      return "El micrófono está bloqueado. Toca el candado junto a la dirección, permite el micrófono y recarga. Mientras tanto puedes responder con los botones.";
+    }
+    if (e?.name === "NotFoundError") return "No encontré un micrófono. Puedes responder con los botones.";
+    return "No pude activar el micrófono. Puedes responder con los botones.";
+  }
+}
 
 // Mismo resumen de checklist que usa el modulo IA de ICA
 const ETIQUETAS_RM = {
@@ -90,6 +147,11 @@ export default function PantallaAvatar({ onUsarFormulario }) {
   const [textoLibre, setTextoLibre] = useState("");
   const [edadEscrita, setEdadEscrita] = useState("");
   const [esperando, setEsperando] = useState(false); // esperando respuesta del paciente
+  const [avisoMic, setAvisoMic] = useState("");       // por que no hay microfono
+  const [seleccion, setSeleccion] = useState([]);     // enfermedades marcadas en la pregunta actual
+  const [marcadas, setMarcadas] = useState([]);       // resumen de lo marcado (chips)
+  const [derivacion, setDerivacion] = useState(null); // { nota, doctor, sede, especialidad }
+  const [modulo, setModulo] = useState("trauma");     // trauma | generales | preop | derivacion
 
   const { hablar, callar, desbloquear, hablando, boca } = useVoz();
 
@@ -102,6 +164,10 @@ export default function PantallaAvatar({ onUsarFormulario }) {
   const avisoRef = useRef(false);
   const escuchaRef = useRef(null);
   const conCorreoRef = useRef(false);
+  const vozOkRef = useRef(escuchaSoportada);   // false si no hay permiso/microfono
+  const botonesTimerRef = useRef(null);
+  const moduloRef = useRef("trauma");
+  const examenesRef = useRef({});              // { examenes, informeIA, comorbilidades, tipoCirugia }
 
   // ---------- escucha: cada frase completa resuelve la respuesta pendiente ----------
   const alEscuchar = useCallback((texto) => {
@@ -115,6 +181,14 @@ export default function PantallaAvatar({ onUsarFormulario }) {
 
   const escucha = useEscucha({ onFrase: alEscuchar });
   escuchaRef.current = escucha;
+
+  // Si el reconocimiento falla (permiso denegado, sin microfono), se sigue con botones
+  useEffect(() => {
+    if (!escucha.error) return;
+    vozOkRef.current = false;
+    setAvisoMic(escucha.error);
+    setPregunta((p) => (p ? { ...p, respaldo: true } : p));
+  }, [escucha.error]);
 
   useEffect(() => () => {
     sesionRef.current += 1;
@@ -140,8 +214,15 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     new Promise((resolve) => {
       esperaRef.current = resolve;
       setEsperando(true);
-      if (escuchaSoportada) escuchaRef.current?.reanudar();
+      if (vozOkRef.current) escuchaRef.current?.reanudar();
+      // Si no responde por voz, aparecen los botones
+      clearTimeout(botonesTimerRef.current);
+      botonesTimerRef.current = setTimeout(
+        () => setPregunta((p) => (p ? { ...p, respaldo: true } : p)),
+        vozOkRef.current ? BOTONES_TRAS_MS : 0,
+      );
     }).then((r) => {
+      clearTimeout(botonesTimerRef.current);
       vigente(sesion);
       return r;
     });
@@ -161,6 +242,8 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     edad: interpretarEdad,
     sexo: interpretarSexo,
     sino: interpretarSiNo,
+    menu: interpretarMenu,
+    cirugia: (t) => interpretarCirugia(t)?.valor || null,
   };
 
   const OPCIONES = {
@@ -168,6 +251,8 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     lado: [{ etiqueta: "Derecho", valor: "Derecha" }, { etiqueta: "Izquierdo", valor: "Izquierda" }],
     sexo: [{ etiqueta: "Hombre", valor: "Masculino" }, { etiqueta: "Mujer", valor: "Femenino" }],
     sino: [{ etiqueta: "Sí", valor: true }, { etiqueta: "No", valor: false }],
+    menu: MENU.opciones,
+    cirugia: CIRUGIAS.map((c) => ({ etiqueta: c.etiqueta, valor: c.valor })),
   };
 
   const MOSTRAR = {
@@ -176,19 +261,23 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     edad: (v) => `${v} años`,
     sexo: (v) => (v === "Masculino" ? "Hombre" : "Mujer"),
     sino: (v) => (v ? "Sí" : "No"),
+    menu: (v) => MENU.opciones.find((o) => o.valor === v)?.etiqueta || v,
+    cirugia: (v) => CIRUGIAS.find((c) => c.valor === v)?.etiqueta || v,
   };
 
-  // Pregunta cerrada: voz -> si no entiende repregunta -> si falla de nuevo, botones
-  const preguntarCerrada = async (sesion, tipo, texto, repregunta) => {
+  // Pregunta cerrada: voz -> si no entiende repregunta -> si falla de nuevo, botones.
+  // siempreBotones: los botones se ven desde el inicio (menu, enfermedades, cirugia).
+  // interprete: reemplaza al interprete del tipo (ej. grupo de enfermedades).
+  const preguntarCerrada = async (sesion, tipo, texto, repregunta, siempreBotones = false, interprete = null) => {
     let intentos = 0;
     let dicho = texto;
     for (;;) {
-      const respaldo = !escuchaSoportada || intentos >= 2;
+      const respaldo = siempreBotones || !vozOkRef.current || intentos >= 2;
       setPregunta({ texto, tipo, respaldo });
       setEntendido("");
       if (dicho) await decir(sesion, dicho);
       const r = await esperarRespuesta(sesion);
-      const valor = r.valor !== undefined ? r.valor : INTERPRETES[tipo](r.texto);
+      const valor = r.valor !== undefined ? r.valor : (interprete || INTERPRETES[tipo])(r.texto);
       if (valor !== null && valor !== undefined) {
         setEntendido(MOSTRAR[tipo](valor));
         return { valor, texto: r.texto };
@@ -199,14 +288,66 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     }
   };
 
-  const preguntarAbierta = async (sesion, texto) => {
-    setPregunta({ texto, tipo: "abierta", respaldo: !escuchaSoportada });
+  // opcional: muestra el boton "No, nada más"
+  const preguntarAbierta = async (sesion, texto, opcional = false) => {
+    setPregunta({ texto, tipo: "abierta", respaldo: !vozOkRef.current, opcional });
     setEntendido("");
     setTextoLibre("");
     await decir(sesion, texto);
     const r = await esperarRespuesta(sesion);
     setEntendido(r.texto);
     return r.texto;
+  };
+
+  // Enfermedades de un grupo: "¿Tienes A, B o C?" (Si/No) -> si es si y hay
+  // varias, "¿Cuál o cuáles?" con chips para marcar. Devuelve las claves.
+  const preguntarGrupo = async (sesion, grupo) => {
+    // Nombrar una enfermedad ("diabetes") cuenta como si, aunque no diga "si"
+    const r1 = await preguntarCerrada(
+      sesion, "sino", grupo.texto, `Responde sí o no, por favor: ${grupo.texto}`, true,
+      (t) => (interpretarItems(grupo.items, t).length ? true : interpretarSiNo(t)),
+    );
+    // Si ya dijo cuales en la misma frase ("tengo diabetes"), no se repregunta
+    const dichas = r1.texto ? interpretarItems(grupo.items, r1.texto) : [];
+    if (dichas.length) return dichas;
+    if (!r1.valor) return [];
+    if (grupo.items.length === 1) return [grupo.items[0].key];
+
+    let intentos = 0;
+    let dicho = PREGUNTAS_EXTRA.cual;
+    for (;;) {
+      setSeleccion([]);
+      setPregunta({ texto: PREGUNTAS_EXTRA.cual, tipo: "items", items: grupo.items, respaldo: true });
+      setEntendido("");
+      if (dicho) await decir(sesion, dicho);
+      const r = await esperarRespuesta(sesion);
+      const claves = Array.isArray(r.valor) ? r.valor : interpretarItems(grupo.items, r.texto);
+      if (claves.length) return claves;
+      intentos += 1;
+      setEntendido(r.texto ? `No entendí: "${r.texto}"` : "");
+      dicho = intentos === 1 ? "Perdón, no te entendí. Márcalas abajo, por favor." : null;
+    }
+  };
+
+  const etiquetaComorb = (key) => {
+    for (const g of GRUPOS_COMORBILIDAD) {
+      const it = g.items.find((i) => i.key === key);
+      if (it) return it.etiqueta;
+    }
+    return key;
+  };
+
+  const recomendarEspecialista = async (zona) => {
+    try {
+      const r = await postJSON("/resolver-derivacion", { dolor: zona, geo: leerGeo() || undefined });
+      if (r?.nota) {
+        setDerivacion(r);
+        return r;
+      }
+    } catch {
+      // sin derivacion: el flujo sigue
+    }
+    return null;
   };
 
   // ---------- puntos dolorosos ----------
@@ -233,7 +374,167 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     return () => eventos.forEach((e) => window.removeEventListener(e, volver));
   }, [fase]);
 
-  // ---------- flujo principal ----------
+  // ---------- menu inicial ----------
+  const elegirModulo = (m) => {
+    moduloRef.current = m;
+    setModulo(m);
+  };
+
+  const menu = async (sesion) => {
+    setFase("conversacion");
+    setProgreso(0);
+    const { valor } = await preguntarCerrada(sesion, "menu", MENU.texto, MENU.repregunta, true);
+    setEntendido("");
+    elegirModulo(valor === "dolor" ? "trauma" : valor);
+    if (valor === "generales" || valor === "preop") return flujoExamenes(sesion, valor);
+    if (valor === "derivacion") return flujoDerivacion(sesion);
+    return conversar(sesion);
+  };
+
+  // ---------- hora con traumatologo ----------
+  const flujoDerivacion = async (sesion) => {
+    const { valor: zona } = await preguntarCerrada(
+      sesion, "zona", FRASES.derivacionZona, PREGUNTAS[0].repregunta, true,
+    );
+    ctxRef.current.zona = zona;
+    setPregunta(null);
+    setFase("analizando");
+    await decir(sesion, FRASES.buscandoEspecialista);
+    const r = await recomendarEspecialista(zona);
+    vigente(sesion);
+    setFase("derivacion");
+    await decir(sesion, r?.nota || FRASES.derivacionError);
+  };
+
+  // ---------- examenes generales / preoperatorio ----------
+  const flujoExamenes = async (sesion, tipo) => {
+    const ctx = ctxRef.current;
+    const pasos = tipo === "preop" ? 10 : 8;
+    let paso = 0;
+    const avanzar = () => setProgreso(Math.round((++paso / pasos) * 100));
+
+    setFase("conversacion");
+    await decir(sesion, tipo === "preop" ? FRASES.inicioPreop : FRASES.inicioGenerales);
+
+    let tipoCirugia = "";
+    if (tipo === "preop") {
+      const { valor } = await preguntarCerrada(sesion, "cirugia", FRASES.cirugia, FRASES.repreguntaCirugia, true);
+      avanzar();
+      const cir = CIRUGIAS.find((c) => c.valor === valor);
+      if (valor === "OTRA") {
+        tipoCirugia = String(await preguntarAbierta(sesion, FRASES.cirugiaOtra) || "").trim().toUpperCase();
+      } else {
+        tipoCirugia = valor;
+      }
+      if (cir?.zona) {
+        ctx.zona = cir.zona;
+        const { valor: lado } = await preguntarCerrada(sesion, "lado", FRASES.ladoCirugia, PREGUNTAS[1].repregunta, true);
+        ctx.lado = lado;
+      }
+      avanzar();
+    }
+
+    const pEdad = PREGUNTAS.find((p) => p.id === "edad");
+    const pSexo = PREGUNTAS.find((p) => p.id === "sexo");
+    ctx.edad = (await preguntarCerrada(sesion, "edad", pEdad.texto, pEdad.repregunta)).valor;
+    avanzar();
+    ctx.sexo = (await preguntarCerrada(sesion, "sexo", pSexo.texto, pSexo.repregunta, true)).valor;
+    avanzar();
+
+    // Enfermedades por grupos, botones abajo
+    await decir(sesion, FRASES.enfermedades);
+    const comorbilidades = {};
+    GRUPOS_COMORBILIDAD.forEach((g) => g.items.forEach((i) => { comorbilidades[i.key] = false; }));
+    const lista = [];
+    setMarcadas([]);
+    for (const grupo of GRUPOS_COMORBILIDAD) {
+      const claves = await preguntarGrupo(sesion, grupo);
+      claves.forEach((k) => { comorbilidades[k] = true; lista.push(etiquetaComorb(k)); });
+      setMarcadas([...lista]);
+      setEntendido(claves.length ? claves.map(etiquetaComorb).join(", ") : "Ninguna");
+      avanzar();
+    }
+
+    // Alergias
+    const rAl = await preguntarCerrada(sesion, "sino", PREGUNTAS_EXTRA.alergias, `Responde sí o no, por favor: ${PREGUNTAS_EXTRA.alergias}`, true);
+    let alergiasDetalle = "";
+    if (rAl.valor) {
+      alergiasDetalle = String(await preguntarAbierta(sesion, PREGUNTAS_EXTRA.alergiasCual) || "").trim();
+      lista.push(`Alergia: ${alergiasDetalle || "sí"}`);
+      setMarcadas([...lista]);
+    }
+    avanzar();
+
+    // Otras enfermedades (opcional)
+    const otrasResp = await preguntarAbierta(sesion, PREGUNTAS_EXTRA.otras, true);
+    const otras = esRespuestaVacia(otrasResp) ? "" : String(otrasResp || "").trim();
+    if (otras) { lista.push(otras); setMarcadas([...lista]); }
+    setProgreso(100);
+
+    // Mismo formato que FormularioComorbilidades + "alergias" como lo lee el backend
+    Object.assign(comorbilidades, {
+      alergias_flag: Boolean(rAl.valor),
+      alergias_detalle: alergiasDetalle,
+      alergias: { tiene: Boolean(rAl.valor), detalle: alergiasDetalle },
+      otras,
+    });
+
+    await analizarExamenes(sesion, tipo, comorbilidades, tipoCirugia);
+  };
+
+  const analizarExamenes = async (sesion, tipo, comorbilidades, tipoCirugia) => {
+    const ctx = ctxRef.current;
+    setPregunta(null);
+    setFase("analizando");
+    setError("");
+    await decir(sesion, FRASES.analizandoExamenes);
+
+    idPagoRef.current = `avatar-${tipo}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const genero = ctx.sexo === "Femenino" ? "Mujer" : "Hombre";
+    let examenes = [];
+    let informeIA = "";
+    try {
+      // El backend exige un nombre: el real se completa al pedir la orden
+      const cuerpo = {
+        idPago: idPagoRef.current,
+        paciente: { nombre: "Paciente", edad: ctx.edad, genero, dolor: ctx.zona || "", lado: ctx.lado || "" },
+        comorbilidades,
+      };
+      const r = tipo === "preop"
+        ? await postJSON("/ia-preop", { ...cuerpo, tipoCirugia })
+        : await postJSON("/ia-generales", cuerpo);
+      if (!r.ok) throw new Error(r.error || "Sin respuesta");
+      examenes = (Array.isArray(r.examenesIA) ? r.examenesIA : r.examenes || []).map((e) => String(e).trim()).filter(Boolean);
+      informeIA = typeof r.informeIA === "string" ? r.informeIA : "";
+      if (!examenes.length) throw new Error("Sin exámenes");
+    } catch {
+      vigente(sesion);
+      setError("No se pudo preparar la propuesta de exámenes.");
+      setFase("error");
+      await decir(sesion, FRASES.errorExamenes);
+      return;
+    }
+    vigente(sesion);
+    examenesRef.current = { examenes, informeIA, comorbilidades, tipoCirugia };
+    setInforme({ diagnosticos: [], explicacion: "", examenes, tipoCirugia });
+    setFase("resultado");
+    await decir(sesion, `${vozExamenes(examenes)} ${FRASES.cierre}`);
+    await preguntarOrden(sesion);
+  };
+
+  const preguntarOrden = async (sesion) => {
+    const { valor } = await preguntarCerrada(sesion, "sino", FRASES.preguntarOrden, FRASES.repreguntarOrden);
+    setPregunta(null);
+    if (!valor) {
+      setFase("fin");
+      await decir(sesion, FRASES.sinOrden);
+      return;
+    }
+    setFase("datos");
+    await decir(sesion, FRASES.pedirDatos);
+  };
+
+  // ---------- flujo de dolor ----------
   const conversar = async (sesion) => {
     const ctx = ctxRef.current;
     const registro = registroRef.current;
@@ -316,22 +617,17 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     }
     vigente(sesion);
     setInforme({ ...resultado, marcadores });
+    // Especialista que corresponde por zona y ubicacion (mismo resolver del backend)
+    const deriv = await recomendarEspecialista(ctx.zona);
+    vigente(sesion);
     setFase("resultado");
 
-    const voz = [avisoRef.current ? FRASES.avisoColumna : "", vozResultado(resultado), FRASES.cierre]
+    const voz = [avisoRef.current ? FRASES.avisoColumna : "", vozResultado(resultado), deriv?.nota || "", FRASES.cierre]
       .filter(Boolean)
       .join(" ");
     await decir(sesion, voz);
 
-    const { valor } = await preguntarCerrada(sesion, "sino", FRASES.preguntarOrden, FRASES.repreguntarOrden);
-    setPregunta(null);
-    if (!valor) {
-      setFase("fin");
-      await decir(sesion, FRASES.sinOrden);
-      return;
-    }
-    setFase("datos");
-    await decir(sesion, FRASES.pedirDatos);
+    await preguntarOrden(sesion);
   };
 
   const comenzar = async () => {
@@ -350,12 +646,30 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     setOrdenUrl("");
     setError("");
     setProgreso(0);
+    setDerivacion(null);
+    setMarcadas([]);
+    setSeleccion([]);
+    examenesRef.current = {};
+    elegirModulo("trauma");
+    setAvisoMic("");
+    vozOkRef.current = escuchaSoportada;
     if (escuchaSoportada) {
-      escucha.iniciar(); // pide permiso de microfono
-      escucha.pausar();
+      // Permiso de microfono dentro del toque (el navegador lo exige); si no hay,
+      // se avisa y se sigue con botones
+      const motivo = await pedirMicrofono();
+      if (sesion !== sesionRef.current) return;
+      if (motivo) {
+        vozOkRef.current = false;
+        setAvisoMic(motivo);
+      } else {
+        escucha.iniciar();
+        escucha.pausar();
+      }
+    } else {
+      setAvisoMic("Este navegador no permite hablarle a la asistente. Abre la página en Chrome para usar la voz, o responde con los botones.");
     }
     try {
-      await conversar(sesion);
+      await menu(sesion);
     } catch (e) {
       if (!(e instanceof Interrumpido)) {
         console.error(e);
@@ -380,7 +694,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     setFase("generando");
     setError("");
     try {
-      const res = await fetch(`${BACKEND_BASE}/api/pdf-ia-orden/${idPagoRef.current}`, { cache: "no-store" });
+      const res = await fetch(`${BACKEND_BASE}${ORDEN[moduloRef.current].pdf(idPagoRef.current)}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const blob = await res.blob();
       if (sesion !== sesionRef.current) return;
@@ -395,10 +709,32 @@ export default function PantallaAvatar({ onUsarFormulario }) {
 
   const enviarDatos = async (datos) => {
     setError("");
+    const ctx = ctxRef.current;
+    const geo = leerGeo() || undefined;
     try {
+      if (moduloRef.current === "generales" || moduloRef.current === "preop") {
+        const ex = examenesRef.current;
+        await postJSON(moduloRef.current === "preop" ? "/guardar-datos-preop" : "/guardar-datos-generales", {
+          idPago: idPagoRef.current,
+          datosPaciente: {
+            nombre: datos.nombre, rut: datos.rut, email: datos.email || undefined,
+            edad: ctx.edad, genero: ctx.sexo === "Femenino" ? "Mujer" : "Hombre",
+            dolor: ctx.zona || undefined, lado: ctx.lado || undefined, geo,
+          },
+          comorbilidades: ex.comorbilidades,
+          tipoCirugia: ex.tipoCirugia || undefined,
+          examenesIA: ex.examenes,
+          informeIA: ex.informeIA || undefined,
+        });
+        conCorreoRef.current = Boolean(datos.email);
+        setConCorreo(Boolean(datos.email));
+        await generarOrden();
+        return;
+      }
+      // geo: para que la orden imprima la derivacion al especialista de su zona
       await postJSON("/api/guardar-datos-ia", {
         idPago: idPagoRef.current,
-        datosPaciente: { nombre: datos.nombre, rut: datos.rut, email: datos.email || undefined },
+        datosPaciente: { nombre: datos.nombre, rut: datos.rut, email: datos.email || undefined, geo },
       });
     } catch {
       setError("No se pudieron guardar tus datos. Intenta de nuevo.");
@@ -435,7 +771,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
 
   const soportado = vozSoportada;
   const enCurso = fase !== "inicio";
-  const avatarGrande = ["inicio", "conversacion", "urgencia", "fin", "analizando"].includes(fase);
+  const avatarGrande = ["inicio", "conversacion", "urgencia", "fin", "analizando", "derivacion"].includes(fase);
 
   return (
     <div className="app" style={S.pagina}>
@@ -452,7 +788,9 @@ export default function PantallaAvatar({ onUsarFormulario }) {
           <Avatar estado={estadoAvatar} boca={boca} />
         </div>
 
-        {enCurso && fase === "conversacion" && (
+        {avisoMic && enCurso && <p style={S.aviso}>{avisoMic}</p>}
+
+        {enCurso && fase === "conversacion" && modulo !== "derivacion" && progreso > 0 && (
           <div style={S.barra}><div style={{ ...S.barraLlena, width: `${progreso}%` }} /></div>
         )}
 
@@ -461,9 +799,10 @@ export default function PantallaAvatar({ onUsarFormulario }) {
           <section style={S.tarjetaCentro}>
             <h1 style={S.titulo}>Hola, soy tu asistente médica</h1>
             <p style={S.texto}>
-              Te haré algunas preguntas por voz, como en una consulta, para orientarte y, si lo necesitas,
-              entregarte una orden de exámenes.
+              Cuéntame qué necesitas: orientarte por un dolor, exámenes generales, exámenes antes de una
+              cirugía u hora con un traumatólogo. Te respondo por voz y, si lo necesitas, te entrego la orden.
             </p>
+            <p style={S.legal}>Al comenzar, el navegador te pedirá permiso para usar el micrófono: toca "Permitir".</p>
             {!soportado && (
               <p style={S.aviso}>Tu navegador no permite voz. Igual puedes responder tocando o escribiendo.</p>
             )}
@@ -478,12 +817,34 @@ export default function PantallaAvatar({ onUsarFormulario }) {
           <section style={S.tarjeta}>
             <p style={S.preguntaTexto}>{pregunta.texto}</p>
 
-            {escuchaSoportada && esperando && (
+            {vozOkRef.current && esperando && (
               <p style={S.escuchando}>
                 {escucha.parcial ? <em>{escucha.parcial}</em> : "Te escucho…"}
               </p>
             )}
             {entendido && <p style={S.entendido}>{entendido}</p>}
+
+            {/* Enfermedades de un grupo: marcar una o varias */}
+            {pregunta.tipo === "items" && (
+              <>
+                <div style={S.opciones}>
+                  {pregunta.items.map((it) => {
+                    const activo = seleccion.includes(it.key);
+                    return (
+                      <button key={it.key} type="button"
+                        style={{ ...S.opcion, ...(activo ? S.opcionActiva : null) }}
+                        onClick={() => setSeleccion((sel) => (activo ? sel.filter((k) => k !== it.key) : [...sel, it.key]))}>
+                        {activo ? "✓ " : ""}{it.etiqueta}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={S.opciones}>
+                  <button type="button" style={S.btnSecundario} disabled={!seleccion.length}
+                    onClick={() => responderEnPantalla(seleccion)}>Listo</button>
+                </div>
+              </>
+            )}
 
             {/* Respaldo: botones para preguntas cerradas */}
             {pregunta.respaldo && OPCIONES[pregunta.tipo] && (
@@ -510,6 +871,12 @@ export default function PantallaAvatar({ onUsarFormulario }) {
               </form>
             )}
 
+            {marcadas.length > 0 && modulo !== "trauma" && (
+              <div style={S.chips}>
+                {marcadas.map((m, i) => <span key={i} style={S.chip}>{m}</span>)}
+              </div>
+            )}
+
             {/* Respaldo: escribir en vez de hablar (preguntas abiertas) */}
             {pregunta.tipo === "abierta" && (
               <form
@@ -523,6 +890,11 @@ export default function PantallaAvatar({ onUsarFormulario }) {
                   value={textoLibre} onChange={(e) => setTextoLibre(e.target.value)} />
                 <button type="submit" style={S.btnSecundario} disabled={!textoLibre.trim()}>Enviar</button>
               </form>
+            )}
+            {pregunta.tipo === "abierta" && pregunta.opcional && (
+              <div style={S.opciones}>
+                <button type="button" style={S.opcion} onClick={() => responderEnPantalla("no")}>No, nada más</button>
+              </div>
             )}
           </section>
         )}
@@ -568,18 +940,33 @@ export default function PantallaAvatar({ onUsarFormulario }) {
                 <p style={S.texto}>{informe.explicacion}</p>
               </>
             )}
+            {informe.tipoCirugia && (
+              <>
+                <p style={S.rotulo}>Cirugía</p>
+                <p style={S.texto}>{informe.tipoCirugia}</p>
+              </>
+            )}
+            {modulo !== "trauma" && marcadas.length > 0 && (
+              <>
+                <p style={S.rotulo}>Antecedentes</p>
+                <div style={{ ...S.chips, justifyContent: "flex-start" }}>
+                  {marcadas.map((m, i) => <span key={i} style={S.chip}>{m}</span>)}
+                </div>
+              </>
+            )}
             {informe.examenes.length > 0 && (
               <>
-                <p style={S.rotulo}>Exámenes propuestos</p>
+                <p style={S.rotulo}>{modulo === "preop" ? "Exámenes preoperatorios" : modulo === "generales" ? "Exámenes generales" : "Exámenes propuestos"}</p>
                 <ul style={S.lista}>{informe.examenes.map((e, i) => <li key={i}>{e}</li>)}</ul>
               </>
             )}
+            {derivacion && <TarjetaDerivacion d={derivacion} />}
             <p style={S.legal}>{FRASES.cierre}</p>
 
             {fase === "resultado" && pregunta && (
               <>
                 <p style={S.preguntaTexto}>{pregunta.texto}</p>
-                {escuchaSoportada && esperando && (
+                {vozOkRef.current && esperando && (
                   <p style={S.escuchando}>{escucha.parcial ? <em>{escucha.parcial}</em> : "Te escucho…"}</p>
                 )}
                 <div style={S.opciones}>
@@ -588,6 +975,14 @@ export default function PantallaAvatar({ onUsarFormulario }) {
                 </div>
               </>
             )}
+          </section>
+        )}
+
+        {/* ---------- HORA CON TRAUMATOLOGO ---------- */}
+        {fase === "derivacion" && (
+          <section style={S.tarjetaCentro}>
+            {derivacion ? <TarjetaDerivacion d={derivacion} /> : <p style={S.texto}>{FRASES.derivacionError}</p>}
+            <a href="https://www.icarticular.cl" target="_blank" rel="noopener noreferrer" style={S.btnPrimario}>Agendar hora</a>
           </section>
         )}
 
@@ -603,7 +998,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
 
         {fase === "lista" && ordenUrl && (
           <section style={S.tarjetaCentro}>
-            <a href={ordenUrl} download="orden_examenes_ICA.pdf" style={S.btnPrimario}>Descargar orden</a>
+            <a href={ordenUrl} download={ORDEN[modulo]?.archivo || "orden_ICA.pdf"} style={S.btnPrimario}>Descargar orden</a>
             {conCorreo && <p style={S.texto}>También te la enviamos por correo.</p>}
           </section>
         )}
@@ -611,17 +1006,40 @@ export default function PantallaAvatar({ onUsarFormulario }) {
         {error && <p style={S.error}>{error}</p>}
         {fase === "error" && (
           <div style={S.opciones}>
-            {informe === null && ctxRef.current.zona && (
+            {informe === null && modulo === "trauma" && ctxRef.current.zona && (
               <button type="button" style={S.btnSecundario} onClick={reintentarAnalisis}>Reintentar</button>
             )}
             <button type="button" style={S.btnSecundario} onClick={comenzar}>Volver a empezar</button>
           </div>
         )}
 
-        {["fin", "lista"].includes(fase) && (
+        {["fin", "lista", "derivacion"].includes(fase) && (
           <button type="button" style={S.enlace} onClick={comenzar}>Nueva consulta</button>
         )}
       </main>
+    </div>
+  );
+}
+
+// ---------- especialista recomendado (respuesta de /resolver-derivacion) ----------
+function TarjetaDerivacion({ d }) {
+  const doc = d.doctor;
+  return (
+    <div style={S.derivacion}>
+      <p style={{ ...S.rotulo, marginTop: 0 }}>Especialista recomendado</p>
+      {doc ? (
+        <>
+          <p style={S.derivNombre}>{doc.nombre}</p>
+          {doc.especialidad && <p style={S.texto}>{doc.especialidad}</p>}
+          {doc.agenda && <p style={S.texto}>{doc.agenda}</p>}
+        </>
+      ) : (
+        <p style={S.texto}>{d.nota}</p>
+      )}
+      {!doc && d.sede?.nombre && <p style={S.texto}>{d.sede.nombre}</p>}
+      {doc?.contactoWeb && (
+        <a href={doc.contactoWeb} target="_blank" rel="noopener noreferrer" style={S.enlace}>Agendar hora</a>
+      )}
     </div>
   );
 }
@@ -704,6 +1122,11 @@ const S = {
   lista: { margin: "0 0 4px", paddingLeft: 20, lineHeight: 1.5 },
   opciones: { display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10, justifyContent: "center" },
   opcion: { font: "inherit", fontSize: 15, padding: "10px 16px", borderRadius: 999, border: `1px solid ${ACENTO}`, background: "#fff", color: PRIMARIO, cursor: "pointer" },
+  opcionActiva: { background: ACENTO, color: "#fff" },
+  chips: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10, justifyContent: "center" },
+  chip: { fontSize: 13, padding: "4px 10px", borderRadius: 999, background: "#E8F0FA", color: PRIMARIO },
+  derivacion: { marginTop: 12, padding: 12, borderRadius: 12, background: "#F0F6FC", border: "1px solid #CFE0F2", textAlign: "left", width: "100%", boxSizing: "border-box" },
+  derivNombre: { margin: "2px 0", fontSize: 17, fontWeight: 700, color: PRIMARIO },
   escribir: { display: "flex", gap: 8, marginTop: 12, alignItems: "flex-end" },
   filaEscribir: { display: "flex", gap: 8, marginTop: 10 },
   textarea: { flex: 1, font: "inherit", fontSize: 15, padding: 10, borderRadius: 10, border: "1px solid #D1D8E5", resize: "vertical" },
