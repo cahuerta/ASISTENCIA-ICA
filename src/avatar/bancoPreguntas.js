@@ -28,7 +28,6 @@ export const ZONAS = [
 ];
 
 export const esColumna = (zona) => String(zona || "").toLowerCase().startsWith("columna");
-const esExtremidadInferior = (zona) => ["Rodilla", "Cadera", "Tobillo"].includes(zona);
 
 // ---------------- Menu inicial ----------------
 export const MENU = {
@@ -110,6 +109,21 @@ export const CIRUGIAS = [
   { etiqueta: "Otra", valor: "OTRA", zona: null },
 ];
 
+// Arma las preguntas de alarma de una zona: [bandera, texto, resumen, mensaje?]
+function alarmas(zona, lista) {
+  const slug = zona.toLowerCase().replace(/\s+/g, "_");
+  return lista.map(([bandera, texto, resumen, mensaje], i) => ({
+    id: `alarma_${slug}_${i + 1}`,
+    tipo: "sino",
+    bandera,
+    texto,
+    repregunta: `Responde sí o no, por favor: ${texto}`,
+    resumen,
+    mensaje,
+    aplica: (ctx) => ctx.zona === zona,
+  }));
+}
+
 export const PREGUNTAS = [
   // ---------------- Ubicacion y datos basicos ----------------
   {
@@ -138,48 +152,80 @@ export const PREGUNTAS = [
     repregunta: "Perdón, ¿eres hombre o mujer?",
   },
 
-  // ---------------- Banderas rojas ----------------
-  {
-    id: "alarma_infeccion",
-    tipo: "sino",
-    bandera: "grave",
-    texto: "¿Has tenido fiebre, o la zona está roja, caliente e hinchada?",
-    repregunta: "Responde sí o no, por favor: ¿fiebre, o la zona roja, caliente e hinchada?",
-    resumen: "fiebre o zona roja, caliente e hinchada",
-  },
-  {
-    id: "alarma_neurologica",
-    tipo: "sino",
-    bandera: "grave",
-    texto: "¿Has perdido fuerza en un brazo o pierna, o tienes adormecimiento que va avanzando?",
-    textoSegun: (ctx) =>
-      ctx.zona === "Columna lumbar"
-        ? "¿Has perdido fuerza en una pierna, tienes adormecimiento que va avanzando, o dificultad para orinar o adormecimiento entre las piernas?"
-        : null,
-    repregunta: "Responde sí o no, por favor: ¿pérdida de fuerza o adormecimiento que va avanzando?",
-    resumen: "pérdida de fuerza o adormecimiento progresivo",
-  },
-  {
-    id: "alarma_trauma_vascular",
-    tipo: "sino",
-    bandera: "grave",
-    texto: "¿Tuviste un golpe fuerte y ves una deformidad, o la mano o el pie están fríos, pálidos o morados?",
-    textoSegun: (ctx) =>
-      esExtremidadInferior(ctx.zona)
-        ? "¿Tuviste un golpe fuerte y no puedes apoyar el pie o caminar, ves una deformidad, o el pie está frío, pálido o morado?"
-        : null,
-    repregunta: "Responde sí o no, por favor: ¿golpe con deformidad, o la mano o el pie fríos o morados?",
-    resumen: "trauma con deformidad, imposibilidad de apoyo o compromiso vascular",
-  },
-  {
-    id: "alarma_columna",
-    tipo: "sino",
-    bandera: "aviso",
-    texto: "¿Te duele de noche aunque estés en reposo, has bajado de peso sin explicación, o has tenido cáncer?",
-    repregunta: "Responde sí o no, por favor: ¿dolor nocturno en reposo, baja de peso o antecedente de cáncer?",
-    aplica: (ctx) => esColumna(ctx.zona),
-    resumen: "dolor nocturno en reposo, baja de peso o antecedente oncológico",
-  },
+  // ---------------- Banderas rojas POR SEGMENTO ----------------
+  // Cada zona tiene sus propias alarmas (3 o 4 preguntas agrupadas).
+  // grave -> se detiene y deriva a urgencia. aviso -> sigue, y al final
+  // recomienda evaluacion pronta con el "mensaje" de la pregunta.
+  ...alarmas("Columna lumbar", [
+    ["grave", "¿Tienes dificultad para orinar, se te escapa la orina o las deposiciones, o sientes adormecida la zona entre las piernas?",
+      "compromiso de esfínteres o anestesia en silla de montar"],
+    ["grave", "¿Has perdido fuerza en una o en ambas piernas, y va empeorando?",
+      "pérdida de fuerza progresiva en extremidades inferiores"],
+    ["grave", "¿Tienes fiebre junto con el dolor de espalda, o tuviste una caída o un accidente fuerte?",
+      "fiebre o trauma de alta energía"],
+    ["aviso", "¿Te duele de noche aunque estés en reposo, has bajado de peso sin explicación, o has tenido cáncer?",
+      "dolor nocturno en reposo, baja de peso o antecedente oncológico",
+      "Como me contaste que tienes dolor nocturno, baja de peso o antecedente de cáncer, te recomiendo que te evalúe un especialista pronto."],
+  ]),
+  ...alarmas("Columna cervical", [
+    ["grave", "¿Sientes torpeza en las manos, se te caen las cosas, o caminas inestable?",
+      "torpeza de manos o marcha inestable"],
+    ["grave", "¿Tuviste un accidente o un golpe fuerte reciente en la cabeza o el cuello?",
+      "trauma cervical reciente"],
+    ["grave", "¿Tienes fiebre junto con el dolor de cuello?", "fiebre con cervicalgia"],
+    ["aviso", "¿Has tenido cáncer, o has bajado de peso sin explicación?",
+      "antecedente oncológico o baja de peso",
+      "Como me contaste que has tenido cáncer o bajado de peso, te recomiendo que te evalúe un especialista pronto."],
+  ]),
+  ...alarmas("Columna dorsal", [
+    ["grave", "¿Tienes dolor en el pecho, falta de aire o sudoración junto con el dolor de espalda?",
+      "dolor torácico, disnea o sudoración"],
+    ["grave", "¿Tuviste un accidente o una caída fuerte, o tienes fiebre?", "trauma de alta energía o fiebre"],
+    ["aviso", "¿Te duele de noche aunque estés en reposo, has bajado de peso sin explicación, o has tenido cáncer?",
+      "dolor nocturno en reposo, baja de peso o antecedente oncológico",
+      "Como me contaste que tienes dolor nocturno, baja de peso o antecedente de cáncer, te recomiendo que te evalúe un especialista pronto."],
+  ]),
+  ...alarmas("Hombro", [
+    ["grave", "¿Tuviste un golpe o una caída y no puedes mover el brazo, o ves el hombro deformado?",
+      "trauma con impotencia funcional o deformidad"],
+    ["grave", "¿El dolor de hombro viene con dolor en el pecho, falta de aire o sudoración?",
+      "dolor torácico, disnea o sudoración"],
+    ["grave", "¿Tienes fiebre, o el hombro está rojo y caliente?", "fiebre o signos inflamatorios locales"],
+    ["aviso", "¿Sientes hormigueo o debilidad en el brazo?", "parestesias o debilidad del brazo",
+      "Como me contaste que sientes hormigueo o debilidad en el brazo, te recomiendo que te evalúe un especialista pronto."],
+  ]),
+  ...["Codo", "Mano"].flatMap((zona) => alarmas(zona, [
+    ["grave", "¿Tuviste un golpe y ves una deformidad, o tienes una herida y algún dedo no se mueve?",
+      "trauma con deformidad o herida con déficit de movilidad de dedos"],
+    ["grave", "¿La mano está fría, pálida o morada, o tienes un dolor muy intenso después de un golpe o con un yeso puesto?",
+      "compromiso vascular o dolor desproporcionado"],
+    ["grave", "¿Te mordió un animal o una persona, o la zona está roja y caliente con fiebre?",
+      "mordedura o signos de infección"],
+    ["aviso", "¿Se te duermen los dedos en la noche?", "parestesias nocturnas de dedos",
+      "Como me contaste que se te duermen los dedos en la noche, te recomiendo que te evalúe un especialista pronto."],
+  ])),
+  ...alarmas("Cadera", [
+    ["grave", "¿Tuviste una caída y no puedes apoyar la pierna ni caminar?", "caída con imposibilidad de apoyo"],
+    ["grave", "¿Tienes fiebre junto con el dolor de cadera?", "fiebre con coxalgia"],
+    ["grave", "¿La pierna está hinchada, roja y dolorosa?", "extremidad inferior edematosa, eritematosa y dolorosa"],
+    ["aviso", "¿El dolor en la ingle lleva meses sin mejorar?", "dolor inguinal persistente",
+      "Como el dolor en la ingle no ha mejorado en meses, te recomiendo que te evalúe un especialista pronto."],
+  ]),
+  ...alarmas("Rodilla", [
+    ["grave", "¿Tuviste un golpe o una torcedura y no puedes apoyar la pierna?", "trauma con imposibilidad de apoyo"],
+    ["grave", "¿La rodilla está roja, caliente e hinchada, y tienes fiebre?", "rodilla inflamada con fiebre"],
+    ["grave", "¿Tienes la pantorrilla hinchada y dolorosa?", "pantorrilla edematosa y dolorosa"],
+    ["aviso", "¿La rodilla se traba y no puedes estirarla completamente?", "bloqueo articular",
+      "Como me contaste que la rodilla se traba, te recomiendo que te evalúe un especialista pronto."],
+  ]),
+  ...alarmas("Tobillo", [
+    ["grave", "Después de la torcedura o el golpe, ¿no puedes dar cuatro pasos, o ves una deformidad?",
+      "imposibilidad de dar cuatro pasos o deformidad"],
+    ["grave", "¿El pie está frío, pálido o morado, o tienes una herida profunda?",
+      "compromiso vascular o herida profunda"],
+    ["aviso", "¿Eres diabético y tienes el pie rojo, caliente o hinchado?", "pie diabético rojo, caliente o edematoso",
+      "Como eres diabético y tienes el pie rojo, caliente o hinchado, te recomiendo que te evalúe un especialista pronto."],
+  ]),
 
   // ---------------- Anamnesis abierta ----------------
   {
@@ -238,8 +284,6 @@ export const FRASES = {
   urgencia:
     "Por lo que me cuentas, es importante que te evalúe un médico pronto. Te recomiendo acudir a un servicio de urgencia. " +
     "No es conveniente esperar una orden de exámenes en este caso.",
-  avisoColumna:
-    "Como me contaste que tienes dolor nocturno, baja de peso o antecedente de cáncer, te recomiendo que te evalúe un especialista pronto.",
   preguntarOrden: "¿Quieres que te entregue la orden de exámenes?",
   repreguntarOrden: "Responde sí o no, por favor: ¿quieres la orden de exámenes?",
   sinOrden: "Está bien. Si cambias de opinión, puedes volver a empezar cuando quieras. Cuídate.",
