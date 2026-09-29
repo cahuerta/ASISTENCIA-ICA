@@ -3,7 +3,7 @@
  * Interpretacion de respuestas habladas por palabras clave (sin costo, en el navegador),
  * armado de la consulta que se envia al backend, lectura del informe y RUT.
  */
-import { ZONAS, esColumna } from "./bancoPreguntas.js";
+import { ZONAS, esColumna, CIRUGIAS } from "./bancoPreguntas.js";
 
 export function normalizar(texto) {
   return String(texto || "")
@@ -103,6 +103,91 @@ export function interpretarSiNo(texto) {
 export function esRespuestaVacia(texto) {
   const t = normalizar(texto);
   return !t || interpretarSiNo(t) === false || /^(nada mas|eso es todo|eso seria|nada)$/.test(t);
+}
+
+// ---------------- menu inicial ----------------
+const CLAVES_MENU = [
+  ["preop", ["cirugia", "operar", "operacion", "opero", "operan", "preoperatori", "pre operatori", "pabellon", "protesis"]],
+  ["generales", ["generales", "general", "chequeo", "rutina", "control", "sangre", "laboratorio"]],
+  ["derivacion", ["hora", "traumatolog", "especialista", "doctor", "medico", "agendar", "agenda", "reserv", "consulta con"]],
+  ["dolor", ["dolor", "duele", "molest", "sintoma", "lesion", "golpe", "torci", "cai"]],
+];
+
+/** "dolor" | "generales" | "preop" | "derivacion" | null */
+export function interpretarMenu(texto) {
+  const t = normalizar(texto);
+  for (const [opcion, claves] of CLAVES_MENU) {
+    if (contiene(t, claves)) return opcion;
+  }
+  return null;
+}
+
+// ---------------- enfermedades previas ----------------
+const CLAVES_COMORBILIDAD = {
+  hta: ["presion", "hipertens", "tension alta"],
+  dm2: ["diabet", "azucar", "insulina"],
+  dislipidemia: ["colesterol", "triglicerid", "dislipid", "grasa en la sangre"],
+  obesidad: ["sobrepeso", "obes", "peso"],
+  tabaquismo: ["fum", "tabaco", "cigarr"],
+  epoc_asma: ["asma", "epoc", "enfisema", "bronqu", "pulmon"],
+  cardiopatia: ["corazon", "cardi", "infarto", "arritmi", "marcapaso"],
+  erc: ["rinon", "renal", "dialisis"],
+  hipotiroidismo: ["tiroid", "hipotiroid", "eutirox", "levotiroxin"],
+  anticoagulantes: ["anticoagul", "aspirina", "sintrom", "neosintrom", "clopidogrel", "warfarin", "rivaroxaban", "apixaban", "xarelto"],
+  artritis_reumatoide: ["artritis", "reumat", "lupus", "autoinmun"],
+};
+
+/**
+ * Enfermedades de un grupo mencionadas en la respuesta. items = [{key}].
+ * "todas" / "todos" marca el grupo completo. Devuelve [] si no reconoce ninguna.
+ */
+export function interpretarItems(items, texto) {
+  const t = normalizar(texto);
+  if (contiene(t, ["todas", "todos", "las tres", "los tres", "ambas", "ambos", "las dos", "los dos"])) {
+    return items.map((i) => i.key);
+  }
+  return items.filter((i) => contiene(t, CLAVES_COMORBILIDAD[i.key] || [])).map((i) => i.key);
+}
+
+// ---------------- cirugia (preoperatorio) ----------------
+/** Devuelve la cirugia de CIRUGIAS que corresponde, o null. */
+export function interpretarCirugia(texto) {
+  const t = normalizar(texto);
+  const cadera = /\bcadera/.test(t);
+  const rodilla = /\brodilla/.test(t);
+  const zona = cadera && !rodilla ? "Cadera" : rodilla && !cadera ? "Rodilla" : null;
+  const buscar = (valor) => CIRUGIAS.find((c) => c.valor === valor) || null;
+
+  if (contiene(t, ["partes blandas", "cirugia menor", "menor"])) return buscar("CIRUGÍA MENOR DE PARTES BLANDAS");
+  if (!zona) return null;
+  if (contiene(t, ["protesis", "reemplazo", "artroplastia", "cambio de"])) {
+    return buscar(zona === "Cadera" ? "ARTROPLASTIA TOTAL DE CADERA (ATC)" : "ARTROPLASTIA TOTAL DE RODILLA (ATR)");
+  }
+  if (contiene(t, ["artroscop", "camara", "menisco", "ligamento"])) {
+    return buscar(zona === "Cadera" ? "ARTROSCOPIA DE CADERA" : "ARTROSCOPIA DE RODILLA");
+  }
+  if (contiene(t, ["osteotom"])) {
+    return buscar(zona === "Cadera" ? "OSTEOTOMÍA DE CADERA" : "OSTEOTOMÍA DE RODILLA");
+  }
+  return null;
+}
+
+/** Texto hablado con los examenes propuestos (generales o preoperatorio). */
+export function vozExamenes(examenes) {
+  if (!examenes.length) return "No encontré exámenes adicionales que proponerte.";
+  return examenes.length === 1
+    ? `Te propongo el siguiente examen: ${listarEnVoz(examenes.map(minusculaExamen))}.`
+    : `Te propongo ${examenes.length} exámenes: ${listarEnVoz(examenes.map(minusculaExamen))}.`;
+}
+
+const PALABRAS_CORTAS = new Set(["DE", "DEL", "Y", "LA", "EL", "LOS", "LAS", "EN", "CON", "SIN", "POR"]);
+
+// "HEMOGRAMA" -> "hemograma" para que la voz no lo deletree; siglas cortas se mantienen
+function minusculaExamen(e) {
+  return String(e)
+    .split(" ")
+    .map((p) => (p.length <= 4 && p === p.toUpperCase() && !PALABRAS_CORTAS.has(p) ? p : p.toLowerCase()))
+    .join(" ");
 }
 
 // ---------------- consulta para el backend ----------------
