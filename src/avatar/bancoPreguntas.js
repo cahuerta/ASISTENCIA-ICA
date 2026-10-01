@@ -154,6 +154,8 @@ function alarmas(zona, lista) {
 export const PREGUNTAS = [
   // ---------------- Ubicacion y datos basicos ----------------
   {
+    // "Espalda" se acepta: luego el paciente marca en el dibujo posterior si es
+    // cervical, dorsal o lumbar (FRASES.nivelColumna)
     id: "zona",
     tipo: "zona",
     texto: "Para empezar, ¿en qué parte del cuerpo tienes el dolor?",
@@ -270,7 +272,15 @@ export const PREGUNTAS = [
   {
     id: "asociados",
     tipo: "abierta",
-    texto: "¿Has notado hinchazón, que la articulación se trabe o falle, chasquidos, hormigueo o rigidez?",
+    // Articulaciones: hinchazon, bloqueo y chasquidos. El hormigueo y
+    // adormecimiento se pregunta solo en columna, segun el segmento.
+    texto: "¿Has notado hinchazón, que la articulación se trabe o se bloquee, o chasquidos?",
+    textoSegun: (ctx) => {
+      if (ctx.zona === "Columna cervical") return "¿Sientes hormigueo, adormecimiento o debilidad en los brazos o las manos?";
+      if (ctx.zona === "Columna lumbar") return "¿Sientes hormigueo, adormecimiento o debilidad en las piernas o los pies?";
+      if (ctx.zona === "Columna dorsal") return "¿Sientes hormigueo, adormecimiento o debilidad en el tronco o en las piernas?";
+      return null;
+    },
     resumen: "Síntomas asociados",
   },
   {
@@ -314,6 +324,14 @@ export const FRASES = {
   agendaGeneral: "Te muestro la agenda. Elige médico, día y hora. Si quieres volver conmigo, dime volver.",
   recordatorioAgenda: "¿Ya tomaste una decisión, o prefieres volver?",
   seguirAgenda: "Perfecto, termina tu reserva en la pantalla. Aquí te espero.",
+  // si eligio solo la orden: especialista recomendado (el mismo que sale en la orden)
+  recomendar: (medico, zona) =>
+    `Te recomiendo que te evalúe ${medico}${zona ? `, especialista en ${zona}` : ""}. ¿Quieres que te busque hora?`,
+  recomendarSinMedico: "¿Quieres que te busque hora con un especialista?",
+  repreguntaRecomendar: "Responde sí o no, por favor: ¿quieres que te busque hora?",
+  // espalda: cervical, dorsal o lumbar en el dibujo
+  nivelColumna: "Muéstrame en el dibujo dónde te duele la espalda: en el cuello, en la parte media, o en la parte baja.",
+  repreguntaNivelColumna: "¿Es en el cuello, en la parte media de la espalda, o en la parte baja? También puedes tocarlo en el dibujo.",
   horaReservada: (cuando, medico, telemedicina) =>
     `Listo, tu hora quedó reservada para el ${cuando}${medico ? ` con ${medico}` : ""}${telemedicina ? ", por telemedicina" : ""}. ` +
     "Te llegará la confirmación por correo.",
