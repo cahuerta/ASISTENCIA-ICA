@@ -1,8 +1,9 @@
 // src/screens/PantallaAvatar.jsx
 // Asistente de voz de ICA: la medica dirige la consulta.
 //
-// 0. Menu (voz o botones): dolor | examenes generales | examenes para cirugia
-//    (preoperatorio) | hora con traumatologo (derivacion por zona + ubicacion).
+// 0. Menu (voz o botones): hora con un medico | dolor | examenes generales |
+//    examenes para cirugia (preoperatorio). Al terminar cada flujo: "¿Te ayudo
+//    en algo mas?" -> vuelve al menu.
 //
 // DOLOR:
 // 1. Anamnesis oral guiada (avatar/bancoPreguntas.js): zona, lado, edad, sexo,
@@ -12,17 +13,26 @@
 // 3. /api/preview-informe (sin cambios en el backend) con la conversacion completa
 //    en "consulta" + edad, sexo, zona, lado y puntos.
 // 4. La medica dice el diagnostico presuntivo, el fundamento y los examenes.
-// 5. "¿Quieres la orden?" -> formulario escrito (nombre, RUT, correo) ->
-//    checklist de resonancia si corresponde -> /api/pdf-ia-orden (gratis por ahora).
-// 6. Recomienda el especialista con /resolver-derivacion (zona + ubicacion GPS que
-//    ICA guarda al abrir), y la ubicacion va a la orden para que salga la derivacion.
+// 5. "¿Te hago la orden de examenes, o te busco hora con el especialista?"
+//    orden | hora | ambas (primero la orden, luego la hora con sus datos) | ninguna.
+//    Orden: formulario escrito (nombre, RUT, correo) -> checklist de resonancia si
+//    corresponde -> /api/pdf-ia-orden (gratis por ahora). La ubicacion va a la orden
+//    para que salga la derivacion.
 //
 // EXAMENES GENERALES / PREOPERATORIO (mismos endpoints que los modulos de ICA):
 //    edad, sexo, (cirugia y lado), enfermedades por grupos con botones abajo,
 //    alergias y otras -> /ia-generales o /ia-preop -> la medica dice los examenes ->
 //    "¿quieres la orden?" -> datos -> /guardar-datos-generales|preop -> /pdf-generales|preop.
 //
-// HORA CON TRAUMATOLOGO: zona -> /resolver-derivacion -> medico y sede.
+// HORA CON UN MEDICO: reconoce el nombre en la lista de profesionales de la ficha
+//    clinica (/professionals publico). Si hay varios, pregunta cual; si no entiende,
+//    muestra los medicos como botones; si no sabe, hace el flujo de dolor.
+//
+// AGENDA: la pagina de reservas de la ficha (reservas.icarticular.cl?modo=asistente)
+//    dentro de un iframe: agendas, telemedicina y formulario de ficha completo son los
+//    de la ficha. En la URL solo va lo no personal (dr, zona, lat, lon); RUT, nombre y
+//    correo van por postMessage. Boton y voz "volver"; a los 2 minutos sin actividad
+//    pregunta "¿Ya tomaste una decision?"; al reservar confirma la hora por voz.
 //
 // MICROFONO: al tocar "Comenzar" se pide permiso con getUserMedia (dentro del toque,
 // como exige el navegador). Si no hay permiso o microfono, se avisa en pantalla y
@@ -36,20 +46,31 @@ import useVoz, { vozSoportada } from "../avatar/useVoz.js";
 import useEscucha, { escuchaSoportada } from "../avatar/useEscucha.js";
 import {
   PREGUNTAS, FRASES, SALUDO, ZONAS, esColumna,
-  MENU, GRUPOS_COMORBILIDAD, PREGUNTAS_EXTRA, CIRUGIAS,
+  MENU, GRUPOS_COMORBILIDAD, PREGUNTAS_EXTRA, CIRUGIAS, TIPO_EXAMEN, ACCION_FINAL,
 } from "../avatar/bancoPreguntas.js";
 import {
   interpretarZona, interpretarLado, interpretarEdad, interpretarSexo, interpretarSiNo,
   esRespuestaVacia, construirConsulta, leerInforme, vozResultado, incluyeResonancia,
   formatearRut, validarRut, interpretarMenu, interpretarItems, interpretarCirugia, vozExamenes,
+  interpretarTipoExamen, interpretarMedico, interpretarAccionFinal, interpretarVolver, nombreEnVoz,
 } from "../avatar/interpretar.js";
 import GenericMapper from "../mappers/GenericMapper.jsx";
 import { resolveZonaKey } from "../mappers/mapperRegistry.js";
 import FormularioResonancia from "../components/FormularioResonancia.jsx";
 import logoICA from "../assets/ica.jpg";
 
+// import.meta.env sin "?.": Vite solo reemplaza la forma exacta al compilar
+// (con "?." las variables VITE_ nunca se aplicaban y siempre quedaba el valor por defecto)
 const BACKEND_BASE =
-  import.meta?.env?.VITE_BACKEND_BASE || "https://asistencia-ica-backend.onrender.com";
+  import.meta.env.VITE_BACKEND_BASE || "https://asistencia-ica-backend.onrender.com";
+
+// Ficha clinica: lista de profesionales (backend) y pagina de reservas (iframe)
+const FICHA_API = import.meta.env.VITE_FICHA_API || "https://services.icarticular.cl";
+const RESERVAS_URL = import.meta.env.VITE_RESERVAS_URL || "https://reservas.icarticular.cl";
+const RESERVAS_ORIGEN = new URL(RESERVAS_URL).origin;
+
+// Sin actividad en la agenda este tiempo -> "¿Ya tomaste una decision?"
+const RECORDATORIO_MS = 120000;
 
 const ZONAS_MAPPER = ["rodilla", "mano", "hombro", "codo", "cadera", "tobillo"];
 
@@ -71,6 +92,55 @@ function leerGeo() {
   } catch {
     return null;
   }
+}
+
+// Profesionales publicos de ICA en la ficha clinica: [{ id, name, specialty }]
+async function cargarMedicos() {
+  try {
+    const res = await fetch(`${FICHA_API}/professionals?public=true&scope=ica`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const lista = Array.isArray(data) ? data : Array.isArray(data?.professionals) ? data.professionals : [];
+    return lista
+      .filter((p) => p && p.id && p.name)
+      .map((p) => ({ id: String(p.id), name: String(p.name), specialty: String(p.specialty || "") }));
+  } catch {
+    return [];
+  }
+}
+
+// Coordenadas para buscar especialistas cerca (sin pedir de nuevo si ya las negó).
+// Redondeadas a ~1 km: solo sirven para saber la region.
+function obtenerCoords() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({
+        lat: Math.round(pos.coords.latitude * 100) / 100,
+        lon: Math.round(pos.coords.longitude * 100) / 100,
+      }),
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 4000, maximumAge: 600000 },
+    );
+  });
+}
+
+// "2026-10-06" -> "martes 6 de octubre"
+function fechaEnVoz(fecha) {
+  const d = new Date(`${fecha}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return fecha;
+  return d.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" }).replace(",", "");
+}
+
+// Solo se acepta una reserva con forma valida desde la pagina de reservas
+function leerReserva(d) {
+  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d.date || "") || !/^\d{1,2}:\d{2}$/.test(d.time || "")) return null;
+  return {
+    date: d.date,
+    time: d.time,
+    professionalName: typeof d.professionalName === "string" ? d.professionalName.slice(0, 120) : "",
+    tipo: d.modalidad === "telemedicina" ? "telemedicina" : "presencial",
+  };
 }
 
 // Pide permiso de microfono dentro del toque del usuario. Devuelve "" o el motivo.
@@ -136,7 +206,7 @@ class Interrumpido extends Error {}
 
 export default function PantallaAvatar({ onUsarFormulario }) {
   const [fase, setFase] = useState("inicio");
-  // inicio | conversacion | puntos | analizando | resultado | datos | resonancia | generando | lista | urgencia | fin | error
+  // inicio | conversacion | puntos | analizando | resultado | datos | resonancia | generando | lista | agenda | urgencia | fin | error
   const [pregunta, setPregunta] = useState(null);   // { texto, tipo, respaldo }
   const [entendido, setEntendido] = useState("");
   const [progreso, setProgreso] = useState(0);
@@ -150,8 +220,10 @@ export default function PantallaAvatar({ onUsarFormulario }) {
   const [avisoMic, setAvisoMic] = useState("");       // por que no hay microfono
   const [seleccion, setSeleccion] = useState([]);     // enfermedades marcadas en la pregunta actual
   const [marcadas, setMarcadas] = useState([]);       // resumen de lo marcado (chips)
-  const [derivacion, setDerivacion] = useState(null); // { nota, doctor, sede, especialidad }
-  const [modulo, setModulo] = useState("trauma");     // trauma | generales | preop | derivacion
+  const [modulo, setModulo] = useState("trauma");     // trauma | generales | preop | hora
+  const [agenda, setAgenda] = useState(null);         // { url } de la pagina de reservas
+  const [reserva, setReserva] = useState(null);       // hora reservada { date, time, professionalName, tipo }
+  const [resumen, setResumen] = useState(false);      // muestra orden/hora al preguntar "¿algo mas?"
 
   const { hablar, callar, desbloquear, hablando, boca } = useVoz();
 
@@ -168,6 +240,13 @@ export default function PantallaAvatar({ onUsarFormulario }) {
   const botonesTimerRef = useRef(null);
   const moduloRef = useRef("trauma");
   const examenesRef = useRef({});              // { examenes, informeIA, comorbilidades, tipoCirugia }
+  const ordenRef = useRef(null);               // resolver: la orden quedo lista
+  const datosRef = useRef(null);               // { nombre, rut, email } que dio para la orden
+  const iframeRef = useRef(null);
+  const agendaRef = useRef(null);              // resolver mientras la agenda esta abierta
+  const actividadRef = useRef(null);           // reinicia el recordatorio de la agenda
+  const prefillRef = useRef(null);             // datos que se mandan a la agenda por postMessage
+  const pendienteRef = useRef({});             // { volver, reservado } llegados mientras hablaba
 
   // ---------- escucha: cada frase completa resuelve la respuesta pendiente ----------
   const alEscuchar = useCallback((texto) => {
@@ -196,6 +275,30 @@ export default function PantallaAvatar({ onUsarFormulario }) {
   }, [callar]);
 
   useEffect(() => () => { if (ordenUrl) URL.revokeObjectURL(ordenUrl); }, [ordenUrl]);
+
+  // ---------- mensajes de la pagina de reservas (solo de su origen y de nuestro iframe) ----------
+  useEffect(() => {
+    const alMensaje = (e) => {
+      if (e.origin !== RESERVAS_ORIGEN) return;
+      if (!iframeRef.current || e.source !== iframeRef.current.contentWindow) return;
+      const d = e.data;
+      if (!d || d.fuente !== "ica-reservas") return;
+      if (d.tipo === "listo" && prefillRef.current) {
+        iframeRef.current.contentWindow.postMessage(
+          { fuente: "ica-asistente", tipo: "paciente", datos: prefillRef.current }, RESERVAS_ORIGEN,
+        );
+      } else if (d.tipo === "actividad") {
+        actividadRef.current?.();
+      } else if (d.tipo === "reservado") {
+        const r = leerReserva(d);
+        if (!r) return;
+        if (agendaRef.current) agendaRef.current({ reservado: r });
+        else pendienteRef.current.reservado = r;
+      }
+    };
+    window.addEventListener("message", alMensaje);
+    return () => window.removeEventListener("message", alMensaje);
+  }, []);
 
   // ---------- utilidades del flujo ----------
   const vigente = (sesion) => {
@@ -243,6 +346,8 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     sexo: interpretarSexo,
     sino: interpretarSiNo,
     menu: interpretarMenu,
+    tipoExamen: interpretarTipoExamen,
+    accion: interpretarAccionFinal,
     cirugia: (t) => interpretarCirugia(t)?.valor || null,
   };
 
@@ -252,6 +357,8 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     sexo: [{ etiqueta: "Hombre", valor: "Masculino" }, { etiqueta: "Mujer", valor: "Femenino" }],
     sino: [{ etiqueta: "Sí", valor: true }, { etiqueta: "No", valor: false }],
     menu: MENU.opciones,
+    tipoExamen: TIPO_EXAMEN.opciones,
+    accion: ACCION_FINAL.opciones,
     cirugia: CIRUGIAS.map((c) => ({ etiqueta: c.etiqueta, valor: c.valor })),
   };
 
@@ -261,19 +368,23 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     edad: (v) => `${v} años`,
     sexo: (v) => (v === "Masculino" ? "Hombre" : "Mujer"),
     sino: (v) => (v ? "Sí" : "No"),
-    menu: (v) => MENU.opciones.find((o) => o.valor === v)?.etiqueta || v,
+    menu: (v) => (v === "examenes" ? "Exámenes" : MENU.opciones.find((o) => o.valor === v)?.etiqueta || v),
+    tipoExamen: (v) => TIPO_EXAMEN.opciones.find((o) => o.valor === v)?.etiqueta || v,
+    accion: (v) => ACCION_FINAL.opciones.find((o) => o.valor === v)?.etiqueta || v,
+    medico: (v) => (v.medico ? v.medico.name : v.varios ? v.varios.map((m) => m.name).join(" o ") : "No sé con quién"),
     cirugia: (v) => CIRUGIAS.find((c) => c.valor === v)?.etiqueta || v,
   };
 
   // Pregunta cerrada: voz -> si no entiende repregunta -> si falla de nuevo, botones.
   // siempreBotones: los botones se ven desde el inicio (menu, enfermedades, cirugia).
   // interprete: reemplaza al interprete del tipo (ej. grupo de enfermedades).
-  const preguntarCerrada = async (sesion, tipo, texto, repregunta, siempreBotones = false, interprete = null) => {
+  // opciones: botones propios (ej. la lista de medicos).
+  const preguntarCerrada = async (sesion, tipo, texto, repregunta, siempreBotones = false, interprete = null, opciones = null) => {
     let intentos = 0;
     let dicho = texto;
     for (;;) {
       const respaldo = siempreBotones || !vozOkRef.current || intentos >= 2;
-      setPregunta({ texto, tipo, respaldo });
+      setPregunta({ texto, tipo, respaldo, opciones });
       setEntendido("");
       if (dicho) await decir(sesion, dicho);
       const r = await esperarRespuesta(sesion);
@@ -337,19 +448,6 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     return key;
   };
 
-  const recomendarEspecialista = async (zona) => {
-    try {
-      const r = await postJSON("/resolver-derivacion", { dolor: zona, geo: leerGeo() || undefined });
-      if (r?.nota) {
-        setDerivacion(r);
-        return r;
-      }
-    } catch {
-      // sin derivacion: el flujo sigue
-    }
-    return null;
-  };
-
   // ---------- puntos dolorosos ----------
   const esperarPuntos = (sesion) =>
     new Promise((resolve) => {
@@ -380,30 +478,171 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     setModulo(m);
   };
 
-  const menu = async (sesion) => {
+  // Cada opcion del menu empieza limpia (se conservan la orden, la hora y los datos)
+  const nuevoFlujo = () => {
+    limpiarPuntosPrevios();
+    ctxRef.current = {};
+    registroRef.current = [];
+    avisosRef.current = [];
+    examenesRef.current = {};
+    setInforme(null);
+    setMarcadas([]);
+    setSeleccion([]);
+    setError("");
+  };
+
+  const menu = async (sesion, texto = MENU.texto) => {
     setFase("conversacion");
     setProgreso(0);
-    const { valor } = await preguntarCerrada(sesion, "menu", MENU.texto, MENU.repregunta, true);
+    setResumen(false);
+    let { valor } = await preguntarCerrada(sesion, "menu", texto, MENU.repregunta, true);
     setEntendido("");
+    nuevoFlujo();
+    if (valor === "examenes") {
+      ({ valor } = await preguntarCerrada(sesion, "tipoExamen", TIPO_EXAMEN.texto, TIPO_EXAMEN.repregunta, true));
+      setEntendido("");
+    }
     elegirModulo(valor === "dolor" ? "trauma" : valor);
     if (valor === "generales" || valor === "preop") return flujoExamenes(sesion, valor);
-    if (valor === "derivacion") return flujoDerivacion(sesion);
+    if (valor === "hora") return flujoHora(sesion);
     return conversar(sesion);
   };
 
-  // ---------- hora con traumatologo ----------
-  const flujoDerivacion = async (sesion) => {
-    const { valor: zona } = await preguntarCerrada(
-      sesion, "zona", FRASES.derivacionZona, PREGUNTAS[0].repregunta, true,
-    );
-    ctxRef.current.zona = zona;
+  // ---------- "¿Te ayudo en algo mas?" ----------
+  const algoMas = async (sesion) => {
+    setFase("conversacion");
+    setProgreso(0);
+    setResumen(true);
+    const { valor } = await preguntarCerrada(sesion, "sino", FRASES.algoMas, FRASES.repreguntaAlgoMas, true);
+    if (valor) return menu(sesion, MENU.otraVez);
     setPregunta(null);
-    setFase("analizando");
-    await decir(sesion, FRASES.buscandoEspecialista);
-    const r = await recomendarEspecialista(zona);
+    setFase("fin");
+    await decir(sesion, FRASES.despedida);
+  };
+
+  // ---------- hora con un medico ----------
+  const flujoHora = async (sesion) => {
+    const medicos = await cargarMedicos();
     vigente(sesion);
-    setFase("derivacion");
-    await decir(sesion, r?.nota || FRASES.derivacionError);
+    if (!medicos.length) {
+      await decir(sesion, FRASES.sinMedicos);
+      return abrirAgenda(sesion, {});
+    }
+    const botones = [
+      ...medicos.map((m) => ({ etiqueta: m.name, valor: { medico: m } })),
+      { etiqueta: "No sé con quién", valor: { nosabe: true, zona: null } },
+    ];
+    let { valor } = await preguntarCerrada(
+      sesion, "medico", FRASES.queMedico, FRASES.repreguntaMedico, false,
+      (t) => interpretarMedico(t, medicos), botones,
+    );
+    if (valor.varios) {
+      const lista = valor.varios;
+      ({ valor } = await preguntarCerrada(
+        sesion, "medico", FRASES.cualMedico, FRASES.repreguntaCualMedico, true,
+        (t) => { const r = interpretarMedico(t, lista); return r?.medico ? r : null; },
+        lista.map((m) => ({ etiqueta: m.name, valor: { medico: m } })),
+      ));
+    }
+    if (valor.medico) return abrirAgenda(sesion, { medico: valor.medico });
+
+    // No sabe con quien: flujo de dolor completo (si ya dijo la zona, no se repregunta)
+    if (valor.zona) ctxRef.current.zona = valor.zona;
+    elegirModulo("trauma");
+    setEntendido("");
+    await decir(sesion, FRASES.ayudaDolor);
+    return conversar(sesion, { sinSaludo: true });
+  };
+
+  // ---------- agenda de la ficha clinica (iframe) ----------
+  const esperarAgenda = (sesion) =>
+    new Promise((resolve) => {
+      let timer = null;
+      const fin = (r) => {
+        if (agendaRef.current !== fin) return;
+        clearTimeout(timer);
+        agendaRef.current = null;
+        actividadRef.current = null;
+        esperaRef.current = null;
+        setEsperando(false);
+        escuchaRef.current?.pausar();
+        resolve(r);
+      };
+      const armar = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => fin({ recordatorio: true }), RECORDATORIO_MS);
+      };
+      agendaRef.current = fin;
+      actividadRef.current = armar;
+      esperaRef.current = fin; // voz y boton "volver"
+      setEsperando(true);
+      if (vozOkRef.current) escuchaRef.current?.reanudar();
+      armar();
+    }).then((r) => {
+      vigente(sesion);
+      return r;
+    });
+
+  // Boton "Volver con la asistente": funciona aunque ella este hablando
+  const volverDeAgenda = () => {
+    if (agendaRef.current) agendaRef.current({ valor: "volver", texto: "volver" });
+    else {
+      pendienteRef.current.volver = true;
+      callar();
+    }
+  };
+
+  const abrirAgenda = async (sesion, { medico = null, zona = null }) => {
+    const q = new URLSearchParams({ modo: "asistente" });
+    if (medico) q.set("dr", medico.id);
+    else {
+      if (zona) q.set("zona", zona);
+      const coords = await obtenerCoords();
+      vigente(sesion);
+      if (coords) { q.set("lat", String(coords.lat)); q.set("lon", String(coords.lon)); }
+    }
+    // Datos personales solo por postMessage, nunca en la URL
+    const d = datosRef.current;
+    const sexo = ctxRef.current.sexo || "";
+    prefillRef.current = d || sexo ? { rut: d?.rut || "", nombre: d?.nombre || "", email: d?.email || "", sexo } : null;
+    pendienteRef.current = {};
+
+    setPregunta(null);
+    setEntendido("");
+    setProgreso(0);
+    setAgenda({ url: `${RESERVAS_URL}/?${q.toString()}` });
+    setFase("agenda");
+    await decir(sesion, medico ? FRASES.agendaMedico(nombreEnVoz(medico.name))
+      : zona ? FRASES.agendaZona(zona.toLowerCase()) : FRASES.agendaGeneral);
+
+    for (;;) {
+      const p = pendienteRef.current;
+      pendienteRef.current = {};
+      const r = p.reservado ? { reservado: p.reservado } : p.volver ? { valor: "volver" } : await esperarAgenda(sesion);
+
+      if (r.reservado) {
+        setAgenda(null);
+        setReserva(r.reservado);
+        setFase("conversacion");
+        await decir(sesion, FRASES.horaReservada(
+          `${fechaEnVoz(r.reservado.date)} a las ${r.reservado.time}`,
+          nombreEnVoz(r.reservado.professionalName),
+          r.reservado.tipo === "telemedicina",
+        ));
+        return algoMas(sesion);
+      }
+      if (r.recordatorio) {
+        await decir(sesion, FRASES.recordatorioAgenda);
+        continue;
+      }
+      const accion = r.valor || interpretarVolver(r.texto);
+      if (accion === "volver") {
+        setAgenda(null);
+        return menu(sesion, MENU.volver);
+      }
+      if (accion === "seguir") await decir(sesion, FRASES.seguirAgenda);
+      // cualquier otra frase se ignora: sigue escuchando
+    }
   };
 
   // ---------- examenes generales / preoperatorio ----------
@@ -525,26 +764,49 @@ export default function PantallaAvatar({ onUsarFormulario }) {
   const preguntarOrden = async (sesion) => {
     const { valor } = await preguntarCerrada(sesion, "sino", FRASES.preguntarOrden, FRASES.repreguntarOrden);
     setPregunta(null);
-    if (!valor) {
-      setFase("fin");
-      await decir(sesion, FRASES.sinOrden);
-      return;
-    }
+    if (valor) await pedirOrden(sesion);
+    else await decir(sesion, FRASES.sinOrden);
+    return algoMas(sesion);
+  };
+
+  // Formulario de datos -> (resonancia) -> PDF. Termina cuando la orden esta lista.
+  const pedirOrden = async (sesion) => {
+    const lista = new Promise((resolve) => { ordenRef.current = resolve; });
     setFase("datos");
     await decir(sesion, FRASES.pedirDatos);
+    await lista;
+    vigente(sesion);
+  };
+
+  // Final del flujo de dolor: orden | hora | ambas | ninguna
+  const accionFinal = async (sesion) => {
+    const { valor } = await preguntarCerrada(sesion, "accion", ACCION_FINAL.texto, ACCION_FINAL.repregunta, true);
+    setPregunta(null);
+    if (valor === "ninguna") {
+      await decir(sesion, FRASES.sinOrden);
+      return algoMas(sesion);
+    }
+    if (valor === "orden" || valor === "ambas") await pedirOrden(sesion);
+    if (valor === "hora" || valor === "ambas") {
+      if (valor === "ambas") await decir(sesion, FRASES.ahoraHora);
+      return abrirAgenda(sesion, { zona: ctxRef.current.zona });
+    }
+    return algoMas(sesion);
   };
 
   // ---------- flujo de dolor ----------
-  const conversar = async (sesion) => {
+  // sinSaludo: viene de "no se con que medico" (ya se le explico)
+  const conversar = async (sesion, { sinSaludo = false } = {}) => {
     const ctx = ctxRef.current;
     const registro = registroRef.current;
     const aplicables = () => PREGUNTAS.filter((p) => !p.aplica || p.aplica(ctx));
 
     setFase("conversacion");
-    await decir(sesion, SALUDO);
+    if (!sinSaludo) await decir(sesion, SALUDO);
 
     for (const p of PREGUNTAS) {
       if (p.aplica && !p.aplica(ctx)) continue;
+      if (p.id === "zona" && ctx.zona) continue; // ya la dijo al pedir hora
       setProgreso(Math.round((aplicables().indexOf(p) / (aplicables().length + 1)) * 100));
       const texto = (p.textoSegun && p.textoSegun(ctx)) || p.texto;
 
@@ -617,17 +879,14 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     }
     vigente(sesion);
     setInforme({ ...resultado, marcadores, avisos: [...avisosRef.current] });
-    // Especialista que corresponde por zona y ubicacion (mismo resolver del backend)
-    const deriv = await recomendarEspecialista(ctx.zona);
-    vigente(sesion);
     setFase("resultado");
 
-    const voz = [...avisosRef.current, vozResultado(resultado), deriv?.nota || "", FRASES.cierre]
+    const voz = [...avisosRef.current, vozResultado(resultado), FRASES.cierre]
       .filter(Boolean)
       .join(" ");
     await decir(sesion, voz);
 
-    await preguntarOrden(sesion);
+    await accionFinal(sesion);
   };
 
   const comenzar = async () => {
@@ -646,10 +905,20 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     setOrdenUrl("");
     setError("");
     setProgreso(0);
-    setDerivacion(null);
     setMarcadas([]);
     setSeleccion([]);
     examenesRef.current = {};
+    ordenRef.current = null;
+    datosRef.current = null;
+    agendaRef.current = null;
+    actividadRef.current = null;
+    prefillRef.current = null;
+    pendienteRef.current = {};
+    setAgenda(null);
+    setReserva(null);
+    setResumen(false);
+    setConCorreo(false);
+    conCorreoRef.current = false;
     elegirModulo("trauma");
     setAvisoMic("");
     vozOkRef.current = escuchaSoportada;
@@ -701,6 +970,10 @@ export default function PantallaAvatar({ onUsarFormulario }) {
       setOrdenUrl(URL.createObjectURL(blob));
       setFase("lista");
       await hablar(conCorreoRef.current ? FRASES.ordenListaCorreo : FRASES.ordenLista);
+      // el flujo sigue (hora con el especialista o "¿algo mas?")
+      const listo = ordenRef.current;
+      ordenRef.current = null;
+      listo?.();
     } catch {
       setError("No se pudo generar la orden. Intenta de nuevo.");
       setFase("datos");
@@ -709,6 +982,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
 
   const enviarDatos = async (datos) => {
     setError("");
+    datosRef.current = datos; // para prellenar la reserva si tambien pide hora
     const ctx = ctxRef.current;
     const geo = leerGeo() || undefined;
     try {
@@ -771,7 +1045,8 @@ export default function PantallaAvatar({ onUsarFormulario }) {
 
   const soportado = vozSoportada;
   const enCurso = fase !== "inicio";
-  const avatarGrande = ["inicio", "conversacion", "urgencia", "fin", "analizando", "derivacion"].includes(fase);
+  const avatarGrande = ["inicio", "conversacion", "urgencia", "fin", "analizando"].includes(fase) && !resumen;
+  const verResumen = resumen && ["conversacion", "fin"].includes(fase);
 
   return (
     <div className="app" style={S.pagina}>
@@ -783,14 +1058,16 @@ export default function PantallaAvatar({ onUsarFormulario }) {
         </div>
       </header>
 
-      <main style={S.main}>
-        <div style={{ ...S.avatar, ...(avatarGrande ? {} : S.avatarChico) }}>
-          <Avatar estado={estadoAvatar} boca={boca} />
-        </div>
+      <main style={{ ...S.main, ...(fase === "agenda" ? S.mainAgenda : null) }}>
+        {fase !== "agenda" && (
+          <div style={{ ...S.avatar, ...(avatarGrande ? {} : S.avatarChico) }}>
+            <Avatar estado={estadoAvatar} boca={boca} />
+          </div>
+        )}
 
         {avisoMic && enCurso && <p style={S.aviso}>{avisoMic}</p>}
 
-        {enCurso && fase === "conversacion" && modulo !== "derivacion" && progreso > 0 && (
+        {enCurso && fase === "conversacion" && modulo !== "hora" && progreso > 0 && (
           <div style={S.barra}><div style={{ ...S.barraLlena, width: `${progreso}%` }} /></div>
         )}
 
@@ -799,8 +1076,8 @@ export default function PantallaAvatar({ onUsarFormulario }) {
           <section style={S.tarjetaCentro}>
             <h1 style={S.titulo}>Hola, soy tu asistente médica</h1>
             <p style={S.texto}>
-              Cuéntame qué necesitas: orientarte por un dolor, exámenes generales, exámenes antes de una
-              cirugía u hora con un traumatólogo. Te respondo por voz y, si lo necesitas, te entrego la orden.
+              Cuéntame qué necesitas: una hora con un médico, orientarte por un dolor, o exámenes generales
+              o para una cirugía. Te respondo por voz, te entrego la orden y te ayudo a reservar tu hora.
             </p>
             <p style={S.legal}>Al comenzar, el navegador te pedirá permiso para usar el micrófono: toca "Permitir".</p>
             {!soportado && (
@@ -809,6 +1086,111 @@ export default function PantallaAvatar({ onUsarFormulario }) {
             <button type="button" style={S.btnPrimario} onClick={comenzar}>Comenzar</button>
             <button type="button" style={S.enlace} onClick={onUsarFormulario}>Prefiero usar el formulario</button>
             <p style={S.legal}>Orientación preliminar. No reemplaza la evaluación presencial con un especialista.</p>
+          </section>
+        )}
+
+        {/* ---------- PUNTOS DOLOROSOS ---------- */}
+        {fase === "puntos" && (
+          <section style={S.tarjeta}>
+            <p style={S.preguntaTexto}>Marca dónde te duele y toca guardar.</p>
+            <GenericMapper
+              mapperId={resolveZonaKey(ctxRef.current.zona)}
+              ladoInicial={(ctxRef.current.lado || "derecha").toLowerCase()}
+              vistaInicial="frente"
+              onSave={(r) => terminarPuntos(r)}
+              onVolver={() => terminarPuntos(null)}
+            />
+            <button type="button" style={S.enlace} onClick={() => terminarPuntos(null)}>Omitir este paso</button>
+          </section>
+        )}
+
+        {fase === "analizando" && <p style={S.estado}>Revisando tu información…</p>}
+
+        {/* ---------- URGENCIA ---------- */}
+        {fase === "urgencia" && (
+          <section style={{ ...S.tarjetaCentro, ...S.tarjetaAlerta }}>
+            <h2 style={S.tituloAlerta}>Necesitas evaluación médica pronto</h2>
+            <p style={S.texto}>{FRASES.urgencia}</p>
+            <button type="button" style={S.btnSecundario} onClick={comenzar}>Volver a empezar</button>
+          </section>
+        )}
+
+        {/* ---------- RESULTADO (y pregunta por la orden / la hora) ---------- */}
+        {informe && (["resultado", "datos", "resonancia", "generando", "lista", "fin"].includes(fase) || verResumen) && (
+          <section style={S.tarjeta}>
+            {informe.diagnosticos.length > 0 && (
+              <>
+                <p style={S.rotulo}>Diagnóstico presuntivo</p>
+                <ul style={S.lista}>{informe.diagnosticos.map((d, i) => <li key={i}>{d}</li>)}</ul>
+              </>
+            )}
+            {informe.explicacion && (
+              <>
+                <p style={S.rotulo}>Fundamento</p>
+                <p style={S.texto}>{informe.explicacion}</p>
+              </>
+            )}
+            {informe.tipoCirugia && (
+              <>
+                <p style={S.rotulo}>Cirugía</p>
+                <p style={S.texto}>{informe.tipoCirugia}</p>
+              </>
+            )}
+            {modulo !== "trauma" && marcadas.length > 0 && (
+              <>
+                <p style={S.rotulo}>Antecedentes</p>
+                <div style={{ ...S.chips, justifyContent: "flex-start" }}>
+                  {marcadas.map((m, i) => <span key={i} style={S.chip}>{m}</span>)}
+                </div>
+              </>
+            )}
+            {informe.examenes.length > 0 && (
+              <>
+                <p style={S.rotulo}>{modulo === "preop" ? "Exámenes preoperatorios" : modulo === "generales" ? "Exámenes generales" : "Exámenes propuestos"}</p>
+                <ul style={S.lista}>{informe.examenes.map((e, i) => <li key={i}>{e}</li>)}</ul>
+              </>
+            )}
+            {informe.avisos?.map((m, i) => <p key={i} style={{ ...S.aviso, marginTop: 10 }}>{m}</p>)}
+            <p style={S.legal}>{FRASES.cierre}</p>
+
+            {fase === "resultado" && pregunta && (
+              <>
+                <p style={S.preguntaTexto}>{pregunta.texto}</p>
+                {vozOkRef.current && esperando && (
+                  <p style={S.escuchando}>{escucha.parcial ? <em>{escucha.parcial}</em> : "Te escucho…"}</p>
+                )}
+                {entendido && <p style={S.entendido}>{entendido}</p>}
+                <div style={S.opciones}>
+                  {(pregunta.tipo === "accion" ? ACCION_FINAL.opciones : [
+                    { etiqueta: "Sí, quiero la orden", valor: true },
+                    { etiqueta: "No, gracias", valor: false },
+                  ]).map((o, i) => (
+                    <button key={i} type="button" style={S.opcion} onClick={() => responderEnPantalla(o.valor)}>{o.etiqueta}</button>
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+        )}
+
+        {/* ---------- LO QUE YA QUEDO LISTO (al preguntar "¿algo mas?" y al final) ---------- */}
+        {verResumen && (reserva || ordenUrl) && (
+          <section style={S.tarjeta}>
+            {reserva && (
+              <>
+                <p style={{ ...S.rotulo, marginTop: 0 }}>Tu hora reservada</p>
+                {reserva.professionalName && <p style={S.derivNombre}>{reserva.professionalName}</p>}
+                <p style={S.texto}>
+                  {fechaEnVoz(reserva.date).replace(/^./, (c) => c.toUpperCase())} · {reserva.time} · {reserva.tipo === "telemedicina" ? "Telemedicina" : "Presencial"}
+                </p>
+                <p style={S.legal}>Te llegará la confirmación por correo.</p>
+              </>
+            )}
+            {ordenUrl && (
+              <a href={ordenUrl} download={ORDEN[modulo]?.archivo || "orden_ICA.pdf"} style={{ ...S.btnSecundario, display: "inline-block", marginTop: reserva ? 12 : 0, textDecoration: "none" }}>
+                Descargar orden
+              </a>
+            )}
           </section>
         )}
 
@@ -847,10 +1229,10 @@ export default function PantallaAvatar({ onUsarFormulario }) {
             )}
 
             {/* Respaldo: botones para preguntas cerradas */}
-            {pregunta.respaldo && OPCIONES[pregunta.tipo] && (
+            {pregunta.respaldo && (pregunta.opciones || OPCIONES[pregunta.tipo]) && (
               <div style={S.opciones}>
-                {OPCIONES[pregunta.tipo].map((o) => (
-                  <button key={String(o.valor)} type="button" style={S.opcion} onClick={() => responderEnPantalla(o.valor)}>
+                {(pregunta.opciones || OPCIONES[pregunta.tipo]).map((o, i) => (
+                  <button key={i} type="button" style={S.opcion} onClick={() => responderEnPantalla(o.valor)}>
                     {o.etiqueta}
                   </button>
                 ))}
@@ -899,91 +1281,21 @@ export default function PantallaAvatar({ onUsarFormulario }) {
           </section>
         )}
 
-        {/* ---------- PUNTOS DOLOROSOS ---------- */}
-        {fase === "puntos" && (
-          <section style={S.tarjeta}>
-            <p style={S.preguntaTexto}>Marca dónde te duele y toca guardar.</p>
-            <GenericMapper
-              mapperId={resolveZonaKey(ctxRef.current.zona)}
-              ladoInicial={(ctxRef.current.lado || "derecha").toLowerCase()}
-              vistaInicial="frente"
-              onSave={(r) => terminarPuntos(r)}
-              onVolver={() => terminarPuntos(null)}
-            />
-            <button type="button" style={S.enlace} onClick={() => terminarPuntos(null)}>Omitir este paso</button>
-          </section>
-        )}
-
-        {fase === "analizando" && <p style={S.estado}>Revisando tu información…</p>}
-
-        {/* ---------- URGENCIA ---------- */}
-        {fase === "urgencia" && (
-          <section style={{ ...S.tarjetaCentro, ...S.tarjetaAlerta }}>
-            <h2 style={S.tituloAlerta}>Necesitas evaluación médica pronto</h2>
-            <p style={S.texto}>{FRASES.urgencia}</p>
-            <button type="button" style={S.btnSecundario} onClick={comenzar}>Volver a empezar</button>
-          </section>
-        )}
-
-        {/* ---------- RESULTADO (y pregunta por la orden) ---------- */}
-        {informe && ["resultado", "datos", "resonancia", "generando", "lista", "fin"].includes(fase) && (
-          <section style={S.tarjeta}>
-            {informe.diagnosticos.length > 0 && (
-              <>
-                <p style={S.rotulo}>Diagnóstico presuntivo</p>
-                <ul style={S.lista}>{informe.diagnosticos.map((d, i) => <li key={i}>{d}</li>)}</ul>
-              </>
-            )}
-            {informe.explicacion && (
-              <>
-                <p style={S.rotulo}>Fundamento</p>
-                <p style={S.texto}>{informe.explicacion}</p>
-              </>
-            )}
-            {informe.tipoCirugia && (
-              <>
-                <p style={S.rotulo}>Cirugía</p>
-                <p style={S.texto}>{informe.tipoCirugia}</p>
-              </>
-            )}
-            {modulo !== "trauma" && marcadas.length > 0 && (
-              <>
-                <p style={S.rotulo}>Antecedentes</p>
-                <div style={{ ...S.chips, justifyContent: "flex-start" }}>
-                  {marcadas.map((m, i) => <span key={i} style={S.chip}>{m}</span>)}
-                </div>
-              </>
-            )}
-            {informe.examenes.length > 0 && (
-              <>
-                <p style={S.rotulo}>{modulo === "preop" ? "Exámenes preoperatorios" : modulo === "generales" ? "Exámenes generales" : "Exámenes propuestos"}</p>
-                <ul style={S.lista}>{informe.examenes.map((e, i) => <li key={i}>{e}</li>)}</ul>
-              </>
-            )}
-            {informe.avisos?.map((m, i) => <p key={i} style={{ ...S.aviso, marginTop: 10 }}>{m}</p>)}
-            {derivacion && <TarjetaDerivacion d={derivacion} />}
-            <p style={S.legal}>{FRASES.cierre}</p>
-
-            {fase === "resultado" && pregunta && (
-              <>
-                <p style={S.preguntaTexto}>{pregunta.texto}</p>
-                {vozOkRef.current && esperando && (
-                  <p style={S.escuchando}>{escucha.parcial ? <em>{escucha.parcial}</em> : "Te escucho…"}</p>
-                )}
-                <div style={S.opciones}>
-                  <button type="button" style={S.opcion} onClick={() => responderEnPantalla(true)}>Sí, quiero la orden</button>
-                  <button type="button" style={S.opcion} onClick={() => responderEnPantalla(false)}>No, gracias</button>
-                </div>
-              </>
-            )}
-          </section>
-        )}
-
-        {/* ---------- HORA CON TRAUMATOLOGO ---------- */}
-        {fase === "derivacion" && (
-          <section style={S.tarjetaCentro}>
-            {derivacion ? <TarjetaDerivacion d={derivacion} /> : <p style={S.texto}>{FRASES.derivacionError}</p>}
-            <a href="https://www.icarticular.cl" target="_blank" rel="noopener noreferrer" style={S.btnPrimario}>Agendar hora</a>
+        {/* ---------- AGENDA DE LA FICHA CLINICA ---------- */}
+        {fase === "agenda" && agenda && (
+          <section style={S.agenda}>
+            {/* Barra compacta: la agenda usa casi toda la pantalla */}
+            <div style={S.agendaBarra}>
+              <div style={S.avatarMini}><Avatar estado={estadoAvatar} boca={boca} /></div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <button type="button" style={S.btnSecundario} onClick={volverDeAgenda}>← Volver con la asistente</button>
+                {vozOkRef.current && esperando && <p style={{ ...S.escuchando, margin: "4px 0 0", fontSize: 12 }}>O dime "volver".</p>}
+              </div>
+              {ordenUrl && (
+                <a href={ordenUrl} download={ORDEN.trauma.archivo} style={S.enlace}>Descargar orden</a>
+              )}
+            </div>
+            <iframe ref={iframeRef} src={agenda.url} title="Agenda de horas" style={S.iframe} />
           </section>
         )}
 
@@ -1014,33 +1326,10 @@ export default function PantallaAvatar({ onUsarFormulario }) {
           </div>
         )}
 
-        {["fin", "lista", "derivacion"].includes(fase) && (
+        {fase === "fin" && (
           <button type="button" style={S.enlace} onClick={comenzar}>Nueva consulta</button>
         )}
       </main>
-    </div>
-  );
-}
-
-// ---------- especialista recomendado (respuesta de /resolver-derivacion) ----------
-function TarjetaDerivacion({ d }) {
-  const doc = d.doctor;
-  return (
-    <div style={S.derivacion}>
-      <p style={{ ...S.rotulo, marginTop: 0 }}>Especialista recomendado</p>
-      {doc ? (
-        <>
-          <p style={S.derivNombre}>{doc.nombre}</p>
-          {doc.especialidad && <p style={S.texto}>{doc.especialidad}</p>}
-          {doc.agenda && <p style={S.texto}>{doc.agenda}</p>}
-        </>
-      ) : (
-        <p style={S.texto}>{d.nota}</p>
-      )}
-      {!doc && d.sede?.nombre && <p style={S.texto}>{d.sede.nombre}</p>}
-      {doc?.contactoWeb && (
-        <a href={doc.contactoWeb} target="_blank" rel="noopener noreferrer" style={S.enlace}>Agendar hora</a>
-      )}
     </div>
   );
 }
@@ -1105,6 +1394,11 @@ const S = {
   logo: { width: 40, height: 40, objectFit: "cover", borderRadius: 8 },
   marca: { margin: 0, fontWeight: 700, fontSize: 15 },
   sub: { margin: 0, fontSize: 12, color: "#9CA3AF" },
+  mainAgenda: { maxWidth: 980, paddingBottom: 16 },
+  agenda: { width: "100%", display: "flex", flexDirection: "column", gap: 8 },
+  agendaBarra: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
+  avatarMini: { width: 52, aspectRatio: "400 / 460", flexShrink: 0 },
+  iframe: { width: "100%", height: "calc(100svh - 170px)", minHeight: 480, border: "1px solid #D1D8E5", borderRadius: 16, background: "#fff" },
   main: { maxWidth: 560, margin: "0 auto", padding: "16px 16px 40px", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 },
   avatar: { width: "min(62vw, 260px)", aspectRatio: "400 / 460", transition: "width 0.3s ease" },
   avatarChico: { width: "min(34vw, 140px)" },
@@ -1126,7 +1420,6 @@ const S = {
   opcionActiva: { background: ACENTO, color: "#fff" },
   chips: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10, justifyContent: "center" },
   chip: { fontSize: 13, padding: "4px 10px", borderRadius: 999, background: "#E8F0FA", color: PRIMARIO },
-  derivacion: { marginTop: 12, padding: 12, borderRadius: 12, background: "#F0F6FC", border: "1px solid #CFE0F2", textAlign: "left", width: "100%", boxSizing: "border-box" },
   derivNombre: { margin: "2px 0", fontSize: 17, fontWeight: 700, color: PRIMARIO },
   escribir: { display: "flex", gap: 8, marginTop: 12, alignItems: "flex-end" },
   filaEscribir: { display: "flex", gap: 8, marginTop: 10 },
