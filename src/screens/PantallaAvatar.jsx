@@ -34,6 +34,17 @@
 //    correo van por postMessage. Boton y voz "volver"; a los 2 minutos sin actividad
 //    pregunta "¿Ya tomaste una decision?"; al reservar confirma la hora por voz.
 //
+// ESPALDA: si dice solo "espalda", marca en el dibujo posterior (EsquemaPosterior de
+//    ICA) si es cervical, dorsal o lumbar (tambien por voz: cuello / medio / abajo).
+//
+// SOLO ORDEN: al terminar la orden recomienda al especialista (el mismo que sale
+//    impreso en la orden, /resolver-derivacion) y ofrece buscarle hora con el.
+//
+// WIDGET (?modo=widget dentro de un iframe de icarticular.cl / hipokratia.health):
+//    muestra solo una burbuja "¿Te ayudo?"; al tocarla avisa a la pagina para que
+//    agrande el iframe y la asistente parte hablando al tiro (el toque ocurre en esta
+//    pagina, como exige el navegador para voz y microfono). La ✕ la vuelve a burbuja.
+//
 // MICROFONO: al tocar "Comenzar" se pide permiso con getUserMedia (dentro del toque,
 // como exige el navegador). Si no hay permiso o microfono, se avisa en pantalla y
 // todo sigue con botones y texto. Si el paciente no responde en 10 s, aparecen
@@ -53,7 +64,9 @@ import {
   esRespuestaVacia, construirConsulta, leerInforme, vozResultado, incluyeResonancia,
   formatearRut, validarRut, interpretarMenu, interpretarItems, interpretarCirugia, vozExamenes,
   interpretarTipoExamen, interpretarMedico, interpretarAccionFinal, interpretarVolver, nombreEnVoz,
+  interpretarNivelColumna,
 } from "../avatar/interpretar.js";
+import EsquemaPosterior from "../EsquemaPosterior.jsx";
 import GenericMapper from "../mappers/GenericMapper.jsx";
 import { resolveZonaKey } from "../mappers/mapperRegistry.js";
 import FormularioResonancia from "../components/FormularioResonancia.jsx";
@@ -92,6 +105,29 @@ function leerGeo() {
   } catch {
     return null;
   }
+}
+
+// ---------- modo widget (burbuja en www.icarticular.cl) ----------
+const ORIGEN_WIDGET = /^https:\/\/([a-z0-9-]+\.)*(icarticular\.cl|hipokratia\.health)$/;
+const MODO_WIDGET = (() => {
+  try {
+    return window.parent !== window && new URLSearchParams(window.location.search).get("modo") === "widget";
+  } catch {
+    return false;
+  }
+})();
+
+// Origen de la pagina que contiene la burbuja, solo si es de confianza
+function origenWidget() {
+  let origen = "";
+  try { origen = window.location.ancestorOrigins?.[0] || ""; } catch {}
+  if (!origen) { try { origen = new URL(document.referrer).origin; } catch {} }
+  return ORIGEN_WIDGET.test(origen) ? origen : null;
+}
+
+function avisarWidget(estado) {
+  const origen = origenWidget();
+  if (MODO_WIDGET && origen) window.parent.postMessage({ fuente: "ica-asistente", tipo: "widget", estado }, origen);
 }
 
 // Profesionales publicos de ICA en la ficha clinica: [{ id, name, specialty }]
@@ -224,6 +260,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
   const [agenda, setAgenda] = useState(null);         // { url } de la pagina de reservas
   const [reserva, setReserva] = useState(null);       // hora reservada { date, time, professionalName, tipo }
   const [resumen, setResumen] = useState(false);      // muestra orden/hora al preguntar "¿algo mas?"
+  const [abierto, setAbierto] = useState(!MODO_WIDGET); // widget: burbuja cerrada / asistente abierta
 
   const { hablar, callar, desbloquear, hablando, boca } = useVoz();
 
@@ -348,6 +385,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     menu: interpretarMenu,
     tipoExamen: interpretarTipoExamen,
     accion: interpretarAccionFinal,
+    columna: interpretarNivelColumna,
     cirugia: (t) => interpretarCirugia(t)?.valor || null,
   };
 
@@ -359,6 +397,11 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     menu: MENU.opciones,
     tipoExamen: TIPO_EXAMEN.opciones,
     accion: ACCION_FINAL.opciones,
+    columna: [
+      { etiqueta: "Cuello", valor: "Columna cervical" },
+      { etiqueta: "Parte media", valor: "Columna dorsal" },
+      { etiqueta: "Parte baja", valor: "Columna lumbar" },
+    ],
     cirugia: CIRUGIAS.map((c) => ({ etiqueta: c.etiqueta, valor: c.valor })),
   };
 
@@ -371,6 +414,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
     menu: (v) => (v === "examenes" ? "Exámenes" : MENU.opciones.find((o) => o.valor === v)?.etiqueta || v),
     tipoExamen: (v) => TIPO_EXAMEN.opciones.find((o) => o.valor === v)?.etiqueta || v,
     accion: (v) => ACCION_FINAL.opciones.find((o) => o.valor === v)?.etiqueta || v,
+    columna: (v) => v,
     medico: (v) => (v.medico ? v.medico.name : v.varios ? v.varios.map((m) => m.name).join(" o ") : "No sé con quién"),
     cirugia: (v) => CIRUGIAS.find((c) => c.valor === v)?.etiqueta || v,
   };
@@ -791,7 +835,46 @@ export default function PantallaAvatar({ onUsarFormulario }) {
       if (valor === "ambas") await decir(sesion, FRASES.ahoraHora);
       return abrirAgenda(sesion, { zona: ctxRef.current.zona });
     }
-    return algoMas(sesion);
+    return recomendarEspecialista(sesion);
+  };
+
+  // Solo pidio la orden: recomienda al especialista (el mismo que sale impreso en
+  // la orden) y ofrece buscarle hora con el
+  const recomendarEspecialista = async (sesion) => {
+    const zona = ctxRef.current.zona;
+    let doctor = null;
+    try {
+      const r = await postJSON("/resolver-derivacion", { dolor: zona, geo: leerGeo() || undefined });
+      doctor = r?.doctor?.nombre ? r.doctor : null;
+    } catch {
+      // sin recomendacion: igual se ofrece hora con un especialista
+    }
+    vigente(sesion);
+    setFase("conversacion");
+    setProgreso(0);
+    setResumen(true);
+    const texto = doctor
+      ? FRASES.recomendar(nombreEnVoz(doctor.nombre), String(zona || "").toLowerCase())
+      : FRASES.recomendarSinMedico;
+    const { valor } = await preguntarCerrada(sesion, "sino", texto, FRASES.repreguntaRecomendar, true);
+    setPregunta(null);
+    if (!valor) return algoMas(sesion);
+    // El recomendado en la agenda de la ficha (si no esta, los especialistas de la zona)
+    let medico = null;
+    if (doctor) {
+      const medicos = await cargarMedicos();
+      vigente(sesion);
+      medico = interpretarMedico(doctor.nombre, medicos)?.medico || null;
+    }
+    return abrirAgenda(sesion, medico ? { medico } : { zona });
+  };
+
+  // Dijo solo "espalda": marca en el dibujo posterior (o dice) cervical, dorsal o lumbar
+  const elegirNivelColumna = async (sesion) => {
+    const { valor } = await preguntarCerrada(
+      sesion, "columna", FRASES.nivelColumna, FRASES.repreguntaNivelColumna, true,
+    );
+    return valor;
   };
 
   // ---------- flujo de dolor ----------
@@ -806,7 +889,11 @@ export default function PantallaAvatar({ onUsarFormulario }) {
 
     for (const p of PREGUNTAS) {
       if (p.aplica && !p.aplica(ctx)) continue;
-      if (p.id === "zona" && ctx.zona) continue; // ya la dijo al pedir hora
+      if (p.id === "zona" && ctx.zona) {
+        // ya la dijo al pedir hora; si fue solo "espalda", se precisa en el dibujo
+        if (ctx.zona === "Espalda") ctx.zona = await elegirNivelColumna(sesion);
+        continue;
+      }
       setProgreso(Math.round((aplicables().indexOf(p) / (aplicables().length + 1)) * 100));
       const texto = (p.textoSegun && p.textoSegun(ctx)) || p.texto;
 
@@ -819,6 +906,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
 
       const { valor, texto: dicho } = await preguntarCerrada(sesion, p.tipo, texto, p.repregunta);
       if (["zona", "lado", "edad", "sexo"].includes(p.tipo)) ctx[p.id] = valor;
+      if (p.tipo === "zona" && valor === "Espalda") ctx.zona = await elegirNivelColumna(sesion);
       if (p.tipo === "sino") {
         registro.push({ id: p.id, bandera: p.bandera, resumen: p.resumen, pregunta: texto, respuesta: dicho, valor });
         if (valor === true && p.bandera === "grave") {
@@ -1043,19 +1131,63 @@ export default function PantallaAvatar({ onUsarFormulario }) {
   const estadoAvatar = hablando ? "hablando" : fase === "analizando" || fase === "generando" ? "pensando"
     : esperando && escucha.escuchando ? "escuchando" : "reposo";
 
+  // ---------- widget ----------
+  useEffect(() => {
+    if (!MODO_WIDGET) return;
+    // La burbuja flota sobre la pagina: fondo transparente
+    document.documentElement.style.background = "transparent";
+    document.body.style.background = "transparent";
+  }, []);
+
+  // El toque ocurre en esta pagina: la voz y el microfono quedan autorizados
+  const abrirWidget = () => {
+    setAbierto(true);
+    avisarWidget("abierto");
+    comenzar();
+  };
+
+  const cerrarWidget = () => {
+    sesionRef.current += 1; // corta la conversacion en curso
+    callar();
+    escuchaRef.current?.pausar();
+    esperaRef.current = null;
+    agendaRef.current = null;
+    actividadRef.current = null;
+    setEsperando(false);
+    setPregunta(null);
+    setAgenda(null);
+    setFase("inicio");
+    setAbierto(false);
+    avisarWidget("cerrado");
+  };
+
   const soportado = vozSoportada;
   const enCurso = fase !== "inicio";
   const avatarGrande = ["inicio", "conversacion", "urgencia", "fin", "analizando"].includes(fase) && !resumen;
   const verResumen = resumen && ["conversacion", "fin"].includes(fase);
 
+  if (MODO_WIDGET && !abierto) {
+    return (
+      <div style={S.widgetCaja}>
+        <button type="button" style={S.widgetBoton} onClick={abrirWidget} aria-label="Abrir la asistente">
+          <span style={S.widgetCara}><Avatar estado="reposo" boca={0} /></span>
+          <span style={S.widgetTexto}>¿Te ayudo?</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="app" style={S.pagina}>
+    <div className="app" style={{ ...S.pagina, ...(fase === "agenda" || MODO_WIDGET ? S.paginaAncha : null) }}>
       <header style={S.cabecera}>
         <img src={logoICA} alt="ICA" style={S.logo} />
-        <div>
+        <div style={{ flex: 1 }}>
           <p style={S.marca}>Instituto de Cirugía Articular</p>
           <p style={S.sub}>Asistente de consulta</p>
         </div>
+        {MODO_WIDGET && (
+          <button type="button" style={S.cerrar} onClick={cerrarWidget} aria-label="Cerrar la asistente">✕</button>
+        )}
       </header>
 
       <main style={{ ...S.main, ...(fase === "agenda" ? S.mainAgenda : null) }}>
@@ -1084,7 +1216,9 @@ export default function PantallaAvatar({ onUsarFormulario }) {
               <p style={S.aviso}>Tu navegador no permite voz. Igual puedes responder tocando o escribiendo.</p>
             )}
             <button type="button" style={S.btnPrimario} onClick={comenzar}>Comenzar</button>
-            <button type="button" style={S.enlace} onClick={onUsarFormulario}>Prefiero usar el formulario</button>
+            {!MODO_WIDGET && (
+              <button type="button" style={S.enlace} onClick={onUsarFormulario}>Prefiero usar el formulario</button>
+            )}
             <p style={S.legal}>Orientación preliminar. No reemplaza la evaluación presencial con un especialista.</p>
           </section>
         )}
@@ -1236,6 +1370,15 @@ export default function PantallaAvatar({ onUsarFormulario }) {
                     {o.etiqueta}
                   </button>
                 ))}
+              </div>
+            )}
+            {/* Espalda: dibujo posterior, solo la columna se puede marcar */}
+            {pregunta.tipo === "columna" && (
+              <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
+                <EsquemaPosterior
+                  width={300}
+                  onSeleccionZona={(z) => { if (String(z).startsWith("Columna")) responderEnPantalla(z); }}
+                />
               </div>
             )}
             {pregunta.respaldo && pregunta.tipo === "edad" && (
@@ -1394,7 +1537,14 @@ const S = {
   logo: { width: 40, height: 40, objectFit: "cover", borderRadius: 8 },
   marca: { margin: 0, fontWeight: 700, fontSize: 15 },
   sub: { margin: 0, fontSize: 12, color: "#9CA3AF" },
-  mainAgenda: { maxWidth: 980, paddingBottom: 16 },
+  // agenda y widget: sin los margenes de .app (en el celular la agenda quedaba angosta)
+  paginaAncha: { padding: 0, maxWidth: "none" },
+  mainAgenda: { maxWidth: 980, width: "100%", boxSizing: "border-box", padding: "10px 8px 12px" },
+  cerrar: { font: "inherit", fontSize: 20, lineHeight: 1, color: "#fff", background: "transparent", border: "1px solid #4B5563", borderRadius: 10, padding: "8px 12px", cursor: "pointer" },
+  widgetCaja: { position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", padding: 6, boxSizing: "border-box", background: "transparent" },
+  widgetBoton: { display: "flex", alignItems: "center", gap: 8, font: "inherit", fontSize: 15, fontWeight: 700, color: "#fff", background: PRIMARIO, border: "none", borderRadius: 999, padding: "6px 16px 6px 6px", cursor: "pointer", boxShadow: "0 6px 18px rgba(15,23,42,0.30)" },
+  widgetCara: { width: 52, aspectRatio: "400 / 460", display: "block", background: "#fff", borderRadius: 999, overflow: "hidden" },
+  widgetTexto: { whiteSpace: "nowrap" },
   agenda: { width: "100%", display: "flex", flexDirection: "column", gap: 8 },
   agendaBarra: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
   avatarMini: { width: 52, aspectRatio: "400 / 460", flexShrink: 0 },
