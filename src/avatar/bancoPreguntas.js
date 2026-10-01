@@ -19,7 +19,8 @@
  *
  * Ademas del dolor (PREGUNTAS), aqui estan el menu inicial, las enfermedades
  * previas por grupos (examenes generales y preoperatorios), los tipos de
- * cirugia y las frases de cada flujo.
+ * cirugia, la pregunta final (orden / hora / ambas) y las frases de cada flujo
+ * (incluida la reserva de hora en la agenda de la ficha clinica).
  */
 
 export const ZONAS = [
@@ -32,14 +33,40 @@ export const esColumna = (zona) => String(zona || "").toLowerCase().startsWith("
 // ---------------- Menu inicial ----------------
 export const MENU = {
   texto:
-    "Hola, soy la asistente del Instituto de Cirugía Articular. ¿En qué te ayudo? Puedes decirme si tienes un dolor, " +
-    "si necesitas exámenes generales, exámenes antes de una cirugía, o si quieres hora con un traumatólogo.",
-  repregunta: "Perdón, no te entendí. ¿Tienes un dolor, necesitas exámenes generales, exámenes para una cirugía, o quieres hora con un traumatólogo?",
+    "Hola, soy la asistente del Instituto de Cirugía Articular. ¿En qué te ayudo? Puedo buscarte hora con un médico, " +
+    "ayudarte si tienes un dolor, o prepararte exámenes.",
+  // Cuando vuelve al menu despues de terminar algo
+  otraVez: "¿En qué te ayudo? Puedo buscarte hora con un médico, ayudarte si tienes un dolor, o prepararte exámenes.",
+  // Cuando vuelve desde la agenda sin reservar
+  volver: "Aquí estoy. ¿En qué te ayudo? Puedo buscarte hora con un médico, ayudarte si tienes un dolor, o prepararte exámenes.",
+  repregunta: "Perdón, no te entendí. ¿Quieres hora con un médico, tienes un dolor, o necesitas exámenes?",
   opciones: [
+    { etiqueta: "Hora con un médico", valor: "hora" },
     { etiqueta: "Tengo un dolor", valor: "dolor" },
     { etiqueta: "Exámenes generales", valor: "generales" },
     { etiqueta: "Exámenes para una cirugía", valor: "preop" },
-    { etiqueta: "Hora con traumatólogo", valor: "derivacion" },
+  ],
+};
+
+// Si dijo solo "examenes", se pregunta cuales
+export const TIPO_EXAMEN = {
+  texto: "¿Necesitas exámenes generales, o exámenes antes de una cirugía?",
+  repregunta: "¿Son exámenes generales, o para una cirugía?",
+  opciones: [
+    { etiqueta: "Exámenes generales", valor: "generales" },
+    { etiqueta: "Exámenes para una cirugía", valor: "preop" },
+  ],
+};
+
+// Al final del flujo de dolor
+export const ACCION_FINAL = {
+  texto: "¿Te hago la orden de exámenes, o te busco hora con el especialista más adecuado?",
+  repregunta: "¿Quieres la orden de exámenes, una hora con el especialista, o ambas?",
+  opciones: [
+    { etiqueta: "Orden de exámenes", valor: "orden" },
+    { etiqueta: "Hora con especialista", valor: "hora" },
+    { etiqueta: "Ambas", valor: "ambas" },
+    { etiqueta: "No, gracias", valor: "ninguna" },
   ],
 };
 
@@ -274,10 +301,26 @@ export const FRASES = {
   enfermedades: "Ahora te preguntaré por algunas enfermedades.",
   analizandoExamenes: "Gracias. Estoy preparando tu propuesta de exámenes, dame un momento.",
   errorExamenes: "Tuve un problema para preparar tus exámenes. Intenta de nuevo en un momento.",
-  // ---- derivacion ----
-  derivacionZona: "Claro. ¿En qué parte del cuerpo es tu problema? Así te recomiendo al especialista que corresponde.",
-  buscandoEspecialista: "Déjame ver qué especialista te corresponde.",
-  derivacionError: "No pude buscar el especialista en este momento. Puedes agendar en icarticular punto ce ele.",
+  // ---- hora con un medico ----
+  queMedico: "¿Con qué médico quieres la hora? Dime su nombre. Si no sabes con quién, dime no sé, y te ayudo según tu dolor.",
+  repreguntaMedico: "No encontré ese nombre. Dime el apellido del médico, o toca su nombre en la pantalla. Si no sabes con quién, dime no sé.",
+  cualMedico: "Tengo más de un médico con ese nombre. ¿Con cuál quieres la hora?",
+  repreguntaCualMedico: "¿Me dices cuál de ellos? También puedes tocarlo en la pantalla.",
+  sinMedicos: "No pude cargar la lista de médicos, pero te muestro la agenda para que elijas.",
+  ayudaDolor: "Te ayudo. Te haré unas preguntas sobre tu dolor, para buscarte el especialista más adecuado.",
+  // nombre ya viene para voz ("el doctor Jaime Espinoza"): "de el" -> "del"
+  agendaMedico: (nombre) => `Perfecto, te muestro la agenda de ${nombre}. Elige el día y la hora que te acomode. Si quieres volver conmigo, dime volver.`.replace(" de el ", " del "),
+  agendaZona: (zona) => `Te muestro los especialistas en ${zona} cerca de ti. Elige el día y la hora que te acomode. Si quieres volver conmigo, dime volver.`,
+  agendaGeneral: "Te muestro la agenda. Elige médico, día y hora. Si quieres volver conmigo, dime volver.",
+  recordatorioAgenda: "¿Ya tomaste una decisión, o prefieres volver?",
+  seguirAgenda: "Perfecto, termina tu reserva en la pantalla. Aquí te espero.",
+  horaReservada: (cuando, medico, telemedicina) =>
+    `Listo, tu hora quedó reservada para el ${cuando}${medico ? ` con ${medico}` : ""}${telemedicina ? ", por telemedicina" : ""}. ` +
+    "Te llegará la confirmación por correo.",
+  ahoraHora: "Ahora te busco hora con el especialista.",
+  algoMas: "¿Te ayudo en algo más?",
+  repreguntaAlgoMas: "Responde sí o no, por favor: ¿te ayudo en algo más?",
+  despedida: "Perfecto. Fue un gusto ayudarte, cuídate mucho.",
 
   puntos: "Ahora muéstrame en el dibujo dónde te duele. Marca los puntos y luego toca guardar.",
   analizando: "Gracias. Estoy revisando todo lo que me contaste, dame un momento.",
@@ -286,7 +329,7 @@ export const FRASES = {
     "No es conveniente esperar una orden de exámenes en este caso.",
   preguntarOrden: "¿Quieres que te entregue la orden de exámenes?",
   repreguntarOrden: "Responde sí o no, por favor: ¿quieres la orden de exámenes?",
-  sinOrden: "Está bien. Si cambias de opinión, puedes volver a empezar cuando quieras. Cuídate.",
+  sinOrden: "Está bien, sin problema.",
   pedirDatos: "Perfecto. Para emitir la orden, completa tus datos en la pantalla.",
   resonancia: "Como incluye una resonancia, antes de emitir la orden responde unas preguntas de seguridad en la pantalla.",
   ordenLista: "Listo. Tu orden de exámenes está lista para descargar.",
