@@ -28,6 +28,8 @@ const CLAVES_ZONA = [
   ["Codo", ["codo"]],
   ["Mano", ["mano\\b", "manos\\b", "muneca", "dedo", "pulgar"]],
   ["Tobillo", ["tobillo", "pie\\b", "pies\\b", "talon", "planta del pie"]],
+  // Sin decir el segmento: se pregunta despues con el dibujo posterior
+  ["Espalda", ["espalda", "columna", "lomo"]],
 ];
 
 export function interpretarZona(texto) {
@@ -35,7 +37,18 @@ export function interpretarZona(texto) {
   for (const [zona, claves] of CLAVES_ZONA) {
     if (contiene(t, claves)) return zona;
   }
-  return null; // "espalda" sola es ambigua: se repregunta
+  return null;
+}
+
+/** "Columna cervical" | "Columna dorsal" | "Columna lumbar" | null (cuando dijo solo "espalda") */
+export function interpretarNivelColumna(texto) {
+  const z = interpretarZona(texto);
+  if (z && z.startsWith("Columna")) return z;
+  const t = normalizar(texto);
+  if (contiene(t, ["cuello", "arriba", "alta", "alto", "nuca", "cervical"])) return "Columna cervical";
+  if (contiene(t, ["abajo", "baja", "bajo", "cintura", "lumbar", "lumbago", "cadera"])) return "Columna lumbar";
+  if (contiene(t, ["medio", "media", "centro", "entre", "omoplato", "paleta", "dorsal"])) return "Columna dorsal";
+  return null;
 }
 
 // ---------------- lado ----------------
