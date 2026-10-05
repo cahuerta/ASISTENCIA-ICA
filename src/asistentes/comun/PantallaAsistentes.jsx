@@ -616,8 +616,8 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
               <>
                 <h1 style={S.titulo}>Hola, soy Ipo, tu asistente virtual</h1>
                 <p style={S.texto}>
-                  Cuéntame qué necesitas: una hora con un médico, orientarte por un dolor, o exámenes generales
-                  o para una cirugía. Te respondo por voz, te entrego la orden y te ayudo a reservar tu hora.
+                  Cuéntame qué necesitas: orientarte por un dolor, o exámenes generales o para una cirugía.
+                  Te respondo por voz y te entrego la orden; si necesitas hora con el especialista, Ica te la busca.
                 </p>
               </>
             )}
