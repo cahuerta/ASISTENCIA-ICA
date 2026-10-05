@@ -11,7 +11,7 @@ const ICA_API =
   "https://services.icarticular.cl";
 
 import PantallaUno from "./screens/PantallaUno.jsx";
-import PantallaAvatar from "./screens/PantallaAvatar.jsx";
+import PantallaAsistentes from "./asistentes/comun/PantallaAsistentes.jsx";
 import PantallaDos from "./screens/PantallaDos.jsx";
 import PantallaTres from "./screens/PantallaTres.jsx";
 import PagoOkBanner from "./components/PagoOkBanner.jsx";
@@ -401,7 +401,7 @@ export default function App() {
      RENDER
      ====================================================== */
   if (pantalla === "avatar") {
-    return <PantallaAvatar onUsarFormulario={() => setPantalla("uno")} />;
+    return <PantallaAsistentes onUsarFormulario={() => setPantalla("uno")} />;
   }
 
   if (pantalla === "uno") {
