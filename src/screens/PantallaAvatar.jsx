@@ -1023,7 +1023,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
         escucha.pausar();
       }
     } else {
-      setAvisoMic("Este navegador no permite hablarle a la asistente. Abre la página en Chrome para usar la voz, o responde con los botones.");
+      setAvisoMic("Este navegador no permite hablarle a Ipo. Abre la página en Chrome para usar la voz, o responde con los botones.");
     }
     try {
       await menu(sesion);
@@ -1169,7 +1169,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
   if (MODO_WIDGET && !abierto) {
     return (
       <div style={S.widgetCaja}>
-        <button type="button" style={S.widgetBoton} onClick={abrirWidget} aria-label="Abrir la asistente">
+        <button type="button" style={S.widgetBoton} onClick={abrirWidget} aria-label="Abrir a Ipo, el asistente">
           <span style={S.widgetCara}><Avatar estado="reposo" boca={0} /></span>
           <span style={S.widgetTexto}>¿Te ayudo?</span>
         </button>
@@ -1183,10 +1183,10 @@ export default function PantallaAvatar({ onUsarFormulario }) {
         <img src={logoICA} alt="ICA" style={S.logo} />
         <div style={{ flex: 1 }}>
           <p style={S.marca}>Instituto de Cirugía Articular</p>
-          <p style={S.sub}>Asistente de consulta</p>
+          <p style={S.sub}>Ipo · Asistente virtual</p>
         </div>
         {MODO_WIDGET && (
-          <button type="button" style={S.cerrar} onClick={cerrarWidget} aria-label="Cerrar la asistente">✕</button>
+          <button type="button" style={S.cerrar} onClick={cerrarWidget} aria-label="Cerrar a Ipo">✕</button>
         )}
       </header>
 
@@ -1206,7 +1206,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
         {/* ---------- INICIO ---------- */}
         {fase === "inicio" && (
           <section style={S.tarjetaCentro}>
-            <h1 style={S.titulo}>Hola, soy tu asistente médica</h1>
+            <h1 style={S.titulo}>Hola, soy Ipo, tu asistente virtual</h1>
             <p style={S.texto}>
               Cuéntame qué necesitas: una hora con un médico, orientarte por un dolor, o exámenes generales
               o para una cirugía. Te respondo por voz, te entrego la orden y te ayudo a reservar tu hora.
@@ -1431,7 +1431,7 @@ export default function PantallaAvatar({ onUsarFormulario }) {
             <div style={S.agendaBarra}>
               <div style={S.avatarMini}><Avatar estado={estadoAvatar} boca={boca} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <button type="button" style={S.btnSecundario} onClick={volverDeAgenda}>← Volver con la asistente</button>
+                <button type="button" style={S.btnSecundario} onClick={volverDeAgenda}>← Volver con Ipo</button>
                 {vozOkRef.current && esperando && <p style={{ ...S.escuchando, margin: "4px 0 0", fontSize: 12 }}>O dime "volver".</p>}
               </div>
               {ordenUrl && (
