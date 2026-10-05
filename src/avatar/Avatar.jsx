@@ -1,6 +1,11 @@
 /**
  * Avatar.jsx
- * Médica Hipokratia en SVG.
+ * Ipo, el asistente virtual de ICA, en SVG.
+ *
+ * v2: antes era una médica; ahora es Ipo (masculino): pelo corto con
+ * patillas, cara de mandíbula más marcada, cejas más gruesas, sin aros.
+ * Cada asistente tendrá su propio aspecto y nombre (Ica en la página
+ * principal, Ipo para dolor y exámenes) para que se note el traspaso.
  *
  * Props:
  * - estado: "reposo" | "escuchando" | "pensando" | "hablando"
@@ -15,11 +20,11 @@ const C = {
   turquesaClaro: "#7FD6CD",
   piel: "#F2CBAA",
   pielSombra: "#E2AF8B",
-  pelo: "#3A2A22",
-  peloBrillo: "#5A4033",
+  pelo: "#2E241F",
+  peloBrillo: "#4E3D33",
   bata: "#FFFFFF",
   bataSombra: "#DDE5EF",
-  labio: "#C8616E",
+  labio: "#B06A5E",
   bocaInterior: "#6E2533",
 };
 
@@ -33,7 +38,7 @@ export default function Avatar({ estado = "reposo", boca = 0 }) {
       className={`avatar avatar--${estado}`}
       viewBox="0 0 400 460"
       role="img"
-      aria-label={`Avatar médica Hipokratia, ${estado}`}
+      aria-label={`Ipo, asistente virtual de ICA, ${estado}`}
     >
       <defs>
         <linearGradient id="gradHalo" x1="0" y1="0" x2="1" y2="1">
@@ -55,14 +60,8 @@ export default function Avatar({ estado = "reposo", boca = 0 }) {
 
       <g clipPath="url(#recorte)">
       <g transform="translate(40 14) scale(0.8)">
-        {/* Pelo (parte trasera) */}
-        <path
-          d="M118 205 C110 120 160 92 200 92 C244 92 292 118 284 205 C290 260 294 320 282 352 C262 366 138 366 118 352 C106 320 110 260 118 205 Z"
-          fill={C.pelo}
-        />
-
         {/* Cuello */}
-        <path d="M178 270 L222 270 L226 330 L174 330 Z" fill={C.pielSombra} />
+        <path d="M172 266 L228 266 L232 330 L168 330 Z" fill={C.pielSombra} />
 
         {/* Uniforme (pijama clínico) */}
         <path d="M110 360 C140 330 170 318 200 318 C230 318 260 330 290 360 L300 470 L100 470 Z" fill={C.turquesa} />
@@ -106,22 +105,26 @@ export default function Avatar({ estado = "reposo", boca = 0 }) {
       {/* Orejas */}
       <ellipse cx="129" cy="210" rx="11" ry="17" fill={C.pielSombra} />
       <ellipse cx="271" cy="210" rx="11" ry="17" fill={C.pielSombra} />
-      <circle cx="129" cy="228" r="3.5" fill={C.turquesa} />
-      <circle cx="271" cy="228" r="3.5" fill={C.turquesa} />
 
-      {/* Cara */}
-      <ellipse cx="200" cy="200" rx="70" ry="84" fill={C.piel} />
-
-      {/* Pelo (flequillo) */}
+      {/* Cara (mandíbula más marcada) */}
       <path
-        d="M128 196 C122 132 164 108 204 110 C240 112 276 134 272 196 C262 162 246 144 222 136 C206 152 170 164 142 170 C134 178 130 186 128 196 Z"
+        d="M130 190 C130 140 160 116 200 116 C240 116 270 140 270 190 C270 234 260 260 238 276 C224 286 212 289 200 289 C188 289 176 286 162 276 C140 260 130 234 130 190 Z"
+        fill={C.piel}
+      />
+
+      {/* Pelo corto */}
+      <path
+        d="M126 198 C118 130 160 100 202 100 C246 100 286 128 274 198 C271 178 267 164 259 153 C238 140 216 134 196 136 C172 138 152 146 141 159 C134 170 130 182 126 198 Z"
         fill={C.pelo}
       />
-      <path d="M214 122 C236 124 256 138 262 160" fill="none" stroke={C.peloBrillo} strokeWidth="4" strokeLinecap="round" />
+      <path d="M176 112 C204 104 238 110 258 128" fill="none" stroke={C.peloBrillo} strokeWidth="4" strokeLinecap="round" />
+      {/* Patillas */}
+      <path d="M127 186 L137 184 L137 214 L131 214 Z" fill={C.pelo} />
+      <path d="M273 186 L263 184 L263 214 L269 214 Z" fill={C.pelo} />
 
       {/* Cejas */}
-      <path className="avatar__ceja" d="M156 178 C166 170 180 170 188 175" fill="none" stroke={C.pelo} strokeWidth="4" strokeLinecap="round" />
-      <path className="avatar__ceja" d="M212 175 C220 170 234 170 244 178" fill="none" stroke={C.pelo} strokeWidth="4" strokeLinecap="round" />
+      <path className="avatar__ceja" d="M154 177 C165 171 179 171 190 174" fill="none" stroke={C.pelo} strokeWidth="5.5" strokeLinecap="round" />
+      <path className="avatar__ceja" d="M210 174 C221 171 235 171 246 177" fill="none" stroke={C.pelo} strokeWidth="5.5" strokeLinecap="round" />
 
       {/* Ojos (parpadean con CSS) */}
       <g className="avatar__ojos">
@@ -132,15 +135,15 @@ export default function Avatar({ estado = "reposo", boca = 0 }) {
         <circle cx="174" cy="196" r="1.6" fill="#FFFFFF" />
         <circle cx="230" cy="196" r="1.6" fill="#FFFFFF" />
       </g>
-      <path d="M161 191 C168 186 178 186 184 191" fill="none" stroke={C.pelo} strokeWidth="2.5" strokeLinecap="round" />
-      <path d="M216 191 C222 186 232 186 239 191" fill="none" stroke={C.pelo} strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M162 191 C168 187 178 187 183 190" fill="none" stroke={C.pelo} strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M217 190 C222 187 232 187 238 191" fill="none" stroke={C.pelo} strokeWidth="1.5" strokeLinecap="round" />
 
       {/* Nariz */}
       <path d="M200 208 C197 220 194 226 199 229 C202 230 205 229 207 227" fill="none" stroke={C.pielSombra} strokeWidth="3" strokeLinecap="round" />
 
       {/* Mejillas */}
-      <ellipse cx="160" cy="228" rx="12" ry="7" fill="#F09A9A" opacity="0.35" />
-      <ellipse cx="240" cy="228" rx="12" ry="7" fill="#F09A9A" opacity="0.35" />
+      <ellipse cx="160" cy="230" rx="12" ry="7" fill="#E79A8A" opacity="0.18" />
+      <ellipse cx="240" cy="230" rx="12" ry="7" fill="#E79A8A" opacity="0.18" />
 
       {/* Boca */}
       <g className="avatar__boca">
