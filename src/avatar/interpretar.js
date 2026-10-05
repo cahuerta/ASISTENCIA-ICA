@@ -221,11 +221,11 @@ export function interpretarAccionFinal(texto) {
 }
 
 // ---------------- mientras la agenda esta abierta ----------------
-/** "volver" (vuelve con la asistente) | "seguir" (sigue en la agenda) | null (se ignora) */
+/** "volver" (vuelve con Ipo) | "seguir" (sigue en la agenda) | null (se ignora) */
 export function interpretarVolver(texto) {
   const t = normalizar(texto);
   if (!t) return null;
-  if (contiene(t, ["volver", "vuelve", "volvamos", "regres", "cancel", "salir", "atras", "asistente"])) return "volver";
+  if (contiene(t, ["volver", "vuelve", "volvamos", "regres", "cancel", "salir", "atras", "asistente", "ipo"])) return "volver";
   if (contiene(t, ["decidi", "sigo", "seguir", "todavia", "aun\\b", "espera", "un momento", "eligiendo", "viendo", "si\\b"])) return "seguir";
   return null;
 }
@@ -305,7 +305,7 @@ function minusculaExamen(e) {
  */
 export function construirConsulta(ctx, registro) {
   const lineas = [];
-  lineas.push("Anamnesis guiada por la asistente de voz (respuestas del paciente).");
+  lineas.push("Anamnesis guiada por el asistente de voz (respuestas del paciente).");
   const zonaTxt = ctx.lado ? `${ctx.zona} ${ctx.lado.toLowerCase()}` : ctx.zona;
   lineas.push(`Motivo: dolor de ${String(zonaTxt || "").toLowerCase()}. Edad ${ctx.edad}, sexo ${String(ctx.sexo || "").toLowerCase()}.`);
 
