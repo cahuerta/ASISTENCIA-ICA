@@ -15,16 +15,28 @@
  * una referencia mientras se dicen (Chrome puede descartar la frase si nada la
  * referencia y nunca avisar que terminó).
  *
+ * v2 (Ipo): se prefieren voces masculinas y, si no hay, se baja el tono.
+ *
  * La boca se abre en cada palabra (evento "boundary") y se cierra suavemente.
  * Si el navegador no emite eventos de palabra, se usa una oscilación de respaldo.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const PREFERENCIA_IDIOMA = ["es-CL", "es-419", "es-US", "es-MX", "es-AR", "es-ES", "es"];
+// Ipo es hombre: se prefieren voces masculinas cuando el navegador las tiene
+// (Edge: Lorenzo de Chile, Jorge, Álvaro; Windows: Pablo, Raúl; Apple: Diego,
+// Jorge, Juan). Muchos Android traen una sola voz en español; en ese caso se
+// usa la que haya, con el tono más grave (TONO).
+const PISTAS_VOZ_MASCULINA = [
+  "lorenzo", "jorge", "alvaro", "álvaro", "pablo", "raul", "raúl", "diego",
+  "juan", "carlos", "enrique", "gonzalo", "tomas", "tomás", "male", "hombre",
+];
 const PISTAS_VOZ_FEMENINA = [
   "paulina", "francisca", "mónica", "monica", "helena", "sabina", "laura",
-  "lucia", "lucía", "elvira", "dalia", "camila", "female", "mujer",
+  "lucia", "lucía", "elvira", "dalia", "camila", "catalina", "female", "mujer",
 ];
+const TONO_VOZ_MASCULINA = 0.95;
+const TONO_SIN_VOZ_MASCULINA = 0.8; // voz femenina o desconocida: más grave
 
 const MAX_CARACTERES_FRASE = 180;
 const ESPERA_INICIO_MS = 5000;      // si la primera frase no parte en este tiempo, se considera bloqueada
@@ -38,7 +50,8 @@ function elegirVoz(voces) {
     const idx = PREFERENCIA_IDIOMA.findIndex((p) => v.lang.toLowerCase().startsWith(p.toLowerCase()));
     let p = idx === -1 ? 0 : (PREFERENCIA_IDIOMA.length - idx) * 10;
     const nombre = v.name.toLowerCase();
-    if (PISTAS_VOZ_FEMENINA.some((f) => nombre.includes(f))) p += 25;
+    if (PISTAS_VOZ_MASCULINA.some((m) => nombre.includes(m))) p += 25;
+    if (PISTAS_VOZ_FEMENINA.some((f) => nombre.includes(f))) p -= 5;
     if (nombre.includes("google") || nombre.includes("natural") || nombre.includes("online")) p += 8;
     return p;
   };
@@ -132,7 +145,9 @@ export default function useVoz() {
         u.lang = "es-CL";
       }
       u.rate = 1;
-      u.pitch = 1.05;
+      const masculina = vozRef.current
+        && PISTAS_VOZ_MASCULINA.some((m) => vozRef.current.name.toLowerCase().includes(m));
+      u.pitch = masculina ? TONO_VOZ_MASCULINA : TONO_SIN_VOZ_MASCULINA;
 
       const palabras = frase.split(/\s+/).length;
       const maximoMs = (palabras / PALABRAS_POR_SEG) * 1000 * 2 + 4000;
