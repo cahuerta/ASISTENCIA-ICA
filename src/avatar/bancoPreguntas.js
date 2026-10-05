@@ -1,6 +1,6 @@
 /**
  * bancoPreguntas.js
- * Banco de preguntas de la anamnesis guiada por la asistente de voz.
+ * Banco de preguntas de la anamnesis guiada por Ipo, el asistente de voz.
  * Editable: cambiar textos, agregar o quitar preguntas no requiere tocar la logica.
  *
  * Tipos:
@@ -33,7 +33,7 @@ export const esColumna = (zona) => String(zona || "").toLowerCase().startsWith("
 // ---------------- Menu inicial ----------------
 export const MENU = {
   texto:
-    "Hola, soy la asistente del Instituto de Cirugía Articular. ¿En qué te ayudo? Puedo buscarte hora con un médico, " +
+    "Hola, soy Ipo, el asistente virtual del Instituto de Cirugía Articular. ¿En qué te ayudo? Puedo buscarte hora con un médico, " +
     "ayudarte si tienes un dolor, o prepararte exámenes.",
   // Cuando vuelve al menu despues de terminar algo
   otraVez: "¿En qué te ayudo? Puedo buscarte hora con un médico, ayudarte si tienes un dolor, o prepararte exámenes.",
