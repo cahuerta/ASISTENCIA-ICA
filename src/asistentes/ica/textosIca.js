@@ -30,4 +30,6 @@ export const TRASPASO_ICA = {
   aExamenes: (tipo) =>
     `Te paso con Ipo, nuestro asistente, que te ayuda con tus exámenes ${tipo === "preop" ? "para la cirugía" : "generales"}.`,
   vuelve: "Hola de nuevo.",
+  // Ipo se lo pasa para la hora y todavia no habian hablado (entro directo a la app)
+  presentarse: "Hola, soy Ica, de recepción del Instituto de Cirugía Articular.",
 };
