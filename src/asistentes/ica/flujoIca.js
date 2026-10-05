@@ -9,7 +9,9 @@
  *    ("Ica me conto que te duele la rodilla derecha, ¿es asi?") y sigue la consulta.
  *  - Examenes generales o preoperatorio: se lo pasa a Ipo directo a ese modulo.
  *  - Cuando Ipo termina, o hay que reservar la hora que Ipo recomendo, Ipo se lo
- *    devuelve (recibirDeIpo) y ella sigue: abre la agenda o pregunta "¿algo mas?".
+ *    devuelve (recibirDeIpo) y ella sigue: abre la agenda del medico recomendado
+ *    (o de los especialistas de la zona) o pregunta "¿algo mas?". La hora la
+ *    busca siempre Ica, tambien si el paciente entro directo a Ipo.
  *
  * El traspaso es en la misma pantalla (api.pasarA cambia dibujo, nombre y voz):
  * no viaja nada por internet.
@@ -75,10 +77,10 @@ export function crearFlujoIca(api, f) {
     return f.recibirExamenesDeIca(sesion, tipo);
   };
 
-  // ---------- Ipo se lo devuelve ----------
-  const recibirDeIpo = async (sesion) => {
+  // ---------- Ipo se lo devuelve (o se lo pasa por primera vez para la hora) ----------
+  const recibirDeIpo = async (sesion, { primeraVez = false } = {}) => {
     await pasarA(sesion, "ica");
-    await decir(sesion, TRASPASO_ICA.vuelve);
+    await decir(sesion, primeraVez ? TRASPASO_ICA.presentarse : TRASPASO_ICA.vuelve);
   };
 
   return { menuIca, icaDolor, recibirDeIpo };
