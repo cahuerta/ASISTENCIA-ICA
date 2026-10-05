@@ -9,17 +9,18 @@
 export const PERSONAJE_IPO = { nombre: "Ipo", rol: "Asistente virtual", voz: "masculina" };
 
 // ---------------- Menu inicial ----------------
+// Ipo atiende dolor y examenes. La hora con un medico la busca Ica, al final,
+// cuando ya hay diagnostico y especialista (o si el paciente la pide).
 export const MENU = {
   texto:
-    "Hola, soy Ipo, el asistente virtual del Instituto de Cirugía Articular. ¿En qué te ayudo? Puedo buscarte hora con un médico, " +
-    "ayudarte si tienes un dolor, o prepararte exámenes.",
+    "Hola, soy Ipo, el asistente virtual del Instituto de Cirugía Articular. ¿En qué te ayudo? Puedo ayudarte si tienes un dolor, " +
+    "o prepararte exámenes generales o para una cirugía.",
   // Cuando vuelve al menu despues de terminar algo
-  otraVez: "¿En qué te ayudo? Puedo buscarte hora con un médico, ayudarte si tienes un dolor, o prepararte exámenes.",
+  otraVez: "¿En qué te ayudo? Puedo ayudarte si tienes un dolor, o prepararte exámenes generales o para una cirugía.",
   // Cuando vuelve desde la agenda sin reservar
-  volver: "Aquí estoy. ¿En qué te ayudo? Puedo buscarte hora con un médico, ayudarte si tienes un dolor, o prepararte exámenes.",
-  repregunta: "Perdón, no te entendí. ¿Quieres hora con un médico, tienes un dolor, o necesitas exámenes?",
+  volver: "Aquí estoy. ¿En qué te ayudo? Puedo ayudarte si tienes un dolor, o prepararte exámenes generales o para una cirugía.",
+  repregunta: "Perdón, no te entendí. ¿Tienes un dolor, o necesitas exámenes generales o para una cirugía?",
   opciones: [
-    { etiqueta: "Hora con un médico", valor: "hora" },
     { etiqueta: "Tengo un dolor", valor: "dolor" },
     { etiqueta: "Exámenes generales", valor: "generales" },
     { etiqueta: "Exámenes para una cirugía", valor: "preop" },
@@ -50,6 +51,12 @@ export const TRASPASO_IPO = {
   corrige: "Perdón, entonces empecemos desde el principio.",
   examenes: "Hola, soy Ipo. Yo te ayudo con tus exámenes.",
   aIcaHora: "Te devuelvo con Ica, que te busca la hora.",
+  // Entrando directo a la app (todavia no habia hablado con Ica)
+  aIcaHoraPrimera: "Te paso con Ica, de recepción, que te busca la hora.",
+  // Recomendacion antes de pasarlo a Ica para la hora
+  // medico y zona ya vienen en voz ("el doctor Jaime Espinoza", "el hombro derecho")
+  recomendarHora: (medico, zona) =>
+    `Para el dolor de ${zona}, te recomiendo a ${medico}.`.replace(" a el ", " al ").replace(" de el ", " del "),
   aIcaFin: "Te dejo con Ica.",
 };
 
@@ -75,7 +82,6 @@ export const FRASES = {
   // espalda: cervical, dorsal o lumbar en el dibujo
   nivelColumna: "Muéstrame en el dibujo dónde te duele la espalda: en el cuello, en la parte media, o en la parte baja.",
   repreguntaNivelColumna: "¿Es en el cuello, en la parte media de la espalda, o en la parte baja? También puedes tocarlo en el dibujo.",
-  ahoraHora: "Ahora te busco hora con el especialista.",
 
   puntos: "Ahora muéstrame en el dibujo dónde te duele. Marca los puntos y luego toca guardar.",
   analizando: "Gracias. Estoy revisando todo lo que me contaste, dame un momento.",
