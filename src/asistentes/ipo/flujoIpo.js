@@ -2,23 +2,27 @@
  * ipo/flujoIpo.js
  * Lo que hace Ipo, el asistente de dolor y examenes.
  *
- * MENU (entrando directo a la app): hora con un medico | dolor | examenes
- *    generales | examenes para cirugia. Si viene de Ica, no hay menu: Ica le pasa
- *    el paciente con la zona y el lado (recibirDolorDeIca: confirma "Ica me conto
- *    que te duele la rodilla derecha, ¿es asi?") o directo a los examenes.
+ * MENU (entrando directo a la app): dolor | examenes generales | examenes para
+ *    cirugia. Ipo no busca horas: si el paciente la pide, se lo pasa a Ica. Si viene
+ *    de Ica, no hay menu: Ica le pasa el paciente con la zona y el lado
+ *    (recibirDolorDeIca: confirma "Ica me conto que te duele la rodilla derecha,
+ *    ¿es asi?") o directo a los examenes.
  *
  * DOLOR:
  * 1. Anamnesis oral guiada (bancoPreguntas.js): zona, lado, edad, sexo, banderas
  *    rojas por zona (grave -> se detiene y deriva a urgencia) y preguntas abiertas.
  * 2. Puntos dolorosos en el esquema de la zona (mismos mappers de ICA). Si dijo
  *    solo "espalda", marca en el dibujo posterior si es cervical, dorsal o lumbar.
- * 3. /api/preview-informe (sin cambios en el backend) con la conversacion completa.
- * 4. Dice el diagnostico presuntivo, el fundamento y los examenes.
+ * 3. /ia-trauma (modulo de trauma del backend) con la conversacion completa en
+ *    "consulta" + edad, sexo, zona, lado y puntos: devuelve 1 diagnostico y 1
+ *    examen del catalogo estandarizado de la zona (con fallback si la IA falla).
+ * 4. Dice el diagnostico presuntivo, el fundamento y el examen.
  * 5. "¿Te hago la orden de examenes, o te busco hora con el especialista?"
  *    orden | hora | ambas | ninguna. Orden: formulario (nombre, RUT, correo) ->
- *    checklist de resonancia si corresponde -> /api/pdf-ia-orden. Solo orden: al
- *    final recomienda al especialista (/resolver-derivacion) y ofrece hora.
- *    Si vino de Ica, para la hora se lo devuelve a Ica (devolverAIca).
+ *    checklist de resonancia si corresponde -> /api/pdf-ia-orden. Para la hora,
+ *    Ipo busca el especialista de la zona (/resolver-derivacion), lo recomienda y
+ *    se lo pasa a Ica, que abre su agenda (devolverAIca). Solo orden: al final
+ *    recomienda al especialista y ofrece hora.
  *
  * EXAMENES GENERALES / PREOPERATORIO (mismos endpoints que los modulos de ICA):
  *    edad, sexo, (cirugia y lado), enfermedades por grupos con botones abajo,
@@ -33,7 +37,7 @@ import { MENU, ACCION_FINAL, SALUDO, FRASES, TRASPASO_IPO } from "./textosIpo.js
 import { PREGUNTAS, esColumna, GRUPOS_COMORBILIDAD, PREGUNTAS_EXTRA, CIRUGIAS } from "./bancoPreguntas.js";
 import { TIPO_EXAMEN } from "../comun/textosComunes.js";
 import {
-  esRespuestaVacia, construirConsulta, leerInforme, vozResultado, incluyeResonancia,
+  esRespuestaVacia, construirConsulta, vozResultado, incluyeResonancia,
   interpretarMedico, nombreEnVoz, vozExamenes, zonaEnVoz,
 } from "../comun/interpretar.js";
 import { cargarMedicos } from "../comun/agenda.js";
@@ -130,7 +134,11 @@ export function crearFlujoIpo(api, f) {
       setEntendido("");
     }
     elegirModulo(valor === "dolor" ? "trauma" : valor);
-    if (valor === "hora") return f.flujoHora(sesion);
+    // Pidio hora (por voz): la busca Ica
+    if (valor === "hora") {
+      await devolverAIca(sesion, "hora");
+      return f.flujoHora(sesion);
+    }
     if (valor === "generales" || valor === "preop") return flujoExamenes(sesion, valor);
     return conversar(sesion);
   };
@@ -165,12 +173,47 @@ export function crearFlujoIpo(api, f) {
     return flujoExamenes(sesion, tipo);
   };
 
-  // Si vino de Ica, se lo devuelve: "hora" (Ica le busca la hora) | "fin" (al terminar)
+  // Le pasa el paciente a Ica.
+  //  "hora": siempre (la hora la busca Ica), aunque haya entrado directo a Ipo.
+  //  "fin":  solo si vino de Ica (si entro directo, Ipo se despide).
   const devolverAIca = async (sesion, motivo) => {
-    if (personajeRef.current !== "ipo" || !desdeIcaRef.current) return;
+    if (personajeRef.current !== "ipo") return;
+    const vinoDeIca = desdeIcaRef.current;
+    if (motivo !== "hora" && !vinoDeIca) return;
     setPregunta(null);
-    await decir(sesion, motivo === "hora" ? TRASPASO_IPO.aIcaHora : TRASPASO_IPO.aIcaFin);
-    await f.recibirDeIpo(sesion);
+    await decir(sesion, motivo !== "hora" ? TRASPASO_IPO.aIcaFin
+      : vinoDeIca ? TRASPASO_IPO.aIcaHora : TRASPASO_IPO.aIcaHoraPrimera);
+    desdeIcaRef.current = true;
+    await f.recibirDeIpo(sesion, { primeraVez: !vinoDeIca });
+  };
+
+  // Especialista de la zona (el mismo que sale impreso en la orden) y, si esta en
+  // la agenda de la ficha, su ficha para abrir su agenda. { doctor, medico } | {}
+  const buscarEspecialista = async (sesion, zona) => {
+    let doctor = null;
+    try {
+      const r = await postJSON("/resolver-derivacion", { dolor: zona, geo: leerGeo() || undefined });
+      doctor = r?.doctor?.nombre ? r.doctor : null;
+    } catch {
+      // sin recomendacion: Ica muestra los especialistas de la zona
+    }
+    vigente(sesion);
+    let medico = null;
+    if (doctor) {
+      const medicos = await cargarMedicos();
+      vigente(sesion);
+      medico = interpretarMedico(doctor.nombre, medicos)?.medico || null;
+    }
+    return { doctor, medico };
+  };
+
+  // Recomienda al especialista y se lo pasa a Ica, que abre su agenda
+  const horaConEspecialista = async (sesion) => {
+    const zona = ctxRef.current.zona;
+    const { doctor, medico } = await buscarEspecialista(sesion, zona);
+    if (doctor) await decir(sesion, TRASPASO_IPO.recomendarHora(nombreEnVoz(doctor.nombre), zonaEnVoz(zona, ctxRef.current.lado)));
+    await devolverAIca(sesion, "hora");
+    return f.abrirAgenda(sesion, medico ? { medico } : { zona });
   };
 
   const etiquetaComorb = (key) => {
@@ -323,12 +366,8 @@ export function crearFlujoIpo(api, f) {
       return api.algoMas(sesion);
     }
     if (valor === "orden" || valor === "ambas") await pedirOrden(sesion);
-    if (valor === "hora" || valor === "ambas") {
-      // Si vino de Ica, la hora se la busca Ica
-      if (desdeIcaRef.current) await devolverAIca(sesion, "hora");
-      else if (valor === "ambas") await decir(sesion, FRASES.ahoraHora);
-      return f.abrirAgenda(sesion, { zona: ctxRef.current.zona });
-    }
+    // La hora: Ipo recomienda al especialista y se lo pasa a Ica
+    if (valor === "hora" || valor === "ambas") return horaConEspecialista(sesion);
     return recomendarEspecialista(sesion);
   };
 
@@ -336,14 +375,7 @@ export function crearFlujoIpo(api, f) {
   // la orden) y ofrece buscarle hora con el
   const recomendarEspecialista = async (sesion) => {
     const zona = ctxRef.current.zona;
-    let doctor = null;
-    try {
-      const r = await postJSON("/resolver-derivacion", { dolor: zona, geo: leerGeo() || undefined });
-      doctor = r?.doctor?.nombre ? r.doctor : null;
-    } catch {
-      // sin recomendacion: igual se ofrece hora con un especialista
-    }
-    vigente(sesion);
+    const { doctor, medico } = await buscarEspecialista(sesion, zona);
     setFase("conversacion");
     setProgreso(0);
     setResumen(true);
@@ -353,14 +385,7 @@ export function crearFlujoIpo(api, f) {
     const { valor } = await preguntarCerrada(sesion, "sino", texto, FRASES.repreguntaRecomendar, true);
     setPregunta(null);
     if (!valor) return api.algoMas(sesion);
-    // El recomendado en la agenda de la ficha (si no esta, los especialistas de la zona)
-    let medico = null;
-    if (doctor) {
-      const medicos = await cargarMedicos();
-      vigente(sesion);
-      medico = interpretarMedico(doctor.nombre, medicos)?.medico || null;
-    }
-    // Si vino de Ica, la hora se la busca Ica
+    // La hora se la busca Ica: la agenda del recomendado (si no esta, los de la zona)
     await devolverAIca(sesion, "hora");
     return f.abrirAgenda(sesion, medico ? { medico } : { zona });
   };
@@ -443,17 +468,21 @@ export function crearFlujoIpo(api, f) {
     idPagoRef.current = `avatar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     let resultado;
     try {
-      const r = await postJSON("/api/preview-informe", {
+      // Modulo de trauma: 1 diagnostico + 1 examen del catalogo de la zona
+      // (si la IA falla, el backend responde igual con su fallback por zona)
+      const r = await postJSON("/ia-trauma", {
         idPago: idPagoRef.current,
-        consulta: construirConsulta(ctx, registroRef.current),
-        edad: ctx.edad,
-        genero: ctx.sexo,
-        dolor: ctx.zona,
-        lado: ctx.lado || "",
+        paciente: { edad: ctx.edad, genero: ctx.sexo, dolor: ctx.zona, lado: ctx.lado || "" },
         marcadores: marcadores || undefined,
+        consulta: construirConsulta(ctx, registroRef.current),
       });
       if (!r.ok) throw new Error(r.error || "Sin respuesta");
-      resultado = leerInforme(r.respuesta, r.examenes);
+      const examenes = (Array.isArray(r.examenes) ? r.examenes : []).map((e) => String(e).trim()).filter(Boolean).slice(0, 1);
+      resultado = {
+        diagnosticos: r.diagnostico ? [String(r.diagnostico).trim()] : [],
+        explicacion: String(r.justificacion || "").trim(),
+        examenes,
+      };
       if (!resultado.examenes.length && !resultado.diagnosticos.length) throw new Error("Informe vacío");
     } catch (e) {
       vigente(sesion);
