@@ -12,6 +12,14 @@
 // ?asistente=ica; Ipo entrando directo a app.icarticular.cl (como antes).
 // Ica e Ipo se pasan al paciente en esta misma pantalla (pasarA): no viaja nada.
 //
+// MISALUD (?modo=misalud&motivo=dolor|generales|preop|hora dentro de un iframe de
+//    misalud.icarticular.cl): el asistente de MiSalud (Katia, o como el paciente lo
+//    llame) le pasa el paciente a Ipo (dolor, examenes) o a Ica (hora). Los datos
+//    (nombre, RUT, correo, edad, sexo, zona y lado) llegan por postMessage, nunca en
+//    la URL, y solo desde un origen de confianza: no se vuelven a preguntar y la
+//    orden sale sin el formulario. Al terminar avisa "terminado" a MiSalud; la ✕
+//    avisa "cerrar".
+//
 // WIDGET (?modo=widget dentro de un iframe de icarticular.cl / hipokratia.health):
 //    muestra solo una burbuja "¿Te ayudo?"; al tocarla avisa a la pagina para que
 //    agrande el iframe y el asistente parte hablando al tiro (el toque ocurre en esta
@@ -62,15 +70,51 @@ const MODO_WIDGET = (() => {
   }
 })();
 
+// ---------- modo MiSalud (dentro del portal del paciente) ----------
+const MODO_MISALUD = (() => {
+  try {
+    return window.parent !== window && new URLSearchParams(window.location.search).get("modo") === "misalud";
+  } catch {
+    return false;
+  }
+})();
+const MOTIVO_MISALUD = (() => {
+  try {
+    const m = new URLSearchParams(window.location.search).get("motivo") || "";
+    return ["dolor", "generales", "preop", "hora"].includes(m) ? m : "";
+  } catch {
+    return "";
+  }
+})();
+
 // Quien recibe al paciente: Ica en la burbuja de la pagina principal (o con
-// ?asistente=ica); Ipo entrando directo a la app
+// ?asistente=ica, o desde MiSalud para una hora); Ipo entrando directo a la app
 const PERSONAJE_INICIAL = (() => {
   try {
     const q = new URLSearchParams(window.location.search);
     if (q.get("asistente") === "ica" || q.get("asistente") === "ipo") return q.get("asistente");
   } catch {}
+  if (MODO_MISALUD) return MOTIVO_MISALUD === "hora" ? "ica" : "ipo";
   return MODO_WIDGET ? "ica" : "ipo";
 })();
+
+// Datos que manda MiSalud: solo lo esperado y con forma valida
+function leerDatosMiSalud(d) {
+  if (!d || typeof d !== "object") return null;
+  const texto = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const edad = Number(d.edad);
+  const zona = ZONAS.includes(d.zona) ? d.zona : "";
+  return {
+    quien: texto(d.quien, 20) || "tu asistente de MiSalud",
+    nombre: texto(d.nombre, 120),
+    rut: texto(d.rut, 12),
+    email: /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(texto(d.email, 120)) ? texto(d.email, 120) : "",
+    edad: Number.isInteger(edad) && edad > 0 && edad <= 110 ? edad : null,
+    sexo: d.sexo === "Masculino" || d.sexo === "Femenino" ? d.sexo : "",
+    zona,
+    lado: zona && !zona.startsWith("Columna") && (d.lado === "Derecha" || d.lado === "Izquierda") ? d.lado : "",
+  };
+}
 
 // Origen de la pagina que contiene la burbuja, solo si es de confianza
 function origenWidget() {
@@ -83,6 +127,12 @@ function origenWidget() {
 function avisarWidget(estado) {
   const origen = origenWidget();
   if (MODO_WIDGET && origen) window.parent.postMessage({ fuente: "ica-asistente", tipo: "widget", estado }, origen);
+}
+
+// Avisos a MiSalud: "listo" (esperando los datos), "terminado", "cerrar"
+function avisarMiSalud(tipo, extra = {}) {
+  const origen = origenWidget();
+  if (MODO_MISALUD && origen) window.parent.postMessage({ fuente: "ica-asistente", tipo, ...extra }, origen);
 }
 
 // Pide permiso de microfono dentro del toque del usuario. Devuelve "" o el motivo.
@@ -125,6 +175,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   const [resumen, setResumen] = useState(false);      // muestra orden/hora al preguntar "¿algo mas?"
   const [abierto, setAbierto] = useState(!MODO_WIDGET); // widget: burbuja cerrada / asistente abierta
   const [personaje, setPersonaje] = useState(PERSONAJE_INICIAL); // "ica" | "ipo": quien habla ahora
+  const [misalud, setMisalud] = useState(null);       // datos que mando MiSalud (modo misalud)
 
   const { hablar, callar, desbloquear, usarVoz, hablando, boca } = useVoz();
 
@@ -149,6 +200,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   const prefillRef = useRef(null);             // datos que se mandan a la agenda por postMessage
   const pendienteRef = useRef({});             // { volver, reservado } llegados mientras hablaba
   const personajeRef = useRef(PERSONAJE_INICIAL);
+  const misaludRef = useRef(null);
   const desdeIcaRef = useRef(false);           // Ipo atiende porque Ica se lo paso
 
   // Cambia quien habla: dibujo, nombre y voz
@@ -187,6 +239,22 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   }, [callar]);
 
   useEffect(() => () => { if (ordenUrl) URL.revokeObjectURL(ordenUrl); }, [ordenUrl]);
+
+  // ---------- modo MiSalud: pide los datos y los recibe (solo de la pagina que nos contiene) ----------
+  useEffect(() => {
+    if (!MODO_MISALUD) return undefined;
+    const alMensaje = (e) => {
+      if (e.source !== window.parent || e.origin !== origenWidget()) return;
+      const d = e.data;
+      if (!d || d.fuente !== "misalud" || d.tipo !== "paciente") return;
+      const datos = leerDatosMiSalud(d.datos);
+      misaludRef.current = datos;
+      setMisalud(datos);
+    };
+    window.addEventListener("message", alMensaje);
+    avisarMiSalud("listo");
+    return () => window.removeEventListener("message", alMensaje);
+  }, []);
 
   // ---------- mensajes de la pagina de reservas (solo de su origen y de nuestro iframe) ----------
   useEffect(() => {
@@ -433,6 +501,35 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     setPregunta(null);
     setFase("fin");
     await decir(sesion, FRASES_COMUNES.despedida);
+    avisarMiSalud("terminado");
+  };
+
+  // Desde MiSalud: datos que no se vuelven a preguntar y a quien le toca
+  const empezarDesdeMiSalud = async (sesion) => {
+    const m = misaludRef.current || {};
+    const ctx = ctxRef.current;
+    if (m.edad) ctx.edad = m.edad;
+    if (m.sexo) ctx.sexo = m.sexo;
+    if (m.nombre && m.rut) datosRef.current = { nombre: m.nombre, rut: m.rut, email: m.email || "" };
+    if (MOTIVO_MISALUD === "hora") {
+      await f.recibirDeIpo(sesion, { primeraVez: true });
+      return f.flujoHora(sesion);
+    }
+    if (MOTIVO_MISALUD === "generales" || MOTIVO_MISALUD === "preop") {
+      elegirModulo(MOTIVO_MISALUD);
+      return f.recibirExamenesDeIca(sesion, MOTIVO_MISALUD);
+    }
+    if (MOTIVO_MISALUD === "dolor") {
+      elegirModulo("trauma");
+      setFase("conversacion");
+      if (m.zona) {
+        ctx.zona = m.zona;
+        if (m.lado) ctx.lado = m.lado;
+        return f.recibirDolorDeIca(sesion, { quien: m.quien });
+      }
+      return f.conversar(sesion);
+    }
+    return menu(sesion);
   };
 
   // ---------- herramientas para los flujos de cada asistente ----------
@@ -501,7 +598,8 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
       setAvisoMic(`Este navegador no permite hablarle a ${PERSONAJES[PERSONAJE_INICIAL].nombre}. Abre la página en Chrome para usar la voz, o responde con los botones.`);
     }
     try {
-      await menu(sesion);
+      if (MODO_MISALUD) await empezarDesdeMiSalud(sesion);
+      else await menu(sesion);
     } catch (e) {
       if (!(e instanceof Interrumpido)) {
         console.error(e);
@@ -586,6 +684,11 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
         {MODO_WIDGET && (
           <button type="button" style={S.cerrar} onClick={cerrarWidget} aria-label={`Cerrar a ${P.nombre}`}>✕</button>
         )}
+        {MODO_MISALUD && (
+          <button type="button" style={S.cerrar}
+            onClick={() => { sesionRef.current += 1; callar(); escuchaRef.current?.pausar(); avisarMiSalud("cerrar"); }}
+            aria-label="Volver a MiSalud">✕</button>
+        )}
       </header>
 
       <main style={{ ...S.main, ...(fase === "agenda" ? S.mainAgenda : null) }}>
@@ -621,12 +724,15 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
                 </p>
               </>
             )}
+            {MODO_MISALUD && misalud && (
+              <p style={S.texto}><strong>{misalud.quien}</strong> te pasó conmigo desde MiSalud.</p>
+            )}
             <p style={S.legal}>Al comenzar, el navegador te pedirá permiso para usar el micrófono: toca "Permitir".</p>
             {!soportado && (
               <p style={S.aviso}>Tu navegador no permite voz. Igual puedes responder tocando o escribiendo.</p>
             )}
             <button type="button" style={S.btnPrimario} onClick={comenzar}>Comenzar</button>
-            {!MODO_WIDGET && (
+            {!MODO_WIDGET && !MODO_MISALUD && (
               <button type="button" style={S.enlace} onClick={onUsarFormulario}>Prefiero usar el formulario</button>
             )}
             <p style={S.legal}>Orientación preliminar. No reemplaza la evaluación presencial con un especialista.</p>
