@@ -166,6 +166,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   const [textoLibre, setTextoLibre] = useState("");
   const [edadEscrita, setEdadEscrita] = useState("");
   const [esperando, setEsperando] = useState(false); // esperando respuesta del paciente
+  const [pensando, setPensando] = useState(false);   // Ipo (agente) eligiendo la siguiente pregunta
   const [avisoMic, setAvisoMic] = useState("");       // por que no hay microfono
   const [seleccion, setSeleccion] = useState([]);     // enfermedades marcadas en la pregunta actual
   const [marcadas, setMarcadas] = useState([]);       // resumen de lo marcado (chips)
@@ -537,7 +538,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   // f: las funciones de todos (Ica, Ipo y la agenda) para que se llamen entre si.
   const api = {
     vigente, decir, hablar, callar, preguntarCerrada, preguntarAbierta, preguntarGrupo, esperarPuntos,
-    elegirModulo, nuevoFlujo, pasarA, menu, algoMas, getInforme: () => informe,
+    elegirModulo, nuevoFlujo, pasarA, menu, algoMas, getInforme: () => informe, esperarRespuesta, setPensando,
     setFase, setPregunta, setEntendido, setProgreso, setResumen, setInforme, setError, setMarcadas,
     setOrdenUrl, setConCorreo, setAgenda, setReserva, setEsperando,
     sesionRef, ctxRef, registroRef, idPagoRef, avisosRef, examenesRef, ordenRef, datosRef, conCorreoRef,
@@ -620,7 +621,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
 
 
   // ---------- render ----------
-  const estadoAvatar = hablando ? "hablando" : fase === "analizando" || fase === "generando" ? "pensando"
+  const estadoAvatar = hablando ? "hablando" : pensando || fase === "analizando" || fase === "generando" ? "pensando"
     : esperando && escucha.escuchando ? "escuchando" : "reposo";
 
   // ---------- widget ----------
