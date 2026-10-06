@@ -62,6 +62,8 @@ export const TRASPASO_IPO = {
 };
 
 export const FRASES = {
+  // ---- consulta de dolor como agente: primero el relato libre ----
+  relato: "Cuéntame con tus palabras qué te pasó y cómo es tu dolor.",
   // ---- generales y preoperatorio ----
   inicioGenerales:
     "Perfecto. Para proponerte exámenes generales te haré unas preguntas sobre tu salud. Puedes responder hablando o tocando los botones.",
