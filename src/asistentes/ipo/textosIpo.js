@@ -46,7 +46,8 @@ export const SALUDO =
 
 // Traspasos con Ica (zona ya viene en voz: "la rodilla derecha")
 export const TRASPASO_IPO = {
-  confirma: (zona) => `Hola, soy Ipo. Ica me contó que te duele ${zona}, ¿es así?`,
+  // quien: "Ica", o el asistente de MiSalud que se lo paso (por defecto Katia)
+  confirma: (zona, quien = "Ica") => `Hola, soy Ipo. ${quien} me contó que te duele ${zona}, ¿es así?`,
   repreguntaConfirma: (zona) => `Responde sí o no, por favor: ¿te duele ${zona}?`,
   corrige: "Perdón, entonces empecemos desde el principio.",
   examenes: "Hola, soy Ipo. Yo te ayudo con tus exámenes.",
@@ -92,6 +93,8 @@ export const FRASES = {
   repreguntarOrden: "Responde sí o no, por favor: ¿quieres la orden de exámenes?",
   sinOrden: "Está bien, sin problema.",
   pedirDatos: "Perfecto. Para emitir la orden, completa tus datos en la pantalla.",
+  // Ya tiene sus datos (viene de MiSalud): la orden sale sin formulario
+  ordenConTusDatos: "Perfecto. Preparo la orden con tus datos.",
   resonancia: "Como incluye una resonancia, antes de emitir la orden responde unas preguntas de seguridad en la pantalla.",
   ordenLista: "Listo. Tu orden de exámenes está lista para descargar.",
   ordenListaCorreo: "Listo. Tu orden está lista para descargar, y también te la enviamos por correo.",
