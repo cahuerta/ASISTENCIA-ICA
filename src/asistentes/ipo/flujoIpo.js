@@ -9,8 +9,15 @@
  *    ¿es asi?") o directo a los examenes.
  *
  * DOLOR:
- * 1. Anamnesis oral guiada (bancoPreguntas.js): zona, lado, edad, sexo, banderas
- *    rojas por zona (grave -> se detiene y deriva a urgencia) y preguntas abiertas.
+ * 1. Zona, lado, edad y sexo (lo que no venga ya de Ica o MiSalud). Luego la
+ *    consulta como AGENTE CON BARANDAS: el paciente cuenta con sus palabras que le
+ *    paso, y en cada turno el backend (/agente/ipo/turno, Haiku) marca que
+ *    preguntas de la zona ya quedaron respondidas (bancoPreguntas.js: banderas
+ *    rojas por zona y preguntas del dolor) y propone UNA pregunta concreta sobre
+ *    lo que falta. No pasa al diagnostico hasta completar la lista; bandera grave
+ *    con si -> urgencia (lo revisan el backend y esta app). Si el backend falla o
+ *    la conversacion se alarga (tope: preguntas de la zona + MARGEN_TURNOS), sigue
+ *    con el guion de siempre, pregunta por pregunta.
  * 2. Puntos dolorosos en el esquema de la zona (mismos mappers de ICA). Si dijo
  *    solo "espalda", marca en el dibujo posterior si es cervical, dorsal o lumbar.
  * 3. /ia-trauma (modulo de trauma del backend) con la conversacion completa en
@@ -42,6 +49,12 @@ import {
 } from "../comun/interpretar.js";
 import { cargarMedicos } from "../comun/agenda.js";
 import { resolveZonaKey } from "../../mappers/mapperRegistry.js";
+import { interpretarSiNo } from "../comun/interpretar.js";
+
+// Agente: turnos extra sobre el numero de preguntas de la zona antes de pasar al guion
+const MARGEN_TURNOS = 6;
+const AGENTE_TIMEOUT_MS = 9000;
+const CAMPOS_BASICOS = ["zona", "lado", "edad", "sexo"];
 
 // import.meta.env sin "?.": Vite solo reemplaza la forma exacta al compilar
 // (con "?." las variables VITE_ nunca se aplicaban y siempre quedaba el valor por defecto)
@@ -113,7 +126,7 @@ async function postJSON(ruta, cuerpo) {
 export function crearFlujoIpo(api, f) {
   const {
     vigente, decir, hablar, preguntarCerrada, preguntarAbierta, preguntarGrupo, esperarPuntos,
-    elegirModulo, nuevoFlujo, getInforme,
+    elegirModulo, nuevoFlujo, getInforme, esperarRespuesta, setPensando,
     setFase, setPregunta, setEntendido, setProgreso, setResumen, setInforme, setError, setMarcadas,
     setOrdenUrl, setConCorreo,
     sesionRef, ctxRef, registroRef, idPagoRef, avisosRef, examenesRef, ordenRef, datosRef,
@@ -408,17 +421,174 @@ export function crearFlujoIpo(api, f) {
     return valor;
   };
 
+
+  // ---------- consulta de dolor como agente ----------
+  // Lista obligatoria de la zona: todas las preguntas del banco que aplican,
+  // menos los datos basicos. Banderas graves primero, luego avisos, luego el resto.
+  const listaDeZona = (ctx) => {
+    const orden = { grave: 0, aviso: 1 };
+    return PREGUNTAS
+      .filter((p) => !CAMPOS_BASICOS.includes(p.id) && (!p.aplica || p.aplica(ctx)))
+      .map((p) => ({ id: p.id, tipo: p.tipo, texto: (p.textoSegun && p.textoSegun(ctx)) || p.texto, bandera: p.bandera || null, p }))
+      .sort((x, y) => (orden[x.bandera] ?? 2) - (orden[y.bandera] ?? 2));
+  };
+
+  // Un turno del agente en el backend; null si falla o tarda (se sigue con el guion)
+  const turnoAgente = async (cuerpo) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), AGENTE_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${BACKEND_BASE}/agente/ipo/turno`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cuerpo),
+        signal: ctrl.signal,
+      });
+      if (!res.ok) return null;
+      const r = await res.json();
+      return r && r.ok ? r : null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  // Una pregunta del banco, como siempre (respaldo del agente). Devuelve
+  // { valor, resumen } o "urgencia".
+  const preguntarDelBanco = async (sesion, item) => {
+    if (item.tipo === "abierta") {
+      const resp = await preguntarAbierta(sesion, item.texto);
+      return { valor: null, resumen: String(resp || "") };
+    }
+    const { valor, texto: dicho } = await preguntarCerrada(sesion, "sino", item.texto, item.p.repregunta);
+    return { valor, resumen: String(dicho || "") };
+  };
+
+  // Pregunta del agente: si/no con botones a la vista, o abierta con texto
+  const preguntarComoAgente = async (sesion, item, texto) => {
+    if (item.tipo === "abierta") {
+      const resp = await preguntarAbierta(sesion, texto);
+      return { texto: String(resp || "") };
+    }
+    setPregunta({
+      texto, tipo: "agente", respaldo: true,
+      opciones: [{ etiqueta: "Sí", valor: true }, { etiqueta: "No", valor: false }],
+    });
+    setEntendido("");
+    await decir(sesion, texto);
+    const r = await esperarRespuesta(sesion);
+    if (typeof r.valor === "boolean") {
+      setEntendido(r.valor ? "Sí" : "No");
+      return { texto: r.valor ? "Sí" : "No", valor: r.valor };
+    }
+    setEntendido(r.texto || "");
+    return { texto: String(r.texto || "") };
+  };
+
+  const consultaAgente = async (sesion) => {
+    const ctx = ctxRef.current;
+    const registro = registroRef.current;
+    const lista = listaDeZona(ctx);
+    const respuestas = {};      // id -> { valor, resumen }
+    const conversacion = [];
+    const tope = lista.length + MARGEN_TURNOS;
+    let turnos = 0;
+    let ultimaPregunta = null;  // item que se acaba de preguntar
+    let usarGuion = false;
+
+    const pendientes = () => lista.filter((i) => !(i.id in respuestas));
+    const hayUrgencia = () => lista.some((i) => i.bandera === "grave" && respuestas[i.id]?.valor === true);
+    const avanzar = () => setProgreso(Math.round(((lista.length - pendientes().length) / (lista.length + 1)) * 100));
+    const urgencia = async () => {
+      setFase("urgencia");
+      setPregunta(null);
+      await decir(sesion, FRASES.urgencia);
+      return "urgencia";
+    };
+
+    // Primero el relato libre: de ahi el agente saca todo lo que ya conto
+    const relato = await preguntarAbierta(sesion, FRASES.relato);
+    conversacion.push({ rol: "ipo", texto: FRASES.relato }, { rol: "paciente", texto: relato });
+    registro.push({ id: "relato", tipo: "abierta", resumen: "Relato del paciente", pregunta: FRASES.relato, respuesta: relato });
+    let ultima = relato;
+
+    while (pendientes().length) {
+      let r = null;
+      if (!usarGuion) {
+        setPensando(true);
+        r = await turnoAgente({
+          zona: ctx.zona, lado: ctx.lado || "", edad: ctx.edad, sexo: ctx.sexo,
+          preguntas: lista.map(({ id, tipo, texto, bandera }) => ({ id, tipo, texto, bandera })),
+          respuestas, conversacion, ultima,
+        });
+        setPensando(false);
+        vigente(sesion);
+        turnos += 1;
+      }
+      if (r) {
+        Object.entries(r.respuestas || {}).forEach(([id, v]) => { if (!(id in respuestas)) respuestas[id] = v; });
+      } else if (ultimaPregunta && !(ultimaPregunta.id in respuestas)) {
+        // Sin agente: la respuesta a lo recien preguntado se interpreta aqui
+        if (ultimaPregunta.tipo === "abierta") respuestas[ultimaPregunta.id] = { valor: null, resumen: ultima };
+        else {
+          const v = interpretarSiNo(ultima);
+          if (v !== null) respuestas[ultimaPregunta.id] = { valor: v, resumen: ultima };
+        }
+      }
+      avanzar();
+      if (r?.urgencia || hayUrgencia()) return urgencia();
+      if (!pendientes().length) break;
+      if (!r || turnos >= tope) usarGuion = true;
+
+      if (usarGuion) {
+        // Guion: la siguiente pregunta pendiente del banco, como siempre
+        const item = pendientes()[0];
+        ultimaPregunta = null;
+        const res = await preguntarDelBanco(sesion, item);
+        respuestas[item.id] = res;
+        conversacion.push({ rol: "ipo", texto: item.texto }, { rol: "paciente", texto: res.resumen });
+        ultima = res.resumen;
+        continue;
+      }
+
+      const pend = pendientes();
+      const item = pend.find((i) => i.id === r.siguiente?.id) || pend[0];
+      const texto = item.id === r.siguiente?.id && r.siguiente?.texto ? r.siguiente.texto : item.texto;
+      const res = await preguntarComoAgente(sesion, item, texto);
+      if (typeof res.valor === "boolean") respuestas[item.id] = { valor: res.valor, resumen: res.texto };
+      conversacion.push({ rol: "ipo", texto }, { rol: "paciente", texto: res.texto });
+      ultimaPregunta = item;
+      ultima = res.texto;
+    }
+    if (hayUrgencia()) return urgencia();
+
+    // Lo respondido, al registro que va al modulo de trauma (consulta) y a los avisos
+    for (const i of lista) {
+      const r = respuestas[i.id];
+      if (!r) continue;
+      if (i.tipo === "abierta") {
+        if (i.p.opcional && esRespuestaVacia(r.resumen)) continue;
+        registro.push({ id: i.id, tipo: "abierta", resumen: i.p.resumen, pregunta: i.texto, respuesta: r.resumen });
+      } else {
+        registro.push({ id: i.id, bandera: i.bandera, resumen: i.p.resumen, pregunta: i.texto, respuesta: r.resumen, valor: r.valor });
+        if (r.valor === true && i.bandera === "aviso" && i.p.mensaje) avisosRef.current.push(i.p.mensaje);
+      }
+    }
+    return "ok";
+  };
+
   // ---------- flujo de dolor ----------
   // sinSaludo: viene de "no se con que medico" (ya se le explico)
   const conversar = async (sesion, { sinSaludo = false } = {}) => {
     const ctx = ctxRef.current;
-    const registro = registroRef.current;
-    const aplicables = () => PREGUNTAS.filter((p) => !p.aplica || p.aplica(ctx));
 
     setFase("conversacion");
     if (!sinSaludo) await decir(sesion, SALUDO);
 
+    // Datos basicos (zona, lado, edad, sexo): los que falten, como siempre
     for (const p of PREGUNTAS) {
+      if (!CAMPOS_BASICOS.includes(p.id)) continue;
       if (p.aplica && !p.aplica(ctx)) continue;
       if (p.id === "zona" && ctx.zona) {
         // ya la dijo al pedir hora (o a Ica); si fue solo "espalda", se precisa en el dibujo
@@ -426,30 +596,14 @@ export function crearFlujoIpo(api, f) {
         continue;
       }
       if (p.id === "lado" && ctx.lado) continue; // ya se lo dijo a Ica
-      setProgreso(Math.round((aplicables().indexOf(p) / (aplicables().length + 1)) * 100));
-      const texto = (p.textoSegun && p.textoSegun(ctx)) || p.texto;
-
-      if (p.tipo === "abierta") {
-        const resp = await preguntarAbierta(sesion, texto);
-        if (p.opcional && esRespuestaVacia(resp)) continue;
-        registro.push({ id: p.id, tipo: "abierta", resumen: p.resumen, pregunta: texto, respuesta: resp });
-        continue;
-      }
-
-      const { valor, texto: dicho } = await preguntarCerrada(sesion, p.tipo, texto, p.repregunta);
-      if (["zona", "lado", "edad", "sexo"].includes(p.tipo)) ctx[p.id] = valor;
+      if ((p.id === "edad" || p.id === "sexo") && ctx[p.id]) continue; // vino de MiSalud
+      const { valor } = await preguntarCerrada(sesion, p.tipo, p.texto, p.repregunta);
+      ctx[p.id] = valor;
       if (p.tipo === "zona" && valor === "Espalda") ctx.zona = await elegirNivelColumna(sesion);
-      if (p.tipo === "sino") {
-        registro.push({ id: p.id, bandera: p.bandera, resumen: p.resumen, pregunta: texto, respuesta: dicho, valor });
-        if (valor === true && p.bandera === "grave") {
-          setFase("urgencia");
-          setPregunta(null);
-          await decir(sesion, FRASES.urgencia);
-          return;
-        }
-        if (valor === true && p.bandera === "aviso" && p.mensaje) avisosRef.current.push(p.mensaje);
-      }
     }
+
+    // Consulta de la zona como agente (con el guion de respaldo)
+    if ((await consultaAgente(sesion)) === "urgencia") return;
     setProgreso(100);
 
     // ---------- puntos dolorosos ----------
