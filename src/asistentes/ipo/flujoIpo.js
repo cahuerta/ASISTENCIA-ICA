@@ -150,12 +150,12 @@ export function crearFlujoIpo(api, f) {
   };
 
   // ---------- traspasos con Ica ----------
-  // Ica ya pregunto zona y lado: Ipo confirma y sigue la consulta desde ahi
-  const recibirDolorDeIca = async (sesion) => {
+  // Ica (o el asistente de MiSalud) ya pregunto zona y lado: Ipo confirma y sigue
+  const recibirDolorDeIca = async (sesion, { quien = "Ica" } = {}) => {
     const ctx = ctxRef.current;
     const donde = zonaEnVoz(ctx.zona, ctx.lado);
     const { valor } = await preguntarCerrada(
-      sesion, "sino", TRASPASO_IPO.confirma(donde), TRASPASO_IPO.repreguntaConfirma(donde), true,
+      sesion, "sino", TRASPASO_IPO.confirma(donde, quien), TRASPASO_IPO.repreguntaConfirma(donde), true,
     );
     setEntendido("");
     if (!valor) {
@@ -254,9 +254,10 @@ export function crearFlujoIpo(api, f) {
 
     const pEdad = PREGUNTAS.find((p) => p.id === "edad");
     const pSexo = PREGUNTAS.find((p) => p.id === "sexo");
-    ctx.edad = (await preguntarCerrada(sesion, "edad", pEdad.texto, pEdad.repregunta)).valor;
+    // Edad y sexo: solo si no vinieron ya (desde MiSalud)
+    if (!ctx.edad) ctx.edad = (await preguntarCerrada(sesion, "edad", pEdad.texto, pEdad.repregunta)).valor;
     avanzar();
-    ctx.sexo = (await preguntarCerrada(sesion, "sexo", pSexo.texto, pSexo.repregunta, true)).valor;
+    if (!ctx.sexo) ctx.sexo = (await preguntarCerrada(sesion, "sexo", pSexo.texto, pSexo.repregunta, true)).valor;
     avanzar();
 
     // Enfermedades por grupos, botones abajo
@@ -351,8 +352,17 @@ export function crearFlujoIpo(api, f) {
   // Formulario de datos -> (resonancia) -> PDF. Termina cuando la orden esta lista.
   const pedirOrden = async (sesion) => {
     const lista = new Promise((resolve) => { ordenRef.current = resolve; });
-    setFase("datos");
-    await decir(sesion, FRASES.pedirDatos);
+    const d = datosRef.current;
+    if (d?.nombre && d?.rut) {
+      // Ya tenemos sus datos (desde MiSalud): sin formulario; si falla, el formulario
+      await decir(sesion, FRASES.ordenConTusDatos);
+      setFase("generando");
+      const ok = await enviarDatos(d);
+      if (!ok) setFase("datos");
+    } else {
+      setFase("datos");
+      await decir(sesion, FRASES.pedirDatos);
+    }
     await lista;
     vigente(sesion);
   };
@@ -512,7 +522,7 @@ export function crearFlujoIpo(api, f) {
       const res = await fetch(`${BACKEND_BASE}${ORDEN[moduloRef.current].pdf(idPagoRef.current)}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`Error ${res.status}`);
       const blob = await res.blob();
-      if (sesion !== sesionRef.current) return;
+      if (sesion !== sesionRef.current) return false;
       setOrdenUrl(URL.createObjectURL(blob));
       setFase("lista");
       await hablar(conCorreoRef.current ? FRASES.ordenListaCorreo : FRASES.ordenLista);
@@ -520,12 +530,15 @@ export function crearFlujoIpo(api, f) {
       const listo = ordenRef.current;
       ordenRef.current = null;
       listo?.();
+      return true;
     } catch {
       setError("No se pudo generar la orden. Intenta de nuevo.");
       setFase("datos");
+      return false;
     }
   };
 
+  // Devuelve true si la orden quedo lista (o falta solo el checklist de resonancia)
   const enviarDatos = async (datos) => {
     const informe = getInforme();
     setError("");
@@ -549,8 +562,7 @@ export function crearFlujoIpo(api, f) {
         });
         conCorreoRef.current = Boolean(datos.email);
         setConCorreo(Boolean(datos.email));
-        await generarOrden();
-        return;
+        return generarOrden();
       }
       // geo: para que la orden imprima la derivacion al especialista de su zona
       await postJSON("/api/guardar-datos-ia", {
@@ -559,16 +571,16 @@ export function crearFlujoIpo(api, f) {
       });
     } catch {
       setError("No se pudieron guardar tus datos. Intenta de nuevo.");
-      return;
+      return false;
     }
     conCorreoRef.current = Boolean(datos.email);
     setConCorreo(Boolean(datos.email));
     if (incluyeResonancia(informe?.examenes)) {
       setFase("resonancia");
       await hablar(FRASES.resonancia);
-      return;
+      return true; // la orden sale al guardar el checklist
     }
-    await generarOrden();
+    return generarOrden();
   };
 
   const guardarResonancia = async (form) => {
