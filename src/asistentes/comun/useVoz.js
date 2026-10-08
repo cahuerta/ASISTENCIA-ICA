@@ -1,6 +1,6 @@
 /**
  * useVoz.js
- * Voz del navegador (speechSynthesis) + apertura de boca para el avatar.
+ * Voz de los asistentes + apertura de boca para el avatar.
  *
  * - hablar(texto): Promise<boolean>. Se resuelve al terminar de hablar; true si
  *   efectivamente habló, false si el navegador no lo permitió (sin interacción
@@ -8,28 +8,44 @@
  * - callar(): corta lo que se esté diciendo.
  * - desbloquear(): se llama en la primera interacción con la página (clic/tecla)
  *   para que el navegador permita hablar después.
+ * - usarVoz("femenina" | "masculina"): Ica o Ipo, para lo próximo que se diga.
  * - boca: número 0..1 con la apertura actual de la boca.
  *
- * El texto se lee FRASE POR FRASE: en Chrome las voces de Google se cortan a
- * los ~15 s si se les pasa un texto largo de una vez. Las frases se guardan en
- * una referencia mientras se dicen (Chrome puede descartar la frase si nada la
- * referencia y nunca avisar que terminó).
+ * v4 VOZ NATURAL: el texto se manda al backend (POST /voz) y vuelve en audio con
+ *   las voces chilenas de Azure (Ica: Catalina, Ipo: Lorenzo). Se pide el texto
+ *   COMPLETO de una vez (no frase por frase): sin cortes entre oraciones. Solo si
+ *   es muy largo se parte en bloques y el siguiente se pide mientras suena el actual.
+ *   - Lo ya escuchado queda guardado en el navegador: no se vuelve a pedir.
+ *   - La boca sigue el volumen real del audio (se mide al recibirlo).
+ *   - RESPALDO: si el backend no responde a tiempo, da error o el plan gratis se
+ *     agotó, se habla con la voz del navegador (como antes) y por un rato ni se
+ *     intenta la voz natural, para no hacer esperar al paciente.
  *
- * v2 (Ipo): se prefieren voces masculinas y, si no hay, se baja el tono.
- * v3 (Ica e Ipo): cada asistente tiene su voz. usarVoz("femenina" | "masculina")
- *   cambia la voz al instante (se llama al pasar de un asistente al otro, antes
- *   de que hable el nuevo). Por defecto, masculina (Ipo).
- *
- * La boca se abre en cada palabra (evento "boundary") y se cierra suavemente.
- * Si el navegador no emite eventos de palabra, se usa una oscilación de respaldo.
+ * Voz del navegador (respaldo, speechSynthesis): se lee FRASE POR FRASE porque en
+ * Chrome las voces de Google se cortan a los ~15 s con textos largos. Se prefiere
+ * voz femenina para Ica y masculina para Ipo; si no hay, se ajusta el tono. La
+ * boca se abre en cada palabra (evento "boundary") o con una oscilación.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
+// ---------- voz natural (backend) ----------
+// import.meta.env sin "?.": Vite solo reemplaza la forma exacta al compilar
+const URL_VOZ =
+  `${import.meta.env.VITE_BACKEND_BASE || "https://asistencia-ica-backend.onrender.com"}/voz`;
+const ESPERA_AUDIO_MS = 4500;          // si el audio no llega en este tiempo, voz del navegador
+const PAUSA_SIN_NATURAL_MS = 30000;    // tras una falla, este rato se habla directo con el navegador
+const MAX_CARACTERES_AUDIO = 650;      // el backend acepta hasta 700
+const MAX_AUDIOS_GUARDADOS = 40;
+const VENTANA_BOCA_S = 0.04;           // la boca se mide en tramos de 40 ms
+// Medio segundo de silencio para desbloquear el audio en el primer toque (iPhone)
+const SILENCIO =
+  "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+
+// ---------- voz del navegador (respaldo) ----------
 const PREFERENCIA_IDIOMA = ["es-CL", "es-419", "es-US", "es-MX", "es-AR", "es-ES", "es"];
-// Ipo es hombre: se prefieren voces masculinas cuando el navegador las tiene
-// (Edge: Lorenzo de Chile, Jorge, Álvaro; Windows: Pablo, Raúl; Apple: Diego,
-// Jorge, Juan). Muchos Android traen una sola voz en español; en ese caso se
-// usa la que haya, con el tono más grave (TONO).
+// Edge: Lorenzo de Chile, Jorge, Álvaro; Windows: Pablo, Raúl; Apple: Diego, Jorge,
+// Juan. Muchos Android traen una sola voz en español: se usa la que haya y se
+// ajusta el tono.
 const PISTAS_VOZ_MASCULINA = [
   "lorenzo", "jorge", "alvaro", "álvaro", "pablo", "raul", "raúl", "diego",
   "juan", "carlos", "enrique", "gonzalo", "tomas", "tomás", "male", "hombre",
@@ -45,6 +61,11 @@ const TONO_FEMENINA = 1.05;
 const MAX_CARACTERES_FRASE = 180;
 const ESPERA_INICIO_MS = 5000;      // si la primera frase no parte en este tiempo, se considera bloqueada
 const PALABRAS_POR_SEG = 2.3;        // para el tiempo máximo de seguridad por frase
+
+const synthSoportado = typeof window !== "undefined" && "speechSynthesis" in window;
+const audioSoportado = typeof window !== "undefined" && typeof window.Audio !== "undefined"
+  && typeof fetch !== "undefined";
+export const vozSoportada = synthSoportado || audioSoportado;
 
 function elegirVoz(voces, genero = "masculina") {
   const preferidas = genero === "femenina" ? PISTAS_VOZ_FEMENINA : PISTAS_VOZ_MASCULINA;
@@ -83,7 +104,102 @@ export function dividirEnFrases(texto) {
   return resultado.filter((f) => /[\p{L}\p{N}]/u.test(f));
 }
 
-export const vozSoportada = typeof window !== "undefined" && "speechSynthesis" in window;
+// Junta frases en bloques de hasta MAX_CARACTERES_AUDIO (casi siempre queda uno solo)
+function dividirEnBloques(texto) {
+  const bloques = [];
+  let actual = "";
+  dividirEnFrases(texto).forEach((f) => {
+    if (actual && actual.length + 1 + f.length > MAX_CARACTERES_AUDIO) {
+      bloques.push(actual);
+      actual = f;
+    } else {
+      actual = actual ? `${actual} ${f}` : f;
+    }
+  });
+  if (actual) bloques.push(actual);
+  return bloques;
+}
+
+// ---------- audios guardados (compartidos mientras la página esté abierta) ----------
+const audiosGuardados = new Map();   // "genero|texto" -> { url, env }
+const audiosEnCamino = new Map();    // "genero|texto" -> Promise<entrada | null>
+let sinNaturalHasta = 0;
+
+function guardarAudio(clave, entrada) {
+  audiosGuardados.set(clave, entrada);
+  while (audiosGuardados.size > MAX_AUDIOS_GUARDADOS) {
+    const [viejaClave, vieja] = audiosGuardados.entries().next().value;
+    audiosGuardados.delete(viejaClave);
+    URL.revokeObjectURL(vieja.url);
+  }
+}
+
+// Volumen del audio en tramos de 40 ms (0..1), para mover la boca al ritmo real
+async function medirVolumen(blob) {
+  const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (!Offline) return null;
+  const ctx = new Offline(1, 1, 16000);
+  const datosAudio = await blob.arrayBuffer();
+  const buffer = await new Promise((ok, mal) => {
+    const p = ctx.decodeAudioData(datosAudio, ok, mal); // Safari antiguo: solo callbacks
+    if (p && typeof p.then === "function") p.then(ok, mal);
+  });
+  const muestras = buffer.getChannelData(0);
+  const paso = Math.max(1, Math.floor(buffer.sampleRate * VENTANA_BOCA_S));
+  const env = new Float32Array(Math.ceil(muestras.length / paso));
+  let maximo = 0;
+  for (let i = 0; i < env.length; i += 1) {
+    let suma = 0;
+    const fin = Math.min(muestras.length, (i + 1) * paso);
+    for (let j = i * paso; j < fin; j += 1) suma += muestras[j] * muestras[j];
+    env[i] = Math.sqrt(suma / Math.max(1, fin - i * paso));
+    if (env[i] > maximo) maximo = env[i];
+  }
+  if (maximo > 0) for (let i = 0; i < env.length; i += 1) env[i] = Math.min(1, (env[i] / maximo) * 1.3);
+  return env;
+}
+
+// Pide el audio al backend. null = usar la voz del navegador.
+function pedirAudio(texto, genero) {
+  const clave = `${genero}|${texto}`;
+  const guardado = audiosGuardados.get(clave);
+  if (guardado) return Promise.resolve(guardado);
+  if (audiosEnCamino.has(clave)) return audiosEnCamino.get(clave);
+  if (!audioSoportado || Date.now() < sinNaturalHasta) return Promise.resolve(null);
+
+  const promesa = (async () => {
+    const ctrl = new AbortController();
+    const reloj = setTimeout(() => ctrl.abort(), ESPERA_AUDIO_MS);
+    try {
+      const r = await fetch(URL_VOZ, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto, voz: genero }),
+        signal: ctrl.signal,
+      });
+      if (!r.ok) {
+        // 400/413/422: solo este texto va por el navegador; el resto: pausa
+        if (![400, 413, 422].includes(r.status)) sinNaturalHasta = Date.now() + PAUSA_SIN_NATURAL_MS;
+        return null;
+      }
+      const blob = await r.blob();
+      if (!blob.size) return null;
+      const entrada = { url: URL.createObjectURL(blob), env: null };
+      medirVolumen(blob).then((env) => { entrada.env = env; }).catch(() => {});
+      guardarAudio(clave, entrada);
+      return entrada;
+    } catch {
+      // Sin red, servidor dormido o demoró demasiado
+      sinNaturalHasta = Date.now() + PAUSA_SIN_NATURAL_MS;
+      return null;
+    } finally {
+      clearTimeout(reloj);
+      audiosEnCamino.delete(clave);
+    }
+  })();
+  audiosEnCamino.set(clave, promesa);
+  return promesa;
+}
 
 export default function useVoz() {
   const [hablando, setHablando] = useState(false);
@@ -96,11 +212,24 @@ export default function useVoz() {
   const hablandoRef = useRef(false);
   const rafRef = useRef(null);
   const turnoRef = useRef(0);         // cada hablar()/callar() invalida lo anterior
-  const fraseActualRef = useRef(null); // referencia viva de la frase que se está diciendo
+  const fraseActualRef = useRef(null); // referencia viva de la frase que se está diciendo (navegador)
+  const audioRef = useRef(null);       // un solo <audio>, desbloqueado en el primer toque
+  const entradaActualRef = useRef(null); // audio natural que está sonando (para la boca)
+  const cortarAudioRef = useRef(null);
 
-  // Cargar voces (en Chrome llegan de forma asíncrona)
+  const obtenerAudio = () => {
+    if (!audioRef.current && audioSoportado) {
+      const a = new Audio();
+      a.preload = "auto";
+      a.setAttribute("playsinline", "");
+      audioRef.current = a;
+    }
+    return audioRef.current;
+  };
+
+  // Cargar voces del navegador (en Chrome llegan de forma asíncrona)
   useEffect(() => {
-    if (!vozSoportada) return undefined;
+    if (!synthSoportado) return undefined;
     const cargar = () => {
       vozRef.current = elegirVoz(window.speechSynthesis.getVoices(), generoRef.current);
     };
@@ -112,7 +241,18 @@ export default function useVoz() {
   // Animación de la boca
   useEffect(() => {
     const tick = (t) => {
-      if (hablandoRef.current) {
+      const entrada = entradaActualRef.current;
+      const a = audioRef.current;
+      if (hablandoRef.current && entrada && a && !a.paused) {
+        if (entrada.env) {
+          // Voz natural: sigue el volumen real del audio
+          const objetivo = entrada.env[Math.floor(a.currentTime / VENTANA_BOCA_S)] || 0;
+          nivelRef.current = nivelRef.current * 0.45 + objetivo * 0.55;
+        } else {
+          const osc = 0.35 + 0.35 * Math.abs(Math.sin(t / 95)) * (0.6 + 0.4 * Math.sin(t / 37));
+          nivelRef.current = Math.max(nivelRef.current * 0.8, osc);
+        }
+      } else if (hablandoRef.current) {
         const sinEventos = t - ultimoLimiteRef.current > 450;
         if (sinEventos) {
           const osc = 0.35 + 0.35 * Math.abs(Math.sin(t / 95)) * (0.6 + 0.4 * Math.sin(t / 37));
@@ -131,12 +271,62 @@ export default function useVoz() {
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
+  // Al cerrar la pantalla, que no siga sonando
+  useEffect(() => () => {
+    cortarAudioRef.current?.();
+    audioRef.current?.pause();
+  }, []);
+
   const marcarHablando = (valor) => {
     hablandoRef.current = valor;
     setHablando(valor);
   };
 
-  // Dice UNA frase. Resuelve "ok" | "error" | "bloqueada" | "cancelada".
+  // ---------- voz natural: reproduce un audio. "ok" | "error" | "bloqueada" | "cancelada" ----------
+  const reproducir = useCallback((entrada, turno) => {
+    return new Promise((resolve) => {
+      const a = obtenerAudio();
+      let listo = false;
+      let seguro = null;
+
+      const terminar = (resultado) => {
+        if (listo) return;
+        listo = true;
+        clearTimeout(seguro);
+        a.onended = null;
+        a.onerror = null;
+        a.onloadedmetadata = null;
+        if (cortarAudioRef.current === cortar) cortarAudioRef.current = null;
+        if (entradaActualRef.current === entrada) entradaActualRef.current = null;
+        resolve(turno !== turnoRef.current ? "cancelada" : resultado);
+      };
+      const cortar = () => { a.pause(); terminar("cancelada"); };
+      cortarAudioRef.current = cortar;
+
+      a.onended = () => terminar("ok");
+      a.onerror = () => terminar("error");
+      a.onloadedmetadata = () => {
+        // Seguridad: si el navegador nunca avisa que terminó, se sigue igual
+        if (Number.isFinite(a.duration)) {
+          clearTimeout(seguro);
+          seguro = setTimeout(() => terminar("ok"), a.duration * 1000 + 3000);
+        }
+      };
+      seguro = setTimeout(() => { a.pause(); terminar("error"); }, 60000);
+
+      entradaActualRef.current = entrada;
+      a.src = entrada.url;
+      const p = a.play();
+      const empezo = () => { if (!listo) marcarHablando(true); };
+      if (p && typeof p.then === "function") {
+        p.then(empezo).catch((e) => terminar(e && e.name === "NotAllowedError" ? "bloqueada" : "error"));
+      } else {
+        empezo();
+      }
+    });
+  }, []);
+
+  // ---------- voz del navegador: dice UNA frase. "ok" | "error" | "bloqueada" | "cancelada" ----------
   const decirFrase = useCallback((frase, turno, esPrimera) => {
     return new Promise((resolve) => {
       let empezo = false;
@@ -182,7 +372,6 @@ export default function useVoz() {
       u.onstart = () => {
         empezo = true;
         clearTimeout(temporizador);
-        // Seguridad: si Chrome nunca avisa que terminó, se sigue igual
         temporizador = setTimeout(() => terminar("ok"), maximoMs);
         ultimoLimiteRef.current = 0;
         marcarHablando(true);
@@ -203,48 +392,82 @@ export default function useVoz() {
     });
   }, []);
 
-  const hablar = useCallback(async (texto) => {
-    if (!vozSoportada || !texto) return false;
-    turnoRef.current += 1;
-    const turno = turnoRef.current;
-
+  // Dice un texto con la voz del navegador, frase por frase
+  const hablarNavegador = useCallback(async (texto, turno, esPrimero) => {
+    if (!synthSoportado) return "error";
     // Solo se limpia la cola si había algo sonando (cancelar y hablar de inmediato
     // puede anular la primera frase en Chrome).
     if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
       window.speechSynthesis.cancel();
       await new Promise((r) => setTimeout(r, 150));
     }
-
     const frases = dividirEnFrases(texto);
-    let hablo = false;
+    let resultado = "error";
     for (let i = 0; i < frases.length; i += 1) {
+      if (turno !== turnoRef.current) return "cancelada";
+      const r = await decirFrase(frases[i], turno, esPrimero && i === 0);
+      if (r === "ok") resultado = "ok";
+      if (r === "bloqueada" || r === "cancelada") return r;
+    }
+    return resultado;
+  }, [decirFrase]);
+
+  const hablar = useCallback(async (texto) => {
+    if (!vozSoportada || !texto) return false;
+    turnoRef.current += 1;
+    const turno = turnoRef.current;
+    cortarAudioRef.current?.();
+    const genero = generoRef.current;
+
+    const bloques = dividirEnBloques(texto);
+    let hablo = false;
+    // El primer bloque se pide ya; el siguiente, mientras suena el actual
+    let proximo = bloques.length ? pedirAudio(bloques[0], genero) : null;
+    for (let i = 0; i < bloques.length; i += 1) {
+      const entrada = await proximo;
       if (turno !== turnoRef.current) break;
-      const resultado = await decirFrase(frases[i], turno, i === 0);
+      proximo = i + 1 < bloques.length ? pedirAudio(bloques[i + 1], genero) : null;
+
+      let resultado = entrada ? await reproducir(entrada, turno) : "error";
+      // El audio natural no estaba o falló al sonar: voz del navegador
+      if (resultado === "error" && turno === turnoRef.current) {
+        resultado = await hablarNavegador(bloques[i], turno, i === 0 && !hablo);
+      }
       if (resultado === "ok") hablo = true;
       if (resultado === "bloqueada" || resultado === "cancelada") break;
     }
 
     if (turno === turnoRef.current) {
       fraseActualRef.current = null;
+      entradaActualRef.current = null;
       marcarHablando(false);
     }
     return hablo;
-  }, [decirFrase]);
+  }, [reproducir, hablarNavegador]);
 
   const callar = useCallback(() => {
     turnoRef.current += 1;
-    if (vozSoportada) window.speechSynthesis.cancel();
+    cortarAudioRef.current?.();
+    if (synthSoportado) window.speechSynthesis.cancel();
     fraseActualRef.current = null;
+    entradaActualRef.current = null;
     marcarHablando(false);
   }, []);
 
-  // Se llama en la primera interacción con la página: una frase muda deja al
-  // navegador autorizado para hablar después.
+  // Se llama en la primera interacción con la página: un sonido mudo deja al
+  // navegador autorizado para hablar después (voz natural y voz del navegador).
   const desbloquear = useCallback(() => {
-    if (!vozSoportada) return;
-    const u = new SpeechSynthesisUtterance(" ");
-    u.volume = 0;
-    window.speechSynthesis.speak(u);
+    const a = obtenerAudio();
+    if (a) {
+      a.src = SILENCIO;
+      const p = a.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    }
+    if (synthSoportado) {
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0;
+      window.speechSynthesis.speak(u);
+    }
   }, []);
 
   // Cambia la voz (Ica: "femenina", Ipo: "masculina") para lo próximo que se diga
@@ -252,7 +475,7 @@ export default function useVoz() {
     const g = genero === "femenina" ? "femenina" : "masculina";
     if (generoRef.current === g) return;
     generoRef.current = g;
-    vozRef.current = vozSoportada ? elegirVoz(window.speechSynthesis.getVoices(), g) : null;
+    vozRef.current = synthSoportado ? elegirVoz(window.speechSynthesis.getVoices(), g) : null;
   }, []);
 
   return { hablar, callar, desbloquear, usarVoz, hablando, boca };
