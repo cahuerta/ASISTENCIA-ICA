@@ -4,13 +4,17 @@
  *
  * - iniciar(): arranca la escucha (debe llamarse tras un toque del usuario).
  * - pausar():  detiene la escucha (se usa mientras el avatar habla, para que no se oiga a sí mismo).
- * - reanudar(): vuelve a escuchar.
+ * - preparar(): enciende el micrófono un poco ANTES de que el asistente termine de
+ *   hablar; lo que oiga se descarta hasta reanudar() (así no se escucha a sí mismo
+ *   y ya está escuchando cuando el asistente se calla).
+ * - reanudar({ silencio: "corto" | "largo" }): vuelve a escuchar (al tiro si ya
+ *   estaba preparado). "corto" para preguntas cerradas, "largo" para contar algo.
  * - onFrase(texto): callback que recibe cada frase COMPLETA.
  *
- * Una frase se considera completa tras un silencio sin resultados nuevos:
- * SILENCIO_CORTO_MS si lo dicho es corto ("sí", "rodilla"): responde rápido;
- * SILENCIO_MS si viene contando algo largo (el relato): no se le corta al
- * tomar aire entre una idea y otra.
+ * Una frase se considera completa tras un silencio sin resultados nuevos, según
+ * la pregunta: SILENCIO_CORTO_MS en las cerradas (sí/no, zona, lado, menú) y
+ * SILENCIO_LARGO_MS en las abiertas (el relato), para no cortarle al paciente
+ * cuando toma aire entre una idea y otra.
  * Mientras tanto, los trozos que el navegador va marcando como finales se
  * acumulan (Chrome, sobre todo en Android, marca como final cada trozo corto
  * y además repite el texto acumulado; aquí se evita duplicarlo).
@@ -38,10 +42,9 @@ const SpeechRecognition =
 
 export const escuchaSoportada = Boolean(SpeechRecognition);
 
-// Silencio que marca el fin de una frase (corta / larga)
-const SILENCIO_CORTO_MS = 700;
-const SILENCIO_MS = 1100;
-const PALABRAS_FRASE_CORTA = 3;
+// Silencio que marca el fin de una frase: preguntas cerradas / abiertas
+const SILENCIO_CORTO_MS = 1000;
+const SILENCIO_LARGO_MS = 1800;
 // Tiempo máximo para que el navegador confirme que empezó a escuchar
 const VIGILANTE_MS = 2500;
 // Espera antes de volver a escuchar cuando la asistente termina de hablar
@@ -103,6 +106,8 @@ export default function useEscucha({ onFrase, idioma = "es-CL" } = {}) {
   const sesionParcialRef = useRef("");   // parcial de la sesión actual
   const ignorarHastaRef = useRef(0);     // índice de resultados ya enviados en esta sesión
   const silencioRef = useRef(null);
+  const silencioMsRef = useRef(SILENCIO_CORTO_MS);
+  const preparadaRef = useRef(false);    // encendida antes de tiempo: se descarta lo que oiga
 
   useEffect(() => {
     onFraseRef.current = onFrase;
@@ -122,7 +127,7 @@ export default function useEscucha({ onFrase, idioma = "es-CL" } = {}) {
   const enviarFrase = useCallback(() => {
     const texto = textoEnCurso().trim();
     limpiarFrase();
-    if (texto && !pausadaRef.current && onFraseRef.current) {
+    if (texto && !pausadaRef.current && !preparadaRef.current && onFraseRef.current) {
       onFraseRef.current(texto);
     }
   }, [limpiarFrase]);
@@ -133,7 +138,7 @@ export default function useEscucha({ onFrase, idioma = "es-CL" } = {}) {
       // Lo ya enviado no se vuelve a contar si la misma sesión sigue abierta
       ignorarHastaRef.current = Number.MAX_SAFE_INTEGER;
       enviarFrase();
-    }, textoEnCurso().trim().split(/\s+/).length <= PALABRAS_FRASE_CORTA ? SILENCIO_CORTO_MS : SILENCIO_MS);
+    }, silencioMsRef.current);
   }, [enviarFrase]);
 
   // Descarta el reconocedor vigente sin esperar a que el navegador avise
@@ -210,6 +215,12 @@ export default function useEscucha({ onFrase, idioma = "es-CL" } = {}) {
       if (!vigente() || pausadaRef.current) return;
       conResultados = true;
       fallosRef.current = 0;
+
+      // Preparada: el asistente todavía habla; todo lo oído hasta ahora se descarta
+      if (preparadaRef.current) {
+        ignorarHastaRef.current = evento.results.length;
+        return;
+      }
 
       // Resultados ya enviados en esta sesión (escritorio mantiene la lista completa)
       if (ignorarHastaRef.current === Number.MAX_SAFE_INTEGER) {
@@ -302,17 +313,35 @@ export default function useEscucha({ onFrase, idioma = "es-CL" } = {}) {
 
   const pausar = useCallback(() => {
     pausadaRef.current = true;
+    preparadaRef.current = false;
     clearTimeout(reinicioRef.current);
     limpiarFrase();
     descartar();
     setEscuchando(false);
   }, [descartar, limpiarFrase]);
 
-  const reanudar = useCallback(() => {
+  // Enciende el micrófono antes de que el asistente termine (lo oído se descarta)
+  const preparar = useCallback(() => {
+    if (!activaRef.current || recRef.current) return;
+    pausadaRef.current = false;
+    preparadaRef.current = true;
+    limpiarFrase();
+    clearTimeout(reinicioRef.current);
+    arrancar();
+  }, [arrancar, limpiarFrase]);
+
+  const reanudar = useCallback(({ silencio = "corto" } = {}) => {
+    silencioMsRef.current = silencio === "largo" ? SILENCIO_LARGO_MS : SILENCIO_CORTO_MS;
     pausadaRef.current = false;
     limpiarFrase();
+    if (preparadaRef.current && recRef.current) {
+      // Ya estaba escuchando: desde ahora cuenta lo que diga el paciente
+      preparadaRef.current = false;
+      return;
+    }
+    preparadaRef.current = false;
     programar(REANUDAR_MS);
   }, [limpiarFrase, programar]);
 
-  return { escuchando, parcial, error, iniciar, pausar, reanudar };
+  return { escuchando, parcial, error, iniciar, pausar, preparar, reanudar };
 }
