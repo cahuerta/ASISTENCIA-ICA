@@ -2,9 +2,11 @@
  * useVoz.js
  * Voz de los asistentes + apertura de boca para el avatar.
  *
- * - hablar(texto): Promise<boolean>. Se resuelve al terminar de hablar; true si
- *   efectivamente habló, false si el navegador no lo permitió (sin interacción
- *   previa con la página) o no hay voz disponible.
+ * - hablar(texto, { alTerminarPronto }): Promise<boolean>. Se resuelve al terminar
+ *   de hablar; true si efectivamente habló, false si el navegador no lo permitió
+ *   (sin interacción previa con la página) o no hay voz disponible.
+ *   alTerminarPronto(): se llama ~0,3 s ANTES de que termine el audio (para que el
+ *   micrófono ya esté encendido cuando el asistente se calla).
  * - callar(): corta lo que se esté diciendo.
  * - desbloquear(): se llama en la primera interacción con la página (clic/tecla)
  *   para que el navegador permita hablar después.
@@ -17,6 +19,8 @@
  *   es muy largo se parte en bloques y el siguiente se pide mientras suena el actual.
  *   - Lo ya escuchado queda guardado en el navegador: no se vuelve a pedir.
  *   - La boca sigue el volumen real del audio (se mide al recibirlo).
+ *   v5: la PRIMERA oración se pide aparte (es corta, llega rápido y empieza a sonar
+ *   antes); el resto se pide al mismo tiempo y sigue sin corte.
  *   - RESPALDO: si el backend no responde a tiempo, da error o el plan gratis se
  *     agotó, se habla con la voz del navegador (como antes) y por un rato ni se
  *     intenta la voz natural, para no hacer esperar al paciente.
@@ -37,6 +41,8 @@ const PAUSA_SIN_NATURAL_MS = 30000;    // tras una falla, este rato se habla dir
 const MAX_CARACTERES_AUDIO = 650;      // el backend acepta hasta 700
 const MAX_AUDIOS_GUARDADOS = 40;
 const VENTANA_BOCA_S = 0.04;           // la boca se mide en tramos de 40 ms
+const MIN_CARACTERES_PRIMERO = 40;     // el primer bloque: la primera oración (o las primeras, si es muy corta)
+const AVISO_ANTES_MS = 300;            // alTerminarPronto: este tiempo antes del final del audio
 // Medio segundo de silencio para desbloquear el audio en el primer toque (iPhone)
 const SILENCIO =
   "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
@@ -104,11 +110,18 @@ export function dividirEnFrases(texto) {
   return resultado.filter((f) => /[\p{L}\p{N}]/u.test(f));
 }
 
-// Junta frases en bloques de hasta MAX_CARACTERES_AUDIO (casi siempre queda uno solo)
+// Bloques para pedir el audio: primero la primera oración (llega rápido y empieza a
+// sonar antes) y después el resto, en bloques de hasta MAX_CARACTERES_AUDIO.
 function dividirEnBloques(texto) {
+  const frases = dividirEnFrases(texto);
   const bloques = [];
+  let primero = "";
+  while (frases.length && primero.length < MIN_CARACTERES_PRIMERO) {
+    primero = primero ? `${primero} ${frases.shift()}` : frases.shift();
+  }
+  if (primero) bloques.push(primero);
   let actual = "";
-  dividirEnFrases(texto).forEach((f) => {
+  frases.forEach((f) => {
     if (actual && actual.length + 1 + f.length > MAX_CARACTERES_AUDIO) {
       bloques.push(actual);
       actual = f;
@@ -283,19 +296,29 @@ export default function useVoz() {
   };
 
   // ---------- voz natural: reproduce un audio. "ok" | "error" | "bloqueada" | "cancelada" ----------
-  const reproducir = useCallback((entrada, turno) => {
+  // avisar: solo en el último bloque, se llama AVISO_ANTES_MS antes del final
+  const reproducir = useCallback((entrada, turno, avisar = null) => {
     return new Promise((resolve) => {
       const a = obtenerAudio();
       let listo = false;
       let seguro = null;
+      let aviso = null;
+
+      const programarAviso = () => {
+        if (!avisar || aviso || listo || !Number.isFinite(a.duration)) return;
+        const restante = (a.duration - a.currentTime) * 1000 - AVISO_ANTES_MS;
+        aviso = setTimeout(() => { if (!listo) avisar(); }, Math.max(0, restante));
+      };
 
       const terminar = (resultado) => {
         if (listo) return;
         listo = true;
         clearTimeout(seguro);
+        clearTimeout(aviso);
         a.onended = null;
         a.onerror = null;
         a.onloadedmetadata = null;
+        a.onplaying = null;
         if (cortarAudioRef.current === cortar) cortarAudioRef.current = null;
         if (entradaActualRef.current === entrada) entradaActualRef.current = null;
         resolve(turno !== turnoRef.current ? "cancelada" : resultado);
@@ -312,6 +335,7 @@ export default function useVoz() {
           seguro = setTimeout(() => terminar("ok"), a.duration * 1000 + 3000);
         }
       };
+      a.onplaying = programarAviso;
       seguro = setTimeout(() => { a.pause(); terminar("error"); }, 60000);
 
       entradaActualRef.current = entrada;
@@ -412,23 +436,32 @@ export default function useVoz() {
     return resultado;
   }, [decirFrase]);
 
-  const hablar = useCallback(async (texto) => {
+  const hablar = useCallback(async (texto, { alTerminarPronto = null } = {}) => {
     if (!vozSoportada || !texto) return false;
     turnoRef.current += 1;
     const turno = turnoRef.current;
     cortarAudioRef.current?.();
     const genero = generoRef.current;
 
+    let avisado = false;
+    const avisar = () => {
+      if (avisado || turno !== turnoRef.current) return;
+      avisado = true;
+      if (alTerminarPronto) alTerminarPronto();
+    };
+
     const bloques = dividirEnBloques(texto);
     let hablo = false;
-    // El primer bloque se pide ya; el siguiente, mientras suena el actual
-    let proximo = bloques.length ? pedirAudio(bloques[0], genero) : null;
+    // Los dos primeros bloques se piden juntos (la primera oración llega antes y
+    // empieza a sonar); los siguientes, mientras suena el anterior
+    const pedidos = bloques.slice(0, 2).map((b) => pedirAudio(b, genero));
     for (let i = 0; i < bloques.length; i += 1) {
-      const entrada = await proximo;
+      const entrada = await pedidos[i];
       if (turno !== turnoRef.current) break;
-      proximo = i + 1 < bloques.length ? pedirAudio(bloques[i + 1], genero) : null;
+      if (i + 2 < bloques.length) pedidos[i + 2] = pedirAudio(bloques[i + 2], genero);
 
-      let resultado = entrada ? await reproducir(entrada, turno) : "error";
+      const ultimo = i === bloques.length - 1;
+      let resultado = entrada ? await reproducir(entrada, turno, ultimo ? avisar : null) : "error";
       // El audio natural no estaba o falló al sonar: voz del navegador
       if (resultado === "error" && turno === turnoRef.current) {
         resultado = await hablarNavegador(bloques[i], turno, i === 0 && !hablo);
@@ -441,6 +474,7 @@ export default function useVoz() {
       fraseActualRef.current = null;
       entradaActualRef.current = null;
       marcarHablando(false);
+      avisar(); // si no se alcanzó a avisar antes (voz del navegador, audio muy corto)
     }
     return hablo;
   }, [reproducir, hablarNavegador]);
