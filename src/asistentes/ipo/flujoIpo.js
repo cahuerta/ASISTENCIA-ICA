@@ -45,7 +45,7 @@ import { PREGUNTAS, esColumna, GRUPOS_COMORBILIDAD, PREGUNTAS_EXTRA, CIRUGIAS } 
 import { TIPO_EXAMEN } from "../comun/textosComunes.js";
 import {
   esRespuestaVacia, construirConsulta, vozResultado, incluyeResonancia,
-  interpretarMedico, nombreEnVoz, vozExamenes, zonaEnVoz,
+  interpretarMedico, nombreEnVoz, vozExamenes, zonaEnVoz, completarDatosBasicos,
 } from "../comun/interpretar.js";
 import { cargarMedicos } from "../comun/agenda.js";
 import { resolveZonaKey } from "../../mappers/mapperRegistry.js";
@@ -139,9 +139,11 @@ export function crearFlujoIpo(api, f) {
     setFase("conversacion");
     setProgreso(0);
     setResumen(false);
-    let { valor } = await preguntarCerrada(sesion, "menu", texto, MENU.repregunta, true);
+    let { valor, texto: dichoMenu } = await preguntarCerrada(sesion, "menu", texto, MENU.repregunta, true);
     setEntendido("");
     nuevoFlujo();
+    // "Me duele la rodilla derecha": zona y lado ya quedan dichos
+    if (valor === "dolor") completarDatosBasicos(ctxRef.current, dichoMenu);
     if (valor === "examenes") {
       ({ valor } = await preguntarCerrada(sesion, "tipoExamen", TIPO_EXAMEN.texto, TIPO_EXAMEN.repregunta, true));
       setEntendido("");
@@ -586,7 +588,8 @@ export function crearFlujoIpo(api, f) {
     setFase("conversacion");
     if (!sinSaludo) await decir(sesion, SALUDO);
 
-    // Datos basicos (zona, lado, edad, sexo): los que falten, como siempre
+    // Datos basicos (zona, lado, edad, sexo): solo los que falten. Cada respuesta se
+    // lee buscando TODOS ("rodilla derecha" -> zona y lado; no se pregunta el lado)
     for (const p of PREGUNTAS) {
       if (!CAMPOS_BASICOS.includes(p.id)) continue;
       if (p.aplica && !p.aplica(ctx)) continue;
@@ -597,8 +600,9 @@ export function crearFlujoIpo(api, f) {
       }
       if (p.id === "lado" && ctx.lado) continue; // ya se lo dijo a Ica
       if ((p.id === "edad" || p.id === "sexo") && ctx[p.id]) continue; // vino de MiSalud
-      const { valor } = await preguntarCerrada(sesion, p.tipo, p.texto, p.repregunta);
+      const { valor, texto: dicho } = await preguntarCerrada(sesion, p.tipo, p.texto, p.repregunta);
       ctx[p.id] = valor;
+      completarDatosBasicos(ctx, dicho);
       if (p.tipo === "zona" && valor === "Espalda") ctx.zona = await elegirNivelColumna(sesion);
     }
 
