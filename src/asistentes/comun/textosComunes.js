@@ -2,7 +2,7 @@
  * comun/textosComunes.js
  * Frases que dice cualquiera de los asistentes (Ica o Ipo): que examenes necesita
  * (si dijo solo "examenes"), buscar hora con un medico en la agenda de la ficha
- * clinica, "¿algo mas?" y la despedida.
+ * clinica, "¿algo mas?" y la despedida. Tambien las muletillas de cada uno.
  */
 
 // Si dijo solo "examenes", se pregunta cuales
@@ -34,4 +34,18 @@ export const FRASES_COMUNES = {
   algoMas: "¿Te ayudo en algo más?",
   repreguntaAlgoMas: "Responde sí o no, por favor: ¿te ayudo en algo más?",
   despedida: "Perfecto. Fue un gusto ayudarte, cuídate mucho.",
+  // ---- respaldo de las preguntas ----
+  tocarPantalla: "Puedes tocar tu respuesta en la pantalla.",
+  marcalas: "Perdón, no te entendí. Márcalas abajo, por favor.",
+};
+
+// Muletillas mientras se espera algo (agente, analisis, agenda): cada asistente las
+// suyas. Cortas, para que no tapen la respuesta; si la espera sigue, una mas larga.
+export const RELLENOS = {
+  ica: ["Mm, déjame ver.", "A ver, un segundito.", "Ya, déjame revisar."],
+  ipo: ["Mm, ya veo.", "Ajá, déjame pensar.", "Entiendo. A ver…"],
+};
+export const RELLENOS_LARGOS = {
+  ica: ["Sigo buscando, dame un momento.", "Ya casi, un poquito más."],
+  ipo: ["Sigo revisando, ya casi.", "Dame un momento más, estoy revisando bien."],
 };
