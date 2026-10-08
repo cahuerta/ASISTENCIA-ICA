@@ -34,6 +34,9 @@
 //  - Lo que dice el asistente se ve en pantalla: si dice algo que no es la pregunta
 //    (un traspaso, un "gracias"), se deja de mostrar la pregunta anterior.
 //  - Tocar un boton mientras el asistente todavia habla lo corta y toma la respuesta.
+//  - Al decir una pregunta, el microfono se enciende ~0,3 s antes de que termine,
+//    para escuchar apenas se calla; el silencio para dar por terminada la respuesta
+//    es corto en preguntas cerradas y largo en las abiertas (el relato).
 //  - api.mientras(sesion, promesa): si algo demora (el agente, el analisis, la
 //    agenda), el asistente dice un "mm, déjame ver" para no quedar en silencio.
 "use client";
@@ -328,21 +331,26 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   // quita y se muestra lo que dice (asi no queda un texto viejo mientras habla).
   const decir = async (sesion, texto) => {
     vigente(sesion);
-    if (preguntaRef.current?.texto !== texto) {
+    const esPregunta = preguntaRef.current?.texto === texto;
+    if (!esPregunta) {
       setPregunta(null);
       setEntendido("");
       setDicho(texto);
     }
-    return decirLo(sesion, texto);
+    return decirLo(sesion, texto, esPregunta);
   };
 
-  // Dice algo sin tocar la pantalla (preguntas, repreguntas y muletillas)
-  const decirLo = async (sesion, texto) => {
+  // Dice algo sin tocar la pantalla (preguntas y repreguntas). esPregunta: despues
+  // viene una respuesta, asi que el microfono se prepara antes de que termine.
+  const decirLo = async (sesion, texto, esPregunta = true) => {
     vigente(sesion);
     escuchaRef.current?.pausar();
     diciendoRef.current = true;
+    const alTerminarPronto = esPregunta && vozOkRef.current
+      ? () => { if (sesion === sesionRef.current) escuchaRef.current?.preparar(); }
+      : null;
     try {
-      await hablar(texto);
+      await hablar(texto, { alTerminarPronto });
     } finally {
       diciendoRef.current = false;
     }
@@ -390,7 +398,9 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
       }
       esperaRef.current = resolve;
       setEsperando(true);
-      if (vozOkRef.current) escuchaRef.current?.reanudar();
+      if (vozOkRef.current) {
+        escuchaRef.current?.reanudar({ silencio: preguntaRef.current?.tipo === "abierta" ? "largo" : "corto" });
+      }
       // Si no responde por voz, aparecen los botones
       clearTimeout(botonesTimerRef.current);
       botonesTimerRef.current = setTimeout(
