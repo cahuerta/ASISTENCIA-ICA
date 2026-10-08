@@ -37,6 +37,8 @@
 //  - Al decir una pregunta, el microfono se enciende ~0,3 s antes de que termine,
 //    para escuchar apenas se calla; el silencio para dar por terminada la respuesta
 //    es corto en preguntas cerradas y largo en las abiertas (el relato).
+//  - Al abrir se despierta al backend y se pide el saludo; al Comenzar, las primeras
+//    preguntas: suenan al tiro con la voz de Azure (PRECARGA).
 //  - api.mientras(sesion, promesa): si algo demora (el agente, el analisis, la
 //    agenda), el asistente dice un "mm, déjame ver" para no quedar en silencio.
 "use client";
@@ -44,14 +46,14 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import "../../app.css";
 import AvatarIca from "../ica/AvatarIca.jsx";
 import AvatarIpo from "../ipo/AvatarIpo.jsx";
-import { PERSONAJE_ICA, MENU_ICA } from "../ica/textosIca.js";
-import { PERSONAJE_IPO, MENU, ACCION_FINAL, FRASES } from "../ipo/textosIpo.js";
-import { ZONAS, PREGUNTAS_EXTRA, CIRUGIAS } from "../ipo/bancoPreguntas.js";
-import { FRASES_COMUNES, TIPO_EXAMEN } from "./textosComunes.js";
+import { PERSONAJE_ICA, MENU_ICA, TRASPASO_ICA } from "../ica/textosIca.js";
+import { PERSONAJE_IPO, MENU, ACCION_FINAL, FRASES, SALUDO } from "../ipo/textosIpo.js";
+import { ZONAS, PREGUNTAS_EXTRA, CIRUGIAS, PREGUNTAS } from "../ipo/bancoPreguntas.js";
+import { FRASES_COMUNES, TIPO_EXAMEN, RELLENOS, RELLENOS_LARGOS } from "./textosComunes.js";
 import { crearFlujoIca } from "../ica/flujoIca.js";
 import { crearFlujoIpo, ORDEN, ZONAS_MAPPER, limpiarPuntosPrevios } from "../ipo/flujoIpo.js";
 import { crearAgenda, RESERVAS_ORIGEN, leerReserva, fechaEnVoz } from "./agenda.js";
-import useVoz, { vozSoportada } from "./useVoz.js";
+import useVoz, { vozSoportada, despertarVoz, precargarVoces } from "./useVoz.js";
 import useEscucha, { escuchaSoportada } from "./useEscucha.js";
 import {
   interpretarZona, interpretarLado, interpretarEdad, interpretarSexo, interpretarSiNo,
@@ -70,16 +72,22 @@ const PERSONAJES = { ica: PERSONAJE_ICA, ipo: PERSONAJE_IPO };
 // Sin respuesta en este tiempo, aparecen los botones aunque haya voz
 const BOTONES_TRAS_MS = 10000;
 
-// Muletillas mientras se espera algo (agente, analisis, agenda): cada asistente las suyas.
-// Cortas, para que no tapen la respuesta; si la espera sigue, una mas larga.
-const RELLENOS = {
-  ica: ["Mm, déjame ver.", "A ver, un segundito.", "Ya, déjame revisar."],
-  ipo: ["Mm, ya veo.", "Ajá, déjame pensar.", "Entiendo. A ver…"],
+// Muletillas (los textos estan en textosComunes.js)
+// Primeras frases de cada uno: se piden de antemano para que suenen al tiro con la
+// voz de Azure (la primera, el saludo, apenas abre la pagina; el resto al Comenzar)
+const textoBanco = (id) => PREGUNTAS.find((p) => p.id === id)?.texto || "";
+const PRECARGA = {
+  ica: [
+    ...[MENU_ICA.texto, TRASPASO_ICA.zona, textoBanco("lado"), TRASPASO_ICA.aDolor, FRASES_COMUNES.queMedico]
+      .map((texto) => ({ texto, genero: "femenina" })),
+    // lo primero que dice Ipo cuando Ica se lo pasa
+    ...[textoBanco("edad"), textoBanco("sexo"), FRASES.relato, ...RELLENOS.ipo.slice(0, 2)]
+      .map((texto) => ({ texto, genero: "masculina" })),
+  ],
+  ipo: [MENU.texto, SALUDO, textoBanco("zona"), textoBanco("lado"), textoBanco("edad"), textoBanco("sexo"),
+    FRASES.relato, ...RELLENOS.ipo].map((texto) => ({ texto, genero: "masculina" })),
 };
-const RELLENOS_LARGOS = {
-  ica: ["Sigo buscando, dame un momento.", "Ya casi, un poquito más."],
-  ipo: ["Sigo revisando, ya casi.", "Dame un momento más, estoy revisando bien."],
-};
+
 const RELLENO_TRAS_MS = 700;         // esperas mas cortas no llevan muletilla
 const RELLENO_LARGO_TRAS_MS = 6500;
 
@@ -253,6 +261,12 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   }, [usarVoz]);
 
   useEffect(() => { usarVoz(PERSONAJES[PERSONAJE_INICIAL].voz); }, [usarVoz]);
+
+  // Al abrir: despierta al backend y pide el saludo, para que suene al tiro al Comenzar
+  useEffect(() => {
+    despertarVoz();
+    precargarVoces(PRECARGA[PERSONAJE_INICIAL].slice(0, 1));
+  }, []);
 
   // ---------- escucha: cada frase completa resuelve la respuesta pendiente ----------
   const alEscuchar = useCallback((texto) => {
@@ -492,7 +506,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
       }
       intentos += 1;
       setEntendido(r.texto ? `No entendí: "${r.texto}"` : "");
-      dicho = intentos === 1 ? repregunta : intentos === 2 ? "Puedes tocar tu respuesta en la pantalla." : null;
+      dicho = intentos === 1 ? repregunta : intentos === 2 ? FRASES_COMUNES.tocarPantalla : null;
     }
   };
 
@@ -533,7 +547,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
       if (claves.length) return claves;
       intentos += 1;
       setEntendido(r.texto ? `No entendí: "${r.texto}"` : "");
-      dicho = intentos === 1 ? "Perdón, no te entendí. Márcalas abajo, por favor." : null;
+      dicho = intentos === 1 ? FRASES_COMUNES.marcalas : null;
     }
   };
 
@@ -664,6 +678,8 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     const sesion = sesionRef.current;
     callar();
     desbloquear();
+    despertarVoz();
+    precargarVoces(PRECARGA[PERSONAJE_INICIAL]); // las primeras preguntas, mientras saluda
     limpiarPuntosPrevios();
     ctxRef.current = {};
     registroRef.current = [];
