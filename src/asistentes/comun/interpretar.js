@@ -86,6 +86,54 @@ export function interpretarEdad(texto) {
   return total > 0 && total <= 110 ? total : null;
 }
 
+// Edad dicha como edad en una frase cualquiera: "tengo 50 años", "50 años", "cincuenta
+// y dos años". NO "hace 3 años", "desde hace 2 años", "durante 5 años" (eso es el
+// tiempo del dolor). null si no la dijo.
+const ANTES_DE_TIEMPO = ["hace", "desde", "durante", "hara", "por", "unos", "unas", "mas", "casi", "como"];
+export function interpretarEdadEnFrase(texto) {
+  const palabras = normalizar(texto).split(" ");
+  for (let i = 0; i < palabras.length; i += 1) {
+    if (palabras[i] !== "ano" && palabras[i] !== "anos") continue;
+    // El numero: 1 palabra ("50", "cincuenta") o 3 ("cincuenta y dos")
+    let inicio = i - 1;
+    if (inicio >= 2 && palabras[inicio - 1] === "y" && DECENAS[palabras[inicio - 2]]) inicio -= 2;
+    if (inicio < 0) continue;
+    const numero = palabras.slice(inicio, i).join(" ");
+    const n = interpretarEdad(numero);
+    if (!n) continue;
+    const antes = palabras.slice(Math.max(0, inicio - 2), inicio);
+    // "tengo unos 50 años" sí es edad; "hace unos 3 años" no
+    const esTiempo = antes.includes("hace") || antes.includes("desde") || antes.includes("durante")
+      || antes.includes("hara") || (antes.length && ANTES_DE_TIEMPO.includes(antes[antes.length - 1]) && !antes.includes("tengo"));
+    if (!esTiempo) return n;
+  }
+  return null;
+}
+
+// Datos basicos que vengan en cualquier respuesta ("rodilla derecha", "hombre de 50
+// años"): se guardan en ctx los que todavia falten, para no volver a preguntarlos.
+export function completarDatosBasicos(ctx, texto) {
+  if (!ctx || !texto) return;
+  if (!ctx.zona) {
+    const zona = interpretarZona(texto);
+    if (zona) ctx.zona = zona;
+  }
+  // El lado solo si la zona tiene lado (la columna no)
+  const zona = ctx.zona || "";
+  if (!ctx.lado && zona !== "Espalda" && !esColumna(zona)) {
+    const lado = interpretarLado(texto);
+    if (lado) ctx.lado = lado;
+  }
+  if (!ctx.edad) {
+    const edad = interpretarEdadEnFrase(texto);
+    if (edad) ctx.edad = edad;
+  }
+  if (!ctx.sexo) {
+    const sexo = interpretarSexo(texto);
+    if (sexo) ctx.sexo = sexo;
+  }
+}
+
 // ---------------- sexo ----------------
 export function interpretarSexo(texto) {
   const t = normalizar(texto);
