@@ -75,14 +75,14 @@ export function leerReserva(d) {
 
 export function crearAgenda(api, f) {
   const {
-    vigente, decir, callar, preguntarCerrada, elegirModulo,
+    vigente, decir, mientras, callar, preguntarCerrada, elegirModulo,
     setPregunta, setEntendido, setProgreso, setAgenda, setReserva, setFase, setEsperando,
     ctxRef, datosRef, prefillRef, pendienteRef, agendaRef, actividadRef, esperaRef, escuchaRef, vozOkRef, personajeRef,
   } = api;
 
   // ---------- hora con un medico ----------
   const flujoHora = async (sesion) => {
-    const medicos = await cargarMedicos();
+    const medicos = await mientras(sesion, cargarMedicos());
     vigente(sesion);
     if (!medicos.length) {
       await decir(sesion, FRASES_COMUNES.sinMedicos);
