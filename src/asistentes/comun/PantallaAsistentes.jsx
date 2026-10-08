@@ -29,6 +29,13 @@
 // como exige el navegador). Si no hay permiso o microfono, se avisa en pantalla y
 // todo sigue con botones y texto. Si el paciente no responde en 10 s, aparecen
 // los botones igual.
+//
+// FLUIDEZ:
+//  - Lo que dice el asistente se ve en pantalla: si dice algo que no es la pregunta
+//    (un traspaso, un "gracias"), se deja de mostrar la pregunta anterior.
+//  - Tocar un boton mientras el asistente todavia habla lo corta y toma la respuesta.
+//  - api.mientras(sesion, promesa): si algo demora (el agente, el analisis, la
+//    agenda), el asistente dice un "mm, déjame ver" para no quedar en silencio.
 "use client";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import "../../app.css";
@@ -59,6 +66,19 @@ const PERSONAJES = { ica: PERSONAJE_ICA, ipo: PERSONAJE_IPO };
 
 // Sin respuesta en este tiempo, aparecen los botones aunque haya voz
 const BOTONES_TRAS_MS = 10000;
+
+// Muletillas mientras se espera algo (agente, analisis, agenda): cada asistente las suyas.
+// Cortas, para que no tapen la respuesta; si la espera sigue, una mas larga.
+const RELLENOS = {
+  ica: ["Mm, déjame ver.", "A ver, un segundito.", "Ya, déjame revisar."],
+  ipo: ["Mm, ya veo.", "Ajá, déjame pensar.", "Entiendo. A ver…"],
+};
+const RELLENOS_LARGOS = {
+  ica: ["Sigo buscando, dame un momento.", "Ya casi, un poquito más."],
+  ipo: ["Sigo revisando, ya casi.", "Dame un momento más, estoy revisando bien."],
+};
+const RELLENO_TRAS_MS = 700;         // esperas mas cortas no llevan muletilla
+const RELLENO_LARGO_TRAS_MS = 6500;
 
 // ---------- modo widget (burbuja en www.icarticular.cl) ----------
 const ORIGEN_WIDGET = /^https:\/\/([a-z0-9-]+\.)*(icarticular\.cl|hipokratia\.health)$/;
@@ -156,7 +176,8 @@ class Interrumpido extends Error {}
 export default function PantallaAsistentes({ onUsarFormulario }) {
   const [fase, setFase] = useState("inicio");
   // inicio | conversacion | puntos | analizando | resultado | datos | resonancia | generando | lista | agenda | urgencia | fin | error
-  const [pregunta, setPregunta] = useState(null);   // { texto, tipo, respaldo }
+  const [pregunta, setPreguntaEstado] = useState(null); // { texto, tipo, respaldo }
+  const [dicho, setDicho] = useState("");           // lo que dice el asistente cuando no es una pregunta
   const [entendido, setEntendido] = useState("");
   const [progreso, setProgreso] = useState(0);
   const [informe, setInforme] = useState(null);
@@ -203,6 +224,23 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   const personajeRef = useRef(PERSONAJE_INICIAL);
   const misaludRef = useRef(null);
   const desdeIcaRef = useRef(false);           // Ipo atiende porque Ica se lo paso
+  const preguntaRef = useRef(null);            // la pregunta en pantalla, al dia (sin esperar el render)
+  const adelantadaRef = useRef(null);          // boton tocado mientras el asistente hablaba
+  const diciendoRef = useRef(false);           // el asistente esta diciendo algo (o cargando su voz)
+  const rellenoRef = useRef(-1);               // ultima muletilla, para no repetirla
+
+  // La pregunta en pantalla (con su referencia al dia para decir y los botones)
+  const setPregunta = useCallback((p) => {
+    if (typeof p !== "function") {
+      preguntaRef.current = p;
+      if (p) adelantadaRef.current = null;
+    }
+    setPreguntaEstado((prev) => {
+      const nueva = typeof p === "function" ? p(prev) : p;
+      preguntaRef.current = nueva;
+      return nueva;
+    });
+  }, []);
 
   // Cambia quien habla: dibujo, nombre y voz
   const cambiarPersonaje = useCallback((p) => {
@@ -286,16 +324,70 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     if (sesion !== sesionRef.current) throw new Interrumpido();
   };
 
+  // Dice algo. Si no es la pregunta que esta en pantalla, la pregunta anterior se
+  // quita y se muestra lo que dice (asi no queda un texto viejo mientras habla).
   const decir = async (sesion, texto) => {
     vigente(sesion);
-    escuchaRef.current?.pausar();
-    await hablar(texto);
+    if (preguntaRef.current?.texto !== texto) {
+      setPregunta(null);
+      setEntendido("");
+      setDicho(texto);
+    }
+    return decirLo(sesion, texto);
+  };
+
+  // Dice algo sin tocar la pantalla (preguntas, repreguntas y muletillas)
+  const decirLo = async (sesion, texto) => {
     vigente(sesion);
+    escuchaRef.current?.pausar();
+    diciendoRef.current = true;
+    try {
+      await hablar(texto);
+    } finally {
+      diciendoRef.current = false;
+    }
+    vigente(sesion);
+  };
+
+  // Mientras se espera algo lento, una muletilla ("mm, déjame ver"); si sigue
+  // demorando, otra mas larga. Al llegar la respuesta se deja terminar la muletilla.
+  const mientras = async (sesion, promesa) => {
+    let listo = false;
+    let voz = null;
+    const elegir = (lista) => {
+      let i = Math.floor(Math.random() * lista.length);
+      if (lista.length > 1 && i === rellenoRef.current) i = (i + 1) % lista.length;
+      rellenoRef.current = i;
+      return lista[i];
+    };
+    const decirRelleno = (lista) => {
+      if (listo || sesion !== sesionRef.current) return;
+      const anterior = voz || Promise.resolve();
+      voz = anterior.then(() => (listo || sesion !== sesionRef.current ? null : hablar(elegir(lista))));
+    };
+    escuchaRef.current?.pausar();
+    const t1 = setTimeout(() => decirRelleno(RELLENOS[personajeRef.current]), RELLENO_TRAS_MS);
+    const t2 = setTimeout(() => decirRelleno(RELLENOS_LARGOS[personajeRef.current]), RELLENO_LARGO_TRAS_MS);
+    try {
+      return await promesa;
+    } finally {
+      listo = true;
+      clearTimeout(t1);
+      clearTimeout(t2);
+      if (voz) await voz.catch(() => {});
+    }
   };
 
   // Respuesta por voz o por el respaldo en pantalla (botones / texto)
   const esperarRespuesta = (sesion) =>
     new Promise((resolve) => {
+      // Ya toco un boton mientras el asistente hablaba: esa es la respuesta
+      if (adelantadaRef.current) {
+        const r = adelantadaRef.current;
+        adelantadaRef.current = null;
+        resolve(r);
+        return;
+      }
       esperaRef.current = resolve;
       setEsperando(true);
       if (vozOkRef.current) escuchaRef.current?.reanudar();
@@ -313,7 +405,14 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
 
   const responderEnPantalla = (valor) => {
     const resolver = esperaRef.current;
-    if (!resolver) return;
+    if (!resolver) {
+      // Todavia esta diciendo la pregunta: se corta y se toma la respuesta
+      if (preguntaRef.current && diciendoRef.current) {
+        adelantadaRef.current = { valor, texto: String(valor) };
+        callar();
+      }
+      return;
+    }
     esperaRef.current = null;
     setEsperando(false);
     escuchaRef.current?.pausar();
@@ -374,7 +473,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
       const respaldo = siempreBotones || !vozOkRef.current || intentos >= 2;
       setPregunta({ texto, tipo, respaldo, opciones });
       setEntendido("");
-      if (dicho) await decir(sesion, dicho);
+      if (dicho) await decirLo(sesion, dicho);
       const r = await esperarRespuesta(sesion);
       const valor = r.valor !== undefined ? r.valor : (interprete || INTERPRETES[tipo])(r.texto);
       if (valor !== null && valor !== undefined) {
@@ -392,7 +491,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     setPregunta({ texto, tipo: "abierta", respaldo: !vozOkRef.current, opcional });
     setEntendido("");
     setTextoLibre("");
-    await decir(sesion, texto);
+    await decirLo(sesion, texto);
     const r = await esperarRespuesta(sesion);
     setEntendido(r.texto);
     return r.texto;
@@ -418,7 +517,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
       setSeleccion([]);
       setPregunta({ texto: PREGUNTAS_EXTRA.cual, tipo: "items", items: grupo.items, respaldo: true });
       setEntendido("");
-      if (dicho) await decir(sesion, dicho);
+      if (dicho) await decirLo(sesion, dicho);
       const r = await esperarRespuesta(sesion);
       const claves = Array.isArray(r.valor) ? r.valor : interpretarItems(grupo.items, r.texto);
       if (claves.length) return claves;
@@ -475,13 +574,15 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   // texto: "inicio" | "otraVez" | "volver" (cada asistente tiene su version)
 
   // ---------- quien atiende: traspaso entre Ica e Ipo ----------
-  const PAUSA_TRASPASO_MS = 350;
+  const PAUSA_TRASPASO_MS = 200;
 
   // Cambia de asistente en la misma pantalla (dibujo, nombre y voz)
   const pasarA = async (sesion, p) => {
     cambiarPersonaje(p);
     setPregunta(null);
     setEntendido("");
+    setDicho("");
+    adelantadaRef.current = null;
     await new Promise((r) => setTimeout(r, PAUSA_TRASPASO_MS)); // se ve el cambio de asistente
     vigente(sesion);
   };
@@ -537,7 +638,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   // api: lo que la pantalla les presta (hablar, preguntar, estados, referencias).
   // f: las funciones de todos (Ica, Ipo y la agenda) para que se llamen entre si.
   const api = {
-    vigente, decir, hablar, callar, preguntarCerrada, preguntarAbierta, preguntarGrupo, esperarPuntos,
+    vigente, decir, mientras, hablar, callar, preguntarCerrada, preguntarAbierta, preguntarGrupo, esperarPuntos,
     elegirModulo, nuevoFlujo, pasarA, menu, algoMas, getInforme: () => informe, esperarRespuesta, setPensando,
     setFase, setPregunta, setEntendido, setProgreso, setResumen, setInforme, setError, setMarcadas,
     setOrdenUrl, setConCorreo, setAgenda, setReserva, setEsperando,
@@ -558,7 +659,9 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     registroRef.current = [];
     avisosRef.current = [];
     esperaRef.current = null;
+    adelantadaRef.current = null;
     setEsperando(false);
+    setDicho("");
     puntosRef.current = null;
     setInforme(null);
     setOrdenUrl("");
@@ -646,8 +749,10 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     esperaRef.current = null;
     agendaRef.current = null;
     actividadRef.current = null;
+    adelantadaRef.current = null;
     setEsperando(false);
     setPregunta(null);
+    setDicho("");
     setAgenda(null);
     setFase("inicio");
     cambiarPersonaje(PERSONAJE_INICIAL); // la burbuja vuelve a mostrar a quien recibe
@@ -842,6 +947,13 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
                 Descargar orden
               </a>
             )}
+          </section>
+        )}
+
+        {/* ---------- LO QUE DICE (cuando no es una pregunta) ---------- */}
+        {fase === "conversacion" && !pregunta && dicho && (
+          <section style={S.tarjeta}>
+            <p style={{ ...S.preguntaTexto, margin: 0 }}>{dicho}</p>
           </section>
         )}
 
