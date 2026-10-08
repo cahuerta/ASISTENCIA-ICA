@@ -5,7 +5,7 @@
  * - hablar(texto, { alTerminarPronto }): Promise<boolean>. Se resuelve al terminar
  *   de hablar; true si efectivamente habló, false si el navegador no lo permitió
  *   (sin interacción previa con la página) o no hay voz disponible.
- *   alTerminarPronto(): se llama ~0,3 s ANTES de que termine el audio (para que el
+ *   alTerminarPronto(): se llama ~0,15 s ANTES de que termine el audio (para que el
  *   micrófono ya esté encendido cuando el asistente se calla).
  * - callar(): corta lo que se esté diciendo.
  * - desbloquear(): se llama en la primera interacción con la página (clic/tecla)
@@ -19,8 +19,12 @@
  *   es muy largo se parte en bloques y el siguiente se pide mientras suena el actual.
  *   - Lo ya escuchado queda guardado en el navegador: no se vuelve a pedir.
  *   - La boca sigue el volumen real del audio (se mide al recibirlo).
- *   v5: la PRIMERA oración se pide aparte (es corta, llega rápido y empieza a sonar
- *   antes); el resto se pide al mismo tiempo y sigue sin corte.
+ *   v6 PRECARGA: despertarVoz() despierta al backend (Render se duerme sin uso) y
+ *   precargarVoces() pide de antemano las primeras frases (el saludo, las primeras
+ *   preguntas): al tocar "Comenzar" ya están y suenan al tiro con la voz de Azure.
+ *   FIN DEL AUDIO: no se depende solo del aviso "ended" del navegador (en algunos
+ *   teléfonos llega tarde o no llega): se da por terminado al cumplirse su duración,
+ *   o si el audio se detiene; la boca se cierra apenas deja de sonar.
  *   - RESPALDO: si el backend no responde a tiempo, da error o el plan gratis se
  *     agotó, se habla con la voz del navegador (como antes) y por un rato ni se
  *     intenta la voz natural, para no hacer esperar al paciente.
@@ -34,15 +38,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 // ---------- voz natural (backend) ----------
 // import.meta.env sin "?.": Vite solo reemplaza la forma exacta al compilar
-const URL_VOZ =
-  `${import.meta.env.VITE_BACKEND_BASE || "https://asistencia-ica-backend.onrender.com"}/voz`;
+const BACKEND = import.meta.env.VITE_BACKEND_BASE || "https://asistencia-ica-backend.onrender.com";
+const URL_VOZ = `${BACKEND}/voz`;
 const ESPERA_AUDIO_MS = 4500;          // si el audio no llega en este tiempo, voz del navegador
 const PAUSA_SIN_NATURAL_MS = 30000;    // tras una falla, este rato se habla directo con el navegador
 const MAX_CARACTERES_AUDIO = 650;      // el backend acepta hasta 700
 const MAX_AUDIOS_GUARDADOS = 40;
 const VENTANA_BOCA_S = 0.04;           // la boca se mide en tramos de 40 ms
-const MIN_CARACTERES_PRIMERO = 40;     // el primer bloque: la primera oración (o las primeras, si es muy corta)
-const AVISO_ANTES_MS = 300;            // alTerminarPronto: este tiempo antes del final del audio
+const AVISO_ANTES_MS = 150;            // alTerminarPronto: este tiempo antes del final del audio
+const MARGEN_FIN_MS = 250;             // se da por terminado a su duración + este margen, aunque no avise
+const ESPERA_PRECARGA_MS = 60000;      // la precarga espera lo que tarde el backend en despertar
+const ESPERA_PRECARGADO_MS = 6000;     // hablar() espera hasta esto un audio que ya se está precargando
 // Medio segundo de silencio para desbloquear el audio en el primer toque (iPhone)
 const SILENCIO =
   "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
@@ -110,18 +116,12 @@ export function dividirEnFrases(texto) {
   return resultado.filter((f) => /[\p{L}\p{N}]/u.test(f));
 }
 
-// Bloques para pedir el audio: primero la primera oración (llega rápido y empieza a
-// sonar antes) y después el resto, en bloques de hasta MAX_CARACTERES_AUDIO.
+// Junta frases en bloques de hasta MAX_CARACTERES_AUDIO (casi siempre queda uno solo:
+// una sola petición por frase, para no gastar de más del plan de Azure)
 function dividirEnBloques(texto) {
-  const frases = dividirEnFrases(texto);
   const bloques = [];
-  let primero = "";
-  while (frases.length && primero.length < MIN_CARACTERES_PRIMERO) {
-    primero = primero ? `${primero} ${frases.shift()}` : frases.shift();
-  }
-  if (primero) bloques.push(primero);
   let actual = "";
-  frases.forEach((f) => {
+  dividirEnFrases(texto).forEach((f) => {
     if (actual && actual.length + 1 + f.length > MAX_CARACTERES_AUDIO) {
       bloques.push(actual);
       actual = f;
@@ -173,16 +173,21 @@ async function medirVolumen(blob) {
 }
 
 // Pide el audio al backend. null = usar la voz del navegador.
-function pedirAudio(texto, genero) {
+// precarga: espera lo que tarde el backend en despertar y, si falla, no deja la
+// voz del navegador "castigada" (esa pausa es solo para fallas al hablar).
+function pedirAudio(texto, genero, { precarga = false } = {}) {
   const clave = `${genero}|${texto}`;
   const guardado = audiosGuardados.get(clave);
   if (guardado) return Promise.resolve(guardado);
   if (audiosEnCamino.has(clave)) return audiosEnCamino.get(clave);
-  if (!audioSoportado || Date.now() < sinNaturalHasta) return Promise.resolve(null);
+  if (!audioSoportado) return Promise.resolve(null);
+
+  // Tras una falla al hablar, un rato directo con la voz del navegador
+  if (!precarga && Date.now() < sinNaturalHasta) return Promise.resolve(null);
 
   const promesa = (async () => {
     const ctrl = new AbortController();
-    const reloj = setTimeout(() => ctrl.abort(), ESPERA_AUDIO_MS);
+    const reloj = setTimeout(() => ctrl.abort(), precarga ? ESPERA_PRECARGA_MS : ESPERA_AUDIO_MS);
     try {
       const r = await fetch(URL_VOZ, {
         method: "POST",
@@ -192,7 +197,7 @@ function pedirAudio(texto, genero) {
       });
       if (!r.ok) {
         // 400/413/422: solo este texto va por el navegador; el resto: pausa
-        if (![400, 413, 422].includes(r.status)) sinNaturalHasta = Date.now() + PAUSA_SIN_NATURAL_MS;
+        if (!precarga && ![400, 413, 422].includes(r.status)) sinNaturalHasta = Date.now() + PAUSA_SIN_NATURAL_MS;
         return null;
       }
       const blob = await r.blob();
@@ -203,7 +208,7 @@ function pedirAudio(texto, genero) {
       return entrada;
     } catch {
       // Sin red, servidor dormido o demoró demasiado
-      sinNaturalHasta = Date.now() + PAUSA_SIN_NATURAL_MS;
+      if (!precarga) sinNaturalHasta = Date.now() + PAUSA_SIN_NATURAL_MS;
       return null;
     } finally {
       clearTimeout(reloj);
@@ -213,6 +218,25 @@ function pedirAudio(texto, genero) {
   audiosEnCamino.set(clave, promesa);
   return promesa;
 }
+
+// Despierta al backend (Render se duerme sin uso): se llama al abrir y al tocar "Comenzar"
+export function despertarVoz() {
+  if (typeof fetch === "undefined") return;
+  fetch(`${BACKEND}/health`, { cache: "no-store" }).catch(() => {});
+}
+
+// Pide de antemano estas frases, una tras otra: [{ texto, genero }]
+export async function precargarVoces(lista) {
+  if (!audioSoportado) return;
+  for (const { texto, genero } of lista) {
+    for (const bloque of dividirEnBloques(texto)) {
+      await pedirAudio(bloque, genero === "femenina" ? "femenina" : "masculina", { precarga: true });
+    }
+  }
+}
+
+// Espera una promesa como máximo ms; después, null
+const conTope = (promesa, ms) => Promise.race([promesa, new Promise((r) => setTimeout(() => r(null), ms))]);
 
 export default function useVoz() {
   const [hablando, setHablando] = useState(false);
@@ -256,7 +280,10 @@ export default function useVoz() {
     const tick = (t) => {
       const entrada = entradaActualRef.current;
       const a = audioRef.current;
-      if (hablandoRef.current && entrada && a && !a.paused) {
+      if (entrada && a && (a.paused || a.ended)) {
+        // Voz natural que ya no suena: boca cerrándose (aunque falte darla por terminada)
+        nivelRef.current *= 0.6;
+      } else if (hablandoRef.current && entrada && a) {
         if (entrada.env) {
           // Voz natural: sigue el volumen real del audio
           const objetivo = entrada.env[Math.floor(a.currentTime / VENTANA_BOCA_S)] || 0;
@@ -304,10 +331,17 @@ export default function useVoz() {
       let seguro = null;
       let aviso = null;
 
-      const programarAviso = () => {
-        if (!avisar || aviso || listo || !Number.isFinite(a.duration)) return;
-        const restante = (a.duration - a.currentTime) * 1000 - AVISO_ANTES_MS;
-        aviso = setTimeout(() => { if (!listo) avisar(); }, Math.max(0, restante));
+      let fin = null;
+      // Al empezar a sonar (y si se reanuda tras cargar): aviso previo y fin por duración
+      const alSonar = () => {
+        if (listo) return;
+        if (!Number.isFinite(a.duration) || a.duration <= 0) return;
+        const restanteMs = (a.duration - a.currentTime) * 1000;
+        clearTimeout(fin);
+        fin = setTimeout(() => { a.pause(); terminar("ok"); }, restanteMs + MARGEN_FIN_MS);
+        if (avisar && !aviso) {
+          aviso = setTimeout(() => { if (!listo) avisar(); }, Math.max(0, restanteMs - AVISO_ANTES_MS));
+        }
       };
 
       const terminar = (resultado) => {
@@ -315,10 +349,12 @@ export default function useVoz() {
         listo = true;
         clearTimeout(seguro);
         clearTimeout(aviso);
+        clearTimeout(fin);
         a.onended = null;
         a.onerror = null;
         a.onloadedmetadata = null;
         a.onplaying = null;
+        a.onpause = null;
         if (cortarAudioRef.current === cortar) cortarAudioRef.current = null;
         if (entradaActualRef.current === entrada) entradaActualRef.current = null;
         resolve(turno !== turnoRef.current ? "cancelada" : resultado);
@@ -328,20 +364,20 @@ export default function useVoz() {
 
       a.onended = () => terminar("ok");
       a.onerror = () => terminar("error");
-      a.onloadedmetadata = () => {
-        // Seguridad: si el navegador nunca avisa que terminó, se sigue igual
-        if (Number.isFinite(a.duration)) {
-          clearTimeout(seguro);
-          seguro = setTimeout(() => terminar("ok"), a.duration * 1000 + 3000);
-        }
-      };
-      a.onplaying = programarAviso;
-      seguro = setTimeout(() => { a.pause(); terminar("error"); }, 60000);
+      a.onplaying = alSonar;
+      a.onloadedmetadata = () => { if (!a.paused) alSonar(); };
+      seguro = setTimeout(() => { a.pause(); terminar("ok"); }, 60000); // último recurso
 
       entradaActualRef.current = entrada;
       a.src = entrada.url;
       const p = a.play();
-      const empezo = () => { if (!listo) marcarHablando(true); };
+      const empezo = () => {
+        if (listo) return;
+        marcarHablando(true);
+        alSonar();
+        // Ya sonando: si el audio se detiene solo (el teléfono, el micrófono), terminó
+        a.onpause = () => terminar("ok");
+      };
       if (p && typeof p.then === "function") {
         p.then(empezo).catch((e) => terminar(e && e.name === "NotAllowedError" ? "bloqueada" : "error"));
       } else {
@@ -452,13 +488,13 @@ export default function useVoz() {
 
     const bloques = dividirEnBloques(texto);
     let hablo = false;
-    // Los dos primeros bloques se piden juntos (la primera oración llega antes y
-    // empieza a sonar); los siguientes, mientras suena el anterior
-    const pedidos = bloques.slice(0, 2).map((b) => pedirAudio(b, genero));
+    // El primer bloque se pide ya; el siguiente, mientras suena el actual
+    const pedidos = [bloques.length ? pedirAudio(bloques[0], genero) : null];
     for (let i = 0; i < bloques.length; i += 1) {
-      const entrada = await pedidos[i];
+      // Si ya se estaba precargando, se espera un poco más (no los 60 s de la precarga)
+      const entrada = await conTope(pedidos[i], ESPERA_PRECARGADO_MS);
       if (turno !== turnoRef.current) break;
-      if (i + 2 < bloques.length) pedidos[i + 2] = pedirAudio(bloques[i + 2], genero);
+      if (i + 1 < bloques.length) pedidos[i + 1] = pedirAudio(bloques[i + 1], genero);
 
       const ultimo = i === bloques.length - 1;
       let resultado = entrada ? await reproducir(entrada, turno, ultimo ? avisar : null) : "error";
