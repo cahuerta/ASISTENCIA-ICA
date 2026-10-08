@@ -5,7 +5,8 @@
  *
  *  - Hora con un medico: la busca ella (comun/agenda.js). Si no sabe con quien,
  *    le pregunta donde le duele y se lo pasa a Ipo.
- *  - Dolor: pregunta solo la zona y el lado y se lo pasa a Ipo, que confirma
+ *  - Dolor: pregunta solo la zona y el lado (lo que ya dijo no se repregunta:
+ *    "rodilla derecha" trae los dos) y se lo pasa a Ipo, que confirma
  *    ("Ica me conto que te duele la rodilla derecha, ¿es asi?") y sigue la consulta.
  *  - Examenes generales o preoperatorio: se lo pasa a Ipo directo a ese modulo.
  *  - Cuando Ipo termina, o hay que reservar la hora que Ipo recomendo, Ipo se lo
@@ -22,6 +23,7 @@
 import { MENU_ICA, TRASPASO_ICA } from "./textosIca.js";
 import { TIPO_EXAMEN } from "../comun/textosComunes.js";
 import { PREGUNTAS, esColumna } from "../ipo/bancoPreguntas.js";
+import { completarDatosBasicos } from "../comun/interpretar.js";
 
 export function crearFlujoIca(api, f) {
   const {
@@ -36,9 +38,11 @@ export function crearFlujoIca(api, f) {
     setFase("conversacion");
     setProgreso(0);
     setResumen(false);
-    let { valor } = await preguntarCerrada(sesion, "menu", texto, MENU_ICA.repregunta, true);
+    let { valor, texto: dichoMenu } = await preguntarCerrada(sesion, "menu", texto, MENU_ICA.repregunta, true);
     setEntendido("");
     nuevoFlujo();
+    // "Me duele la rodilla derecha": zona y lado ya quedan dichos
+    if (valor === "dolor") completarDatosBasicos(ctxRef.current, dichoMenu);
     if (valor === "examenes") {
       ({ valor } = await preguntarCerrada(sesion, "tipoExamen", TIPO_EXAMEN.texto, TIPO_EXAMEN.repregunta, true));
       setEntendido("");
@@ -55,12 +59,16 @@ export function crearFlujoIca(api, f) {
     elegirModulo("trauma");
     if (!ctx.zona) {
       const pZona = PREGUNTAS.find((p) => p.id === "zona");
-      ctx.zona = (await preguntarCerrada(sesion, "zona", TRASPASO_ICA.zona, pZona.repregunta)).valor;
+      const r = await preguntarCerrada(sesion, "zona", TRASPASO_ICA.zona, pZona.repregunta);
+      ctx.zona = r.valor;
+      completarDatosBasicos(ctx, r.texto); // "rodilla derecha": no se pregunta el lado
     }
     // "espalda" sin segmento: Ipo lo precisa en el dibujo; la columna no tiene lado
     if (ctx.zona !== "Espalda" && !esColumna(ctx.zona) && !ctx.lado) {
       const pLado = PREGUNTAS.find((p) => p.id === "lado");
-      ctx.lado = (await preguntarCerrada(sesion, "lado", pLado.texto, pLado.repregunta)).valor;
+      const r = await preguntarCerrada(sesion, "lado", pLado.texto, pLado.repregunta);
+      ctx.lado = r.valor;
+      completarDatosBasicos(ctx, r.texto);
     }
     setEntendido("");
     await decir(sesion, TRASPASO_ICA.aDolor);
