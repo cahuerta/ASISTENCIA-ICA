@@ -126,7 +126,7 @@ async function postJSON(ruta, cuerpo) {
 export function crearFlujoIpo(api, f) {
   const {
     vigente, decir, hablar, preguntarCerrada, preguntarAbierta, preguntarGrupo, esperarPuntos,
-    elegirModulo, nuevoFlujo, getInforme, esperarRespuesta, setPensando,
+    elegirModulo, nuevoFlujo, getInforme, esperarRespuesta, setPensando, mientras,
     setFase, setPregunta, setEntendido, setProgreso, setResumen, setInforme, setError, setMarcadas,
     setOrdenUrl, setConCorreo,
     sesionRef, ctxRef, registroRef, idPagoRef, avisosRef, examenesRef, ordenRef, datosRef,
@@ -205,7 +205,7 @@ export function crearFlujoIpo(api, f) {
   const buscarEspecialista = async (sesion, zona) => {
     let doctor = null;
     try {
-      const r = await postJSON("/resolver-derivacion", { dolor: zona, geo: leerGeo() || undefined });
+      const r = await mientras(sesion, postJSON("/resolver-derivacion", { dolor: zona, geo: leerGeo() || undefined }));
       doctor = r?.doctor?.nombre ? r.doctor : null;
     } catch {
       // sin recomendacion: Ica muestra los especialistas de la zona
@@ -213,7 +213,7 @@ export function crearFlujoIpo(api, f) {
     vigente(sesion);
     let medico = null;
     if (doctor) {
-      const medicos = await cargarMedicos();
+      const medicos = await mientras(sesion, cargarMedicos());
       vigente(sesion);
       medico = interpretarMedico(doctor.nombre, medicos)?.medico || null;
     }
@@ -332,9 +332,9 @@ export function crearFlujoIpo(api, f) {
         paciente: { nombre: "Paciente", edad: ctx.edad, genero, dolor: ctx.zona || "", lado: ctx.lado || "" },
         comorbilidades,
       };
-      const r = tipo === "preop"
-        ? await postJSON("/ia-preop", { ...cuerpo, tipoCirugia })
-        : await postJSON("/ia-generales", cuerpo);
+      const r = await mientras(sesion, tipo === "preop"
+        ? postJSON("/ia-preop", { ...cuerpo, tipoCirugia })
+        : postJSON("/ia-generales", cuerpo));
       if (!r.ok) throw new Error(r.error || "Sin respuesta");
       examenes = (Array.isArray(r.examenesIA) ? r.examenesIA : r.examenes || []).map((e) => String(e).trim()).filter(Boolean);
       informeIA = typeof r.informeIA === "string" ? r.informeIA : "";
@@ -517,11 +517,11 @@ export function crearFlujoIpo(api, f) {
       let r = null;
       if (!usarGuion) {
         setPensando(true);
-        r = await turnoAgente({
+        r = await mientras(sesion, turnoAgente({
           zona: ctx.zona, lado: ctx.lado || "", edad: ctx.edad, sexo: ctx.sexo,
           preguntas: lista.map(({ id, tipo, texto, bandera }) => ({ id, tipo, texto, bandera })),
           respuestas, conversacion, ultima,
-        });
+        }));
         setPensando(false);
         vigente(sesion);
         turnos += 1;
@@ -634,12 +634,12 @@ export function crearFlujoIpo(api, f) {
     try {
       // Modulo de trauma: 1 diagnostico + 1 examen del catalogo de la zona
       // (si la IA falla, el backend responde igual con su fallback por zona)
-      const r = await postJSON("/ia-trauma", {
+      const r = await mientras(sesion, postJSON("/ia-trauma", {
         idPago: idPagoRef.current,
         paciente: { edad: ctx.edad, genero: ctx.sexo, dolor: ctx.zona, lado: ctx.lado || "" },
         marcadores: marcadores || undefined,
         consulta: construirConsulta(ctx, registroRef.current),
-      });
+      }));
       if (!r.ok) throw new Error(r.error || "Sin respuesta");
       const examenes = (Array.isArray(r.examenes) ? r.examenes : []).map((e) => String(e).trim()).filter(Boolean).slice(0, 1);
       resultado = {
