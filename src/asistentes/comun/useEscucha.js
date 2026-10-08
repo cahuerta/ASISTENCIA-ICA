@@ -7,7 +7,10 @@
  * - reanudar(): vuelve a escuchar.
  * - onFrase(texto): callback que recibe cada frase COMPLETA.
  *
- * Una frase se considera completa tras SILENCIO_MS sin resultados nuevos.
+ * Una frase se considera completa tras un silencio sin resultados nuevos:
+ * SILENCIO_CORTO_MS si lo dicho es corto ("sí", "rodilla"): responde rápido;
+ * SILENCIO_MS si viene contando algo largo (el relato): no se le corta al
+ * tomar aire entre una idea y otra.
  * Mientras tanto, los trozos que el navegador va marcando como finales se
  * acumulan (Chrome, sobre todo en Android, marca como final cada trozo corto
  * y además repite el texto acumulado; aquí se evita duplicarlo).
@@ -35,8 +38,10 @@ const SpeechRecognition =
 
 export const escuchaSoportada = Boolean(SpeechRecognition);
 
-// Silencio que marca el fin de una frase
-const SILENCIO_MS = 1000;
+// Silencio que marca el fin de una frase (corta / larga)
+const SILENCIO_CORTO_MS = 700;
+const SILENCIO_MS = 1100;
+const PALABRAS_FRASE_CORTA = 3;
 // Tiempo máximo para que el navegador confirme que empezó a escuchar
 const VIGILANTE_MS = 2500;
 // Espera antes de volver a escuchar cuando la asistente termina de hablar
@@ -128,7 +133,7 @@ export default function useEscucha({ onFrase, idioma = "es-CL" } = {}) {
       // Lo ya enviado no se vuelve a contar si la misma sesión sigue abierta
       ignorarHastaRef.current = Number.MAX_SAFE_INTEGER;
       enviarFrase();
-    }, SILENCIO_MS);
+    }, textoEnCurso().trim().split(/\s+/).length <= PALABRAS_FRASE_CORTA ? SILENCIO_CORTO_MS : SILENCIO_MS);
   }, [enviarFrase]);
 
   // Descarta el reconocedor vigente sin esperar a que el navegador avise
