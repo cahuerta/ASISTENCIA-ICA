@@ -48,7 +48,7 @@ const SILENCIO_LARGO_MS = 1800;
 // Tiempo máximo para que el navegador confirme que empezó a escuchar
 const VIGILANTE_MS = 2500;
 // Espera antes de volver a escuchar cuando la asistente termina de hablar
-const REANUDAR_MS = 120;
+const REANUDAR_MS = 60;
 // Espera antes de reiniciar cuando el navegador corta la escucha
 const REINICIO_MS = 200;
 // Fallos seguidos (no inicia, error de inicio, cortes inmediatos) antes de avisar
