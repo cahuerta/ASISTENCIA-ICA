@@ -34,6 +34,9 @@ export const FRASES_COMUNES = {
   algoMas: "¿Te ayudo en algo más?",
   repreguntaAlgoMas: "Responde sí o no, por favor: ¿te ayudo en algo más?",
   despedida: "Perfecto. Fue un gusto ayudarte, cuídate mucho.",
+  // MiSalud: al terminar, se devuelve al paciente a su asistente (Katia o como la llame)
+  devolverMiSalud: (quien, conOrden) =>
+    `${conOrden ? `Listo. Le dejé tu orden a ${quien} para que la descargues. ` : "Listo. "}Te devuelvo con ${quien}.`,
   // ---- respaldo de las preguntas ----
   tocarPantalla: "Puedes tocar tu respuesta en la pantalla.",
   marcalas: "Perdón, no te entendí. Márcalas abajo, por favor.",
