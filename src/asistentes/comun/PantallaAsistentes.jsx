@@ -19,6 +19,12 @@
 //    la URL, y solo desde un origen de confianza: no se vuelven a preguntar y la
 //    orden sale sin el formulario. Al terminar avisa "terminado" a MiSalud; la ✕
 //    avisa "cerrar".
+//    SIN "COMENZAR": el paciente ya toco a su asistente en MiSalud; apenas llegan
+//    sus datos, Ipo / Ica parten solos (si el navegador deja sonar el audio dentro
+//    del panel; si no, queda el boton Comenzar como siempre).
+//    AL TERMINAR no se pregunta "¿algo mas?": se le devuelve el paciente a su
+//    asistente junto con la orden (el PDF, para que la descargue alla) y la hora
+//    reservada, por postMessage solo al origen de confianza.
 //
 // WIDGET (?modo=widget dentro de un iframe de icarticular.cl / hipokratia.health):
 //    muestra solo una burbuja "¿Te ayudo?"; al tocarla avisa a la pagina para que
@@ -182,6 +188,24 @@ async function pedirMicrofono() {
   }
 }
 
+// Modo MiSalud: ¿el navegador deja sonar audio sin un toque en esta pagina?
+// (con allow="autoplay" del panel y el toque que el paciente ya hizo en MiSalud,
+// Chrome lo permite; Safari a veces no: entonces queda el boton Comenzar)
+// 50 ms de silencio real (con muestras: el navegador lo trata como audio con sonido)
+const SILENCIO_PRUEBA =
+  "data:audio/wav;base64,UklGRrQBAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YZABAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
+async function puedeSonarSolo() {
+  try {
+    // Con volumen normal (es silencio): un audio mudo el navegador lo deja sonar siempre
+    const a = new Audio(SILENCIO_PRUEBA);
+    await a.play();
+    a.pause();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 class Interrumpido extends Error {}
 
 export default function PantallaAsistentes({ onUsarFormulario }) {
@@ -234,6 +258,10 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   const pendienteRef = useRef({});             // { volver, reservado } llegados mientras hablaba
   const personajeRef = useRef(PERSONAJE_INICIAL);
   const misaludRef = useRef(null);
+  const comenzarRef = useRef(null);            // modo MiSalud: para partir solo al llegar los datos
+  const arrancoRef = useRef(false);            // modo MiSalud: ya partio solo una vez
+  const ordenUrlRef = useRef("");              // la orden lista (para devolverla a MiSalud)
+  const reservaRef = useRef(null);             // la hora reservada (para devolverla a MiSalud)
   const desdeIcaRef = useRef(false);           // Ipo atiende porque Ica se lo paso
   const preguntaRef = useRef(null);            // la pregunta en pantalla, al dia (sin esperar el render)
   const adelantadaRef = useRef(null);          // boton tocado mientras el asistente hablaba
@@ -306,6 +334,10 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
       const datos = leerDatosMiSalud(d.datos);
       misaludRef.current = datos;
       setMisalud(datos);
+      if (!arrancoRef.current) {
+        arrancoRef.current = true;
+        puedeSonarSolo().then((ok) => { if (ok) comenzarRef.current?.(); });
+      }
     };
     window.addEventListener("message", alMensaje);
     avisarMiSalud("listo");
@@ -622,12 +654,30 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     setResumen(true);
     // Si Ica se lo paso a Ipo, la que despide (o sigue ayudando) es Ica
     await f.devolverAIca(sesion, "fin");
+    if (MODO_MISALUD) return devolverAMiSalud(sesion);
     const { valor } = await preguntarCerrada(sesion, "sino", FRASES_COMUNES.algoMas, FRASES_COMUNES.repreguntaAlgoMas, true);
     if (valor) return menu(sesion, "otraVez");
     setPregunta(null);
     setFase("fin");
     await decir(sesion, FRASES_COMUNES.despedida);
     avisarMiSalud("terminado");
+  };
+
+  // MiSalud: se devuelve el paciente a su asistente con la orden (PDF) y la hora
+  const devolverAMiSalud = async (sesion) => {
+    let orden = null;
+    if (ordenUrlRef.current) {
+      try {
+        const b = await (await fetch(ordenUrlRef.current)).blob();
+        if (b.size) orden = b;
+      } catch {}
+    }
+    vigente(sesion);
+    const quien = misaludRef.current?.quien || "tu asistente";
+    setPregunta(null);
+    setFase("fin");
+    await decir(sesion, FRASES_COMUNES.devolverMiSalud(quien, Boolean(orden)));
+    avisarMiSalud("terminado", { orden, reserva: reservaRef.current });
   };
 
   // Desde MiSalud: datos que no se vuelven a preguntar y a quien le toca
@@ -665,7 +715,10 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     vigente, decir, mientras, hablar, callar, preguntarCerrada, preguntarAbierta, preguntarGrupo, esperarPuntos,
     elegirModulo, nuevoFlujo, pasarA, menu, algoMas, getInforme: () => informe, esperarRespuesta, setPensando,
     setFase, setPregunta, setEntendido, setProgreso, setResumen, setInforme, setError, setMarcadas,
-    setOrdenUrl, setConCorreo, setAgenda, setReserva, setEsperando,
+    setOrdenUrl: (u) => { ordenUrlRef.current = u || ""; setOrdenUrl(u); },
+    setConCorreo, setAgenda,
+    setReserva: (r) => { reservaRef.current = r || null; setReserva(r); },
+    setEsperando,
     sesionRef, ctxRef, registroRef, idPagoRef, avisosRef, examenesRef, ordenRef, datosRef, conCorreoRef,
     moduloRef, personajeRef, desdeIcaRef, agendaRef, actividadRef, esperaRef, prefillRef, pendienteRef,
     escuchaRef, vozOkRef,
@@ -704,6 +757,8 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     pendienteRef.current = {};
     setAgenda(null);
     setReserva(null);
+    ordenUrlRef.current = "";
+    reservaRef.current = null;
     setResumen(false);
     setConCorreo(false);
     conCorreoRef.current = false;
@@ -738,6 +793,8 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
       }
     }
   };
+
+  comenzarRef.current = comenzar;
 
   const reintentarAnalisis = async () => {
     const sesion = sesionRef.current;
