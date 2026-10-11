@@ -1,6 +1,6 @@
 /**
  * comun/textosComunes.js
- * Frases que dice cualquiera de los asistentes (Ica o Ipo): que examenes necesita
+ * Frases que dice cualquiera de los asistentes (Ica, Ipo o Sophia): que examenes necesita
  * (si dijo solo "examenes"), buscar hora con un medico en la agenda de la ficha
  * clinica, "¿algo mas?" y la despedida. Tambien las muletillas de cada uno.
  */
@@ -47,8 +47,10 @@ export const FRASES_COMUNES = {
 export const RELLENOS = {
   ica: ["Mm, déjame ver.", "A ver, un segundito.", "Ya, déjame revisar."],
   ipo: ["Mm, ya veo.", "Ajá, déjame pensar.", "Entiendo. A ver…"],
+  sophia: ["Mm, interesante.", "Déjame revisar.", "A ver, busco los estudios."],
 };
 export const RELLENOS_LARGOS = {
   ica: ["Sigo buscando, dame un momento.", "Ya casi, un poquito más."],
   ipo: ["Sigo revisando, ya casi.", "Dame un momento más, estoy revisando bien."],
+  sophia: ["Sigo leyendo los estudios, dame un momento.", "Estoy comparando la evidencia, ya casi."],
 };
