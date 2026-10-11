@@ -6,9 +6,6 @@ const BACKEND_BASE =
   import.meta?.env?.VITE_BACKEND_BASE||
   "https://asistencia-ica-backend.onrender.com";
 
-const ICA_API =
-  import.meta?.env?.VITE_ICA_API_URL ||
-  "https://services.icarticular.cl";
 
 import PantallaUno from "./screens/PantallaUno.jsx";
 import PantallaAsistentes from "./asistentes/comun/PantallaAsistentes.jsx";
@@ -20,19 +17,6 @@ import PagoOkBanner from "./components/PagoOkBanner.jsx";
  * APP con 3 pantallas
  * + GEO silencioso al inicio (GPS → IP → DEFAULT)
  */
-
-// ── Calcula edad desde fecha_nacimiento ──────────────────────
-function _calcularEdad(fechaNacimiento) {
-  if (!fechaNacimiento) return undefined;
-  try {
-    const hoy    = new Date();
-    const nacido = new Date(fechaNacimiento);
-    let edad = hoy.getFullYear() - nacido.getFullYear();
-    const m  = hoy.getMonth() - nacido.getMonth();
-    if (m < 0 || (m === 0 && hoy.getDate() < nacido.getDate())) edad--;
-    return edad > 0 ? edad : undefined;
-  } catch { return undefined; }
-}
 
 export default function App() {
   /* ======================================================
@@ -188,16 +172,21 @@ export default function App() {
   };
 
   /* ======================================================
-     LEER origen=reserva DESDE URL
+     LINK DEL CORREO DE CONFIRMACIÓN DE RESERVA
+     ?origen=reserva&c=<código cifrado>: el código (lo emite la ficha) prueba
+     quién es el paciente, sin RUT ni nombre en la dirección (Ley 21.719). Con él
+     el backend trae sus datos desde la ficha (no se le preguntan) y, al emitir la
+     orden, el prediagnóstico queda grabado en su ficha. Links antiguos con
+     ?rut=: no se confía en el RUT de la dirección (el paciente llena sus datos).
      ====================================================== */
   const _origenReserva = (() => {
     try {
       const q      = getQuery();
       const origen = q.get("origen") || "";
-      const rut    = q.get("rut")    || "";
-      return { esReserva: origen === "reserva", rut };
+      const codigo = q.get("c")      || "";
+      return { esReserva: origen === "reserva", codigo };
     } catch {
-      return { esReserva: false, rut: "" };
+      return { esReserva: false, codigo: "" };
     }
   })();
 
@@ -220,8 +209,8 @@ export default function App() {
   const [fichaLista, setFichaLista]       = useState(!_origenReserva.esReserva);
   const [datosPaciente, setDatosPaciente] = useState(() => {
     try {
-      if (_origenReserva.esReserva && _origenReserva.rut) {
-        return { rut: _origenReserva.rut, origen: "reserva" };
+      if (_origenReserva.esReserva && _origenReserva.codigo) {
+        return { origen: "reserva", codigo: _origenReserva.codigo };
       }
       const raw = sessionStorage.getItem("datosPacienteJSON");
       return raw ? JSON.parse(raw) : null;
@@ -251,48 +240,53 @@ export default function App() {
   const handledReturnRef = useRef(false);
 
   /* ======================================================
-     CARGAR FICHA ADMIN DESDE ICA — esperar antes de renderizar
+     DATOS DEL PACIENTE DESDE EL CÓDIGO DEL CORREO — esperar antes de renderizar
      ====================================================== */
   useEffect(() => {
-    if (!_origenReserva.esReserva || !_origenReserva.rut) return;
+    if (!_origenReserva.esReserva || !_origenReserva.codigo) return;
 
-    async function cargarFichaAdmin() {
+    // El código sale de la barra de direcciones (no queda en el historial)
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("c");
+      window.history.replaceState(null, "", url.toString());
+    } catch {}
+
+    async function cargarPaciente() {
       try {
-        const res = await fetch(
-          `${ICA_API}/api/fichas/admin/${_origenReserva.rut}`,
-          { headers: { "X-Internal-User": "public_web" } }
-        );
+        const res = await fetch(`${BACKEND_BASE}/paciente-verificado`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigo: _origenReserva.codigo }),
+        });
         if (res.ok) {
-          const admin = await res.json();
-          const nombre = [
-            admin.nombre,
-            admin.apellido_paterno,
-            admin.apellido_materno
-          ].filter(Boolean).join(" ");
-
+          const d = await res.json();
           const datos = {
-            rut:    admin.rut,
-            nombre,
-            edad:   _calcularEdad(admin.fecha_nacimiento),
-            genero: admin.sexo   || undefined,
-            email:  admin.email  || undefined,  // ← NUEVO
+            rut:    d.rut,
+            nombre: d.nombre,
+            edad:   d.edad || undefined,
+            genero: d.genero || undefined,
+            email:  d.email || undefined,
             origen: "reserva",
+            codigo: d.codigo,   // para grabar el prediagnóstico en su ficha
           };
-
           setDatosPaciente(datos);
           sessionStorage.setItem("datosPacienteJSON", JSON.stringify(datos));
           sessionStorage.setItem("origen", "reserva");
           sessionStorage.setItem("modulo", "trauma");
-          console.log("💾 Ficha admin cargada desde ICA:", datos);
+        } else {
+          // Link vencido o sin ficha: sigue sin datos (el paciente los escribe)
+          setDatosPaciente(null);
         }
       } catch (e) {
-        console.warn("⚠️ No se pudo cargar ficha admin desde ICA:", e);
+        console.warn("No se pudieron traer los datos del paciente:", e);
+        setDatosPaciente(null);
       } finally {
         setFichaLista(true);
       }
     }
 
-    cargarFichaAdmin();
+    cargarPaciente();
   }, []);
 
   /* ======================================================
