@@ -273,7 +273,11 @@ export function zonaEnVoz(zona, lado) {
 }
 
 // ---------------- pregunta final del flujo de dolor ----------------
-/** "orden" | "hora" | "ambas" | "ninguna" | null */
+// "info": mas informacion con evidencia (se lo pasa a Sophia)
+const CLAVES_INFO = ["informacion", "evidencia", "estudio", "investig", "fundament", "explica", "saber mas",
+  "conocer mas", "sophia", "sofia", "mas detalle", "por que"];
+
+/** "orden" | "hora" | "ambas" | "info" | "ninguna" | null */
 export function interpretarAccionFinal(texto) {
   const t = normalizar(texto);
   if (!t) return null;
@@ -283,6 +287,9 @@ export function interpretarAccionFinal(texto) {
   const orden = !noOrden && contiene(t, ["orden", "examen"]);
   const hora = !noHora && contiene(t, ["hora\\b", "especialista", "agend", "reserv", "cita", "medico", "doctor", "consulta"]);
   if (orden && hora) return "ambas";
+  // "mas informacion" gana si no pidio orden ni hora ("explicame la orden" -> orden)
+  const noInfo = /\bno\s+(quiero\s+|necesito\s+)?(mas\s+)?(informacion|explicacion)/.test(t);
+  if (!orden && !hora && !noInfo && contiene(t, CLAVES_INFO)) return "info";
   if (orden) return "orden";
   if (hora) return "hora";
   if ((noOrden && noHora) || contiene(t, ["ninguna", "ninguno", "nada", "no gracias"]) || t === "no") return "ninguna";
@@ -290,7 +297,7 @@ export function interpretarAccionFinal(texto) {
 }
 
 // ---------------- mientras la agenda esta abierta ----------------
-/** "volver" (vuelve con Ica o Ipo) | "seguir" (sigue en la agenda) | null (se ignora) */
+/** "volver" (vuelve con quien le abrio la agenda) | "seguir" (sigue en la agenda) | null (se ignora) */
 export function interpretarVolver(texto) {
   const t = normalizar(texto);
   if (!t) return null;
