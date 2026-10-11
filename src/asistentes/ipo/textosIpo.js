@@ -1,8 +1,9 @@
 /**
  * ipo/textosIpo.js
  * Lo que dice Ipo, el asistente de dolor y examenes: su menu (cuando se entra
- * directo a la app), el inicio de la consulta, la pregunta final (orden / hora),
- * las frases de cada paso y lo que dice al recibir o devolver al paciente a Ica.
+ * directo a la app), el inicio de la consulta, la pregunta final (orden / hora /
+ * mas informacion con Sophia), las frases de cada paso y lo que dice al recibir o
+ * devolver al paciente a Ica, o al pasarlo a Sophia y recibirlo de vuelta.
  * Las preguntas de la consulta estan en bancoPreguntas.js.
  */
 
@@ -27,14 +28,17 @@ export const MENU = {
   ],
 };
 
-// Al final del flujo de dolor
+// Al final del flujo de dolor. "info": Sophia le explica la evidencia sobre su caso
 export const ACCION_FINAL = {
-  texto: "¿Te hago la orden de exámenes, o te busco hora con el especialista más adecuado?",
-  repregunta: "¿Quieres la orden de exámenes, una hora con el especialista, o ambas?",
+  texto:
+    "¿Te hago la orden de exámenes, te busco hora con el especialista más adecuado, " +
+    "o quieres que Sophia, nuestra investigadora, te explique qué dice la evidencia científica sobre tu caso?",
+  repregunta: "¿Quieres la orden de exámenes, una hora con el especialista, ambas, o más información con Sophia?",
   opciones: [
     { etiqueta: "Orden de exámenes", valor: "orden" },
     { etiqueta: "Hora con especialista", valor: "hora" },
     { etiqueta: "Ambas", valor: "ambas" },
+    { etiqueta: "Más información (Sophia)", valor: "info" },
     { etiqueta: "No, gracias", valor: "ninguna" },
   ],
 };
@@ -59,6 +63,11 @@ export const TRASPASO_IPO = {
   recomendarHora: (medico, zona) =>
     `Para el dolor de ${zona}, te recomiendo a ${medico}.`.replace(" a el ", " al ").replace(" de el ", " del "),
   aIcaFin: "Te dejo con Ica.",
+  // Traspasos con Sophia (la investigadora)
+  aSophia: "Te paso con Sophia, nuestra investigadora, que revisa los estudios científicos sobre tu caso.",
+  vuelveDeSophia: "Aquí estoy de nuevo.",
+  // Sophia se lo pasa porque tiene un dolor (entró directo a Sophia)
+  desdeSophia: "Hola, soy Ipo.",
 };
 
 export const FRASES = {
