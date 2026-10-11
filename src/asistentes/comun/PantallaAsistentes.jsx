@@ -1,16 +1,21 @@
 // src/asistentes/comun/PantallaAsistentes.jsx
-// La pantalla donde atienden los asistentes de voz de ICA: Ica (recepcion) e Ipo
-// (dolor y examenes). Aqui esta lo comun: la voz y el microfono, como se pregunta
-// (por voz, repregunta y botones), los puntos dolorosos, la agenda en un iframe,
-// la orden para descargar, la burbuja de la pagina principal y el dibujo de quien
-// esta atendiendo. Lo que hace cada uno esta en su carpeta:
-//   ica/flujoIca.js  (recepcion, hora, pasar a Ipo)   ica/textosIca.js  ica/AvatarIca.jsx
-//   ipo/flujoIpo.js  (dolor, examenes, orden)         ipo/textosIpo.js  ipo/AvatarIpo.jsx
-//   comun/agenda.js  (buscar hora con un medico, la usan los dos)
+// La pantalla donde atienden los asistentes de voz de ICA: Ica (recepcion), Ipo
+// (dolor y examenes) y Sophia (investigadora: evidencia cientifica). Aqui esta lo
+// comun: la voz y el microfono, como se pregunta (por voz, repregunta y botones),
+// los puntos dolorosos, la agenda en un iframe, la orden para descargar, la
+// respuesta completa de Sophia con sus estudios, la burbuja de la pagina principal
+// y el dibujo de quien esta atendiendo. Lo que hace cada uno esta en su carpeta:
+//   ica/flujoIca.js        (recepcion, hora, pasar a Ipo)       ica/textosIca.js        ica/AvatarIca.jsx
+//   ipo/flujoIpo.js        (dolor, examenes, orden)             ipo/textosIpo.js        ipo/AvatarIpo.jsx
+//   sophia/flujoSophia.js  (evidencia, con o sin caso de Ipo)   sophia/textosSophia.js  sophia/AvatarSophia.jsx
+//   comun/agenda.js        (buscar hora con un medico, la usan todos)
 //
 // QUIEN RECIBE: Ica en la burbuja de la pagina principal (?modo=widget) o con
-// ?asistente=ica; Ipo entrando directo a app.icarticular.cl (como antes).
-// Ica e Ipo se pasan al paciente en esta misma pantalla (pasarA): no viaja nada.
+// ?asistente=ica; Sophia con ?asistente=sophia (solo para preguntas); Ipo
+// entrando directo a app.icarticular.cl (como antes).
+// Los tres se pasan al paciente en esta misma pantalla (pasarA). Ipo le pasa a
+// Sophia todo el caso (sin nombre ni RUT); Sophia lo manda a Backend-avatar-medico
+// para buscar la evidencia.
 //
 // MISALUD (?modo=misalud&motivo=dolor|generales|preop|hora dentro de un iframe de
 //    misalud.icarticular.cl): el asistente de MiSalud (Katia, o como el paciente lo
@@ -53,12 +58,15 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import "../../app.css";
 import AvatarIca from "../ica/AvatarIca.jsx";
 import AvatarIpo from "../ipo/AvatarIpo.jsx";
+import AvatarSophia from "../sophia/AvatarSophia.jsx";
 import { PERSONAJE_ICA, MENU_ICA, TRASPASO_ICA } from "../ica/textosIca.js";
 import { PERSONAJE_IPO, MENU, ACCION_FINAL, FRASES, SALUDO } from "../ipo/textosIpo.js";
+import { PERSONAJE_SOPHIA, MENU_SOPHIA, FRASES_SOPHIA, etiquetaSalida } from "../sophia/textosSophia.js";
 import { ZONAS, PREGUNTAS_EXTRA, CIRUGIAS, PREGUNTAS } from "../ipo/bancoPreguntas.js";
 import { FRASES_COMUNES, TIPO_EXAMEN, RELLENOS, RELLENOS_LARGOS } from "./textosComunes.js";
 import { crearFlujoIca } from "../ica/flujoIca.js";
 import { crearFlujoIpo, ORDEN, ZONAS_MAPPER, limpiarPuntosPrevios } from "../ipo/flujoIpo.js";
+import { crearFlujoSophia, despertarSophia } from "../sophia/flujoSophia.js";
 import { crearAgenda, RESERVAS_ORIGEN, leerReserva, fechaEnVoz } from "./agenda.js";
 import useVoz, { vozSoportada, despertarVoz, precargarVoces } from "./useVoz.js";
 import useEscucha, { escuchaSoportada } from "./useEscucha.js";
@@ -73,15 +81,17 @@ import { resolveZonaKey } from "../../mappers/mapperRegistry.js";
 import FormularioResonancia from "../../components/FormularioResonancia.jsx";
 import logoICA from "../../assets/ica.jpg";
 
-// Quien es quien (nombre, rol y voz de cada asistente)
-const PERSONAJES = { ica: PERSONAJE_ICA, ipo: PERSONAJE_IPO };
+// Quien es quien (nombre, rol y voz de cada asistente) y su dibujo
+const PERSONAJES = { ica: PERSONAJE_ICA, ipo: PERSONAJE_IPO, sophia: PERSONAJE_SOPHIA };
+const AVATARES = { ica: AvatarIca, ipo: AvatarIpo, sophia: AvatarSophia };
 
 // Sin respuesta en este tiempo, aparecen los botones aunque haya voz
 const BOTONES_TRAS_MS = 10000;
 
 // Muletillas (los textos estan en textosComunes.js)
 // Primeras frases de cada uno: se piden de antemano para que suenen al tiro con la
-// voz de Azure (la primera, el saludo, apenas abre la pagina; el resto al Comenzar)
+// voz de Azure (la primera, el saludo, apenas abre la pagina; el resto al Comenzar).
+// genero = la voz: "femenina" (Ica), "masculina" (Ipo), "sophia" (Sophia)
 const textoBanco = (id) => PREGUNTAS.find((p) => p.id === id)?.texto || "";
 const PRECARGA = {
   ica: [
@@ -93,6 +103,8 @@ const PRECARGA = {
   ],
   ipo: [MENU.texto, SALUDO, textoBanco("zona"), textoBanco("lado"), textoBanco("edad"), textoBanco("sexo"),
     FRASES.relato, ...RELLENOS.ipo].map((texto) => ({ texto, genero: "masculina" })),
+  sophia: [MENU_SOPHIA.texto, FRASES_SOPHIA.buscando, ...RELLENOS.sophia]
+    .map((texto) => ({ texto, genero: "sophia" })),
 };
 
 const RELLENO_TRAS_MS = 700;         // esperas mas cortas no llevan muletilla
@@ -126,11 +138,12 @@ const MOTIVO_MISALUD = (() => {
 })();
 
 // Quien recibe al paciente: Ica en la burbuja de la pagina principal (o con
-// ?asistente=ica, o desde MiSalud para una hora); Ipo entrando directo a la app
+// ?asistente=ica, o desde MiSalud para una hora); Sophia con ?asistente=sophia;
+// Ipo entrando directo a la app
 const PERSONAJE_INICIAL = (() => {
   try {
     const q = new URLSearchParams(window.location.search);
-    if (q.get("asistente") === "ica" || q.get("asistente") === "ipo") return q.get("asistente");
+    if (PERSONAJES[q.get("asistente")]) return q.get("asistente");
   } catch {}
   if (MODO_MISALUD) return MOTIVO_MISALUD === "hora" ? "ica" : "ipo";
   return MODO_WIDGET ? "ica" : "ipo";
@@ -235,8 +248,9 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   const [reserva, setReserva] = useState(null);       // hora reservada { date, time, professionalName, tipo }
   const [resumen, setResumen] = useState(false);      // muestra orden/hora al preguntar "¿algo mas?"
   const [abierto, setAbierto] = useState(!MODO_WIDGET); // widget: burbuja cerrada / asistente abierta
-  const [personaje, setPersonaje] = useState(PERSONAJE_INICIAL); // "ica" | "ipo": quien habla ahora
+  const [personaje, setPersonaje] = useState(PERSONAJE_INICIAL); // "ica" | "ipo" | "sophia": quien habla ahora
   const [misalud, setMisalud] = useState(null);       // datos que mando MiSalud (modo misalud)
+  const [evidencia, setEvidencia] = useState(null);   // respuesta de Sophia { resumen, texto, papers }
 
   const { hablar, callar, desbloquear, usarVoz, hablando, boca } = useVoz();
 
@@ -267,6 +281,8 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   const ordenUrlRef = useRef("");              // la orden lista (para devolverla a MiSalud)
   const reservaRef = useRef(null);             // la hora reservada (para devolverla a MiSalud)
   const desdeIcaRef = useRef(false);           // Ipo atiende porque Ica se lo paso
+  const desdeIpoRef = useRef(false);           // Sophia atiende porque Ipo se lo paso (con su caso)
+  const informeRef = useRef(null);             // el informe al dia (los flujos largos no ven el estado nuevo)
   const preguntaRef = useRef(null);            // la pregunta en pantalla, al dia (sin esperar el render)
   const adelantadaRef = useRef(null);          // boton tocado mientras el asistente hablaba
   const diciendoRef = useRef(false);           // el asistente esta diciendo algo (o cargando su voz)
@@ -285,6 +301,12 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     });
   }, []);
 
+  // El informe en pantalla y en su referencia (Sophia lo lee para armar el caso)
+  const ponerInforme = useCallback((i) => {
+    informeRef.current = i || null;
+    setInforme(i || null);
+  }, []);
+
   // Cambia quien habla: dibujo, nombre y voz
   const cambiarPersonaje = useCallback((p) => {
     personajeRef.current = p;
@@ -297,6 +319,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   // Al abrir: despierta al backend y pide el saludo, para que suene al tiro al Comenzar
   useEffect(() => {
     despertarVoz();
+    if (PERSONAJE_INICIAL === "sophia") despertarSophia();
     precargarVoces(PRECARGA[PERSONAJE_INICIAL].slice(0, 1));
   }, []);
 
@@ -520,6 +543,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     columna: (v) => v,
     medico: (v) => (v.medico ? v.medico.name : v.varios ? v.varios.map((m) => m.name).join(" o ") : "No sé con quién"),
     cirugia: (v) => CIRUGIAS.find((c) => c.valor === v)?.etiqueta || v,
+    salida: etiquetaSalida, // lo que sigue despues de una respuesta de Sophia
   };
 
   // Pregunta cerrada: voz -> si no entiende repregunta -> si falla de nuevo, botones.
@@ -625,7 +649,9 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     registroRef.current = [];
     avisosRef.current = [];
     examenesRef.current = {};
-    setInforme(null);
+    desdeIpoRef.current = false;
+    ponerInforme(null);
+    setEvidencia(null);
     setMarcadas([]);
     setSeleccion([]);
     setError("");
@@ -633,7 +659,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
 
   // texto: "inicio" | "otraVez" | "volver" (cada asistente tiene su version)
 
-  // ---------- quien atiende: traspaso entre Ica e Ipo ----------
+  // ---------- quien atiende: traspaso entre Ica, Ipo y Sophia ----------
   const PAUSA_TRASPASO_MS = 200;
 
   // Cambia de asistente en la misma pantalla (dibujo, nombre y voz)
@@ -648,8 +674,11 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   };
 
   // Menu de quien este atendiendo. cual: "inicio" | "otraVez" | "volver"
-  const menu = (sesion, cual = "inicio") =>
-    (personajeRef.current === "ica" ? f.menuIca(sesion, cual) : f.menuIpo(sesion, cual));
+  const menu = (sesion, cual = "inicio") => {
+    if (personajeRef.current === "ica") return f.menuIca(sesion, cual);
+    if (personajeRef.current === "sophia") return f.menuSophia(sesion, cual);
+    return f.menuIpo(sesion, cual);
+  };
 
   // ---------- "¿Te ayudo en algo mas?" ----------
   const algoMas = async (sesion) => {
@@ -661,6 +690,12 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     if (MODO_MISALUD) return devolverAMiSalud(sesion);
     const { valor } = await preguntarCerrada(sesion, "sino", FRASES_COMUNES.algoMas, FRASES_COMUNES.repreguntaAlgoMas, true);
     if (valor) return menu(sesion, "otraVez");
+    return despedir(sesion);
+  };
+
+  // Se despide quien este atendiendo (en MiSalud: vuelve a su asistente)
+  const despedir = async (sesion) => {
+    if (MODO_MISALUD) return devolverAMiSalud(sesion);
     setPregunta(null);
     setFase("fin");
     await decir(sesion, FRASES_COMUNES.despedida);
@@ -714,21 +749,22 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
 
   // ---------- herramientas para los flujos de cada asistente ----------
   // api: lo que la pantalla les presta (hablar, preguntar, estados, referencias).
-  // f: las funciones de todos (Ica, Ipo y la agenda) para que se llamen entre si.
+  // f: las funciones de todos (Ica, Ipo, Sophia y la agenda) para que se llamen entre si.
   const api = {
     vigente, decir, mientras, hablar, callar, preguntarCerrada, preguntarAbierta, preguntarGrupo, esperarPuntos,
-    elegirModulo, nuevoFlujo, pasarA, menu, algoMas, getInforme: () => informe, esperarRespuesta, setPensando,
-    setFase, setPregunta, setEntendido, setProgreso, setResumen, setInforme, setError, setMarcadas,
+    elegirModulo, nuevoFlujo, pasarA, menu, algoMas, despedir, getInforme: () => informeRef.current, esperarRespuesta,
+    setPensando, setEvidencia,
+    setFase, setPregunta, setEntendido, setProgreso, setResumen, setInforme: ponerInforme, setError, setMarcadas,
     setOrdenUrl: (u) => { ordenUrlRef.current = u || ""; setOrdenUrl(u); },
     setConCorreo, setAgenda,
     setReserva: (r) => { reservaRef.current = r || null; setReserva(r); },
     setEsperando,
     sesionRef, ctxRef, registroRef, idPagoRef, avisosRef, examenesRef, ordenRef, datosRef, conCorreoRef,
-    moduloRef, personajeRef, desdeIcaRef, agendaRef, actividadRef, esperaRef, prefillRef, pendienteRef,
-    escuchaRef, vozOkRef,
+    moduloRef, personajeRef, desdeIcaRef, desdeIpoRef, informeRef, agendaRef, actividadRef, esperaRef,
+    prefillRef, pendienteRef, escuchaRef, vozOkRef,
   };
   const f = {};
-  Object.assign(f, crearAgenda(api, f), crearFlujoIca(api, f), crearFlujoIpo(api, f));
+  Object.assign(f, crearAgenda(api, f), crearFlujoIca(api, f), crearFlujoIpo(api, f), crearFlujoSophia(api, f));
 
   const comenzar = async () => {
     sesionRef.current += 1;
@@ -746,7 +782,8 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     setEsperando(false);
     setDicho("");
     puntosRef.current = null;
-    setInforme(null);
+    ponerInforme(null);
+    setEvidencia(null);
     setOrdenUrl("");
     setError("");
     setProgreso(0);
@@ -769,6 +806,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     elegirModulo("trauma");
     cambiarPersonaje(PERSONAJE_INICIAL);
     desdeIcaRef.current = false;
+    desdeIpoRef.current = false;
     setAvisoMic("");
     vozOkRef.current = escuchaSoportada;
     if (escuchaSoportada) {
@@ -850,7 +888,8 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
 
   const soportado = vozSoportada;
   const P = PERSONAJES[personaje];
-  const AvatarActual = personaje === "ica" ? AvatarIca : AvatarIpo;
+  const AvatarActual = AVATARES[personaje] || AvatarIpo;
+  const verEvidencia = personaje === "sophia" && evidencia && fase === "conversacion";
   const enCurso = fase !== "inicio";
   const avatarGrande = ["inicio", "conversacion", "urgencia", "fin", "analizando"].includes(fase) && !resumen;
   const verResumen = resumen && ["conversacion", "fin"].includes(fase);
@@ -908,6 +947,14 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
                   nuestro asistente, que te orienta y te entrega la orden.
                 </p>
               </>
+            ) : personaje === "sophia" ? (
+              <>
+                <h1 style={S.titulo}>Hola, soy Sophia, investigadora</h1>
+                <p style={S.texto}>
+                  Pregúntame lo que quieras saber sobre una lesión, una enfermedad o un tratamiento, y te respondo
+                  con la mejor evidencia científica disponible.
+                </p>
+              </>
             ) : (
               <>
                 <h1 style={S.titulo}>Hola, soy Ipo, tu asistente virtual</h1>
@@ -925,10 +972,14 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
               <p style={S.aviso}>Tu navegador no permite voz. Igual puedes responder tocando o escribiendo.</p>
             )}
             <button type="button" style={S.btnPrimario} onClick={comenzar}>Comenzar</button>
-            {!MODO_WIDGET && !MODO_MISALUD && (
+            {!MODO_WIDGET && !MODO_MISALUD && personaje !== "sophia" && (
               <button type="button" style={S.enlace} onClick={onUsarFormulario}>Prefiero usar el formulario</button>
             )}
-            <p style={S.legal}>Orientación preliminar. No reemplaza la evaluación presencial con un especialista.</p>
+            <p style={S.legal}>
+              {personaje === "sophia"
+                ? "Información educativa. No reemplaza la evaluación con un especialista."
+                : "Orientación preliminar. No reemplaza la evaluación presencial con un especialista."}
+            </p>
           </section>
         )}
 
@@ -1036,6 +1087,9 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
             )}
           </section>
         )}
+
+        {/* ---------- SOPHIA: respuesta completa con los estudios ---------- */}
+        {verEvidencia && <TarjetaEvidencia evidencia={evidencia} />}
 
         {/* ---------- LO QUE DICE (cuando no es una pregunta) ---------- */}
         {fase === "conversacion" && !pregunta && dicho && (
@@ -1193,6 +1247,70 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   );
 }
 
+// ---------- respuesta de Sophia ----------
+// Arriba lo que dijo (resumen); abajo, desplegable, la respuesta completa de
+// EvidenciaMed (markdown simple: titulos y viñetas, sin HTML externo) y los estudios.
+function TarjetaEvidencia({ evidencia }) {
+  const bloques = [];
+  let lista = [];
+  const cerrarLista = () => {
+    if (!lista.length) return;
+    const items = lista;
+    bloques.push(<ul key={`ul-${bloques.length}`} style={S.lista}>{items.map((it, i) => <li key={i}>{it}</li>)}</ul>);
+    lista = [];
+  };
+  String(evidencia.texto || "").split("\n").forEach((linea) => {
+    const limpia = linea.replace(/\*\*/g, "").trim();
+    if (!limpia) cerrarLista();
+    else if (/^#{1,6}\s/.test(limpia)) {
+      cerrarLista();
+      bloques.push(<p key={`h-${bloques.length}`} style={S.rotulo}>{limpia.replace(/^#{1,6}\s*/, "")}</p>);
+    } else if (/^[-•*]\s/.test(limpia)) lista.push(limpia.replace(/^[-•*]\s*/, ""));
+    else {
+      cerrarLista();
+      bloques.push(<p key={`p-${bloques.length}`} style={S.texto}>{limpia}</p>);
+    }
+  });
+  cerrarLista();
+  const papers = Array.isArray(evidencia.papers) ? evidencia.papers : [];
+  const conDetalle = bloques.length > 0 || papers.length > 0;
+
+  return (
+    <section style={S.tarjeta}>
+      {evidencia.resumen && (
+        <>
+          <p style={{ ...S.rotulo, marginTop: 0 }}>Lo que encontré</p>
+          <p style={S.texto}>{evidencia.resumen}</p>
+        </>
+      )}
+      {conDetalle && (
+        <details style={{ marginTop: 10 }}>
+          <summary style={S.resumenEvidencia}>Ver la respuesta completa y los estudios</summary>
+          {bloques}
+          {papers.length > 0 && (
+            <>
+              <p style={S.rotulo}>Estudios revisados</p>
+              <ul style={S.lista}>
+                {papers.map((p, i) => {
+                  const titulo = String(p?.titulo || p?.title || "Estudio sin título");
+                  const doi = typeof p?.doi === "string" && /^10\.\S+$/.test(p.doi.trim()) ? p.doi.trim() : "";
+                  return (
+                    <li key={doi || i} style={{ marginBottom: 6 }}>
+                      {doi ? <a href={`https://doi.org/${doi}`} target="_blank" rel="noopener noreferrer" style={S.enlaceTexto}>{titulo}</a> : titulo}
+                      {p?.nivel_evidencia_oxford ? ` — Nivel de evidencia ${p.nivel_evidencia_oxford}` : ""}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </details>
+      )}
+      <p style={S.legal}>Información educativa. No reemplaza la evaluación con un especialista.</p>
+    </section>
+  );
+}
+
 // ---------- formulario final (nombre, RUT, correo) ----------
 function FormularioDatos({ onEnviar }) {
   const [datos, setDatos] = useState({ nombre: "", rut: "", email: "" });
@@ -1296,6 +1414,8 @@ const S = {
   btnPrimario: { font: "inherit", fontSize: 17, fontWeight: 700, color: "#fff", background: PRIMARIO, border: "none", borderRadius: 12, padding: "14px 28px", cursor: "pointer", textDecoration: "none", display: "inline-block", width: "100%", boxSizing: "border-box", textAlign: "center" },
   btnSecundario: { font: "inherit", fontSize: 15, fontWeight: 600, color: PRIMARIO, background: "#fff", border: `1px solid ${PRIMARIO}`, borderRadius: 10, padding: "10px 18px", cursor: "pointer" },
   enlace: { font: "inherit", fontSize: 14, color: ACENTO, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 6 },
+  enlaceTexto: { color: ACENTO },
+  resumenEvidencia: { cursor: "pointer", fontSize: 15, fontWeight: 600, color: PRIMARIO },
   estado: { fontSize: 15, color: "#6B7280", margin: 0 },
   aviso: { margin: 0, fontSize: 14, color: "#92400E", background: "#FFFBEB", borderRadius: 8, padding: "8px 10px" },
   legal: { margin: "8px 0 0", fontSize: 12, color: "#6B7280" },
