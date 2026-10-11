@@ -10,11 +10,12 @@
  * - callar(): corta lo que se esté diciendo.
  * - desbloquear(): se llama en la primera interacción con la página (clic/tecla)
  *   para que el navegador permita hablar después.
- * - usarVoz("femenina" | "masculina"): Ica o Ipo, para lo próximo que se diga.
+ * - usarVoz("femenina" | "masculina" | "sophia"): Ica, Ipo o Sophia, para lo
+ *   próximo que se diga.
  * - boca: número 0..1 con la apertura actual de la boca.
  *
  * v4 VOZ NATURAL: el texto se manda al backend (POST /voz) y vuelve en audio con
- *   las voces chilenas de Azure (Ica: Catalina, Ipo: Lorenzo). Se pide el texto
+ *   las voces de Azure (Ica: Catalina, Ipo: Lorenzo, Sophia: Dalia). Se pide el texto
  *   COMPLETO de una vez (no frase por frase): sin cortes entre oraciones. Solo si
  *   es muy largo se parte en bloques y el siguiente se pide mientras suena el actual.
  *   - Lo ya escuchado queda guardado en el navegador: no se vuelve a pedir.
@@ -31,8 +32,11 @@
  *
  * Voz del navegador (respaldo, speechSynthesis): se lee FRASE POR FRASE porque en
  * Chrome las voces de Google se cortan a los ~15 s con textos largos. Se prefiere
- * voz femenina para Ica y masculina para Ipo; si no hay, se ajusta el tono. La
- * boca se abre en cada palabra (evento "boundary") o con una oscilación.
+ * voz femenina para Ica y Sophia y masculina para Ipo; si no hay, se ajusta el
+ * tono. La boca se abre en cada palabra (evento "boundary") o con una oscilación.
+ *
+ * PRONUNCIACIÓN: en pantalla se escribe "Sophia", pero a la voz se le manda
+ * "Sofía" (así suena bien en cualquier voz). Ver PRONUNCIAR.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -69,6 +73,15 @@ const PISTAS_VOZ_FEMENINA = [
 const TONO_VOZ_MASCULINA = 0.95;
 const TONO_SIN_VOZ_MASCULINA = 0.8; // voz femenina o desconocida: más grave
 const TONO_FEMENINA = 1.05;
+const TONO_SOPHIA = 0.98;          // respaldo del navegador: un poco distinta de Ica
+
+// Voces que entiende el backend (/voz) y el género para la voz del navegador
+const GENERO_DE_VOZ = { femenina: "femenina", masculina: "masculina", sophia: "femenina" };
+const vozValida = (v) => (GENERO_DE_VOZ[v] ? v : "masculina");
+
+// Lo que se escribe distinto de como se dice
+const PRONUNCIAR = [[/\bSophia\b/g, "Sofía"]];
+export const paraVoz = (texto) => PRONUNCIAR.reduce((t, [re, dicho]) => t.replace(re, dicho), String(texto || ""));
 
 const MAX_CARACTERES_FRASE = 180;
 const ESPERA_INICIO_MS = 5000;      // si la primera frase no parte en este tiempo, se considera bloqueada
@@ -226,11 +239,12 @@ export function despertarVoz() {
 }
 
 // Pide de antemano estas frases, una tras otra: [{ texto, genero }]
+// genero: "femenina" | "masculina" | "sophia" (la voz de cada asistente)
 export async function precargarVoces(lista) {
   if (!audioSoportado) return;
   for (const { texto, genero } of lista) {
-    for (const bloque of dividirEnBloques(texto)) {
-      await pedirAudio(bloque, genero === "femenina" ? "femenina" : "masculina", { precarga: true });
+    for (const bloque of dividirEnBloques(paraVoz(texto))) {
+      await pedirAudio(bloque, vozValida(genero), { precarga: true });
     }
   }
 }
@@ -243,7 +257,7 @@ export default function useVoz() {
   const [boca, setBoca] = useState(0);
 
   const vozRef = useRef(null);
-  const generoRef = useRef("masculina");
+  const generoRef = useRef("masculina");   // voz del asistente: "femenina" | "masculina" | "sophia"
   const nivelRef = useRef(0);
   const ultimoLimiteRef = useRef(0);
   const hablandoRef = useRef(false);
@@ -268,7 +282,7 @@ export default function useVoz() {
   useEffect(() => {
     if (!synthSoportado) return undefined;
     const cargar = () => {
-      vozRef.current = elegirVoz(window.speechSynthesis.getVoices(), generoRef.current);
+      vozRef.current = elegirVoz(window.speechSynthesis.getVoices(), GENERO_DE_VOZ[generoRef.current]);
     };
     cargar();
     window.speechSynthesis.addEventListener("voiceschanged", cargar);
@@ -394,7 +408,7 @@ export default function useVoz() {
       const u = new SpeechSynthesisUtterance(frase);
       fraseActualRef.current = u;
 
-      if (!vozRef.current) vozRef.current = elegirVoz(window.speechSynthesis.getVoices(), generoRef.current);
+      if (!vozRef.current) vozRef.current = elegirVoz(window.speechSynthesis.getVoices(), GENERO_DE_VOZ[generoRef.current]);
       if (vozRef.current) {
         u.voice = vozRef.current;
         u.lang = vozRef.current.lang;
@@ -402,7 +416,9 @@ export default function useVoz() {
         u.lang = "es-CL";
       }
       u.rate = 1;
-      if (generoRef.current === "femenina") {
+      if (generoRef.current === "sophia") {
+        u.pitch = TONO_SOPHIA;
+      } else if (generoRef.current === "femenina") {
         u.pitch = TONO_FEMENINA;
       } else {
         const masculina = vozRef.current
@@ -472,7 +488,8 @@ export default function useVoz() {
     return resultado;
   }, [decirFrase]);
 
-  const hablar = useCallback(async (texto, { alTerminarPronto = null } = {}) => {
+  const hablar = useCallback(async (textoEscrito, { alTerminarPronto = null } = {}) => {
+    const texto = paraVoz(textoEscrito);
     if (!vozSoportada || !texto) return false;
     turnoRef.current += 1;
     const turno = turnoRef.current;
@@ -540,12 +557,12 @@ export default function useVoz() {
     }
   }, []);
 
-  // Cambia la voz (Ica: "femenina", Ipo: "masculina") para lo próximo que se diga
+  // Cambia la voz (Ica: "femenina", Ipo: "masculina", Sophia: "sophia") para lo próximo que se diga
   const usarVoz = useCallback((genero) => {
-    const g = genero === "femenina" ? "femenina" : "masculina";
+    const g = vozValida(genero);
     if (generoRef.current === g) return;
     generoRef.current = g;
-    vozRef.current = synthSoportado ? elegirVoz(window.speechSynthesis.getVoices(), g) : null;
+    vozRef.current = synthSoportado ? elegirVoz(window.speechSynthesis.getVoices(), GENERO_DE_VOZ[g]) : null;
   }, []);
 
   return { hablar, callar, desbloquear, usarVoz, hablando, boca };
