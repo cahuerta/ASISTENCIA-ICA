@@ -36,6 +36,10 @@
  *    alergias y otras -> /ia-generales o /ia-preop -> dice los examenes ->
  *    "¿quieres la orden?" -> datos -> /guardar-datos-generales|preop -> /pdf-generales|preop.
  *
+ * GRABAR EN LA FICHA: si el paciente viene de MiSalud trae un "codigo" cifrado
+ *    (datos.codigo); va con sus datos y el backend graba la orden en su ficha.
+ *    Sin codigo (app publica), no se graba.
+ *
  * crearFlujoIpo(api, f): api = herramientas de la pantalla (decir, preguntar,
  * estados y referencias); f = funciones de todos (f.abrirAgenda, f.flujoHora,
  * f.recibirDeIpo). Devuelve las funciones de Ipo.
@@ -712,6 +716,7 @@ export function crearFlujoIpo(api, f) {
             nombre: datos.nombre, rut: datos.rut, email: datos.email || undefined,
             edad: ctx.edad, genero: ctx.sexo === "Femenino" ? "Mujer" : "Hombre",
             dolor: ctx.zona || undefined, lado: ctx.lado || undefined, geo,
+            codigo: datos.codigo || undefined,
           },
           comorbilidades: ex.comorbilidades,
           tipoCirugia: ex.tipoCirugia || undefined,
@@ -725,7 +730,10 @@ export function crearFlujoIpo(api, f) {
       // geo: para que la orden imprima la derivacion al especialista de su zona
       await postJSON("/api/guardar-datos-ia", {
         idPago: idPagoRef.current,
-        datosPaciente: { nombre: datos.nombre, rut: datos.rut, email: datos.email || undefined, geo },
+        datosPaciente: {
+          nombre: datos.nombre, rut: datos.rut, email: datos.email || undefined, geo,
+          codigo: datos.codigo || undefined,
+        },
       });
     } catch {
       setError("No se pudieron guardar tus datos. Intenta de nuevo.");
