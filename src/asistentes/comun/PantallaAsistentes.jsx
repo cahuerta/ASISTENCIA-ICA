@@ -18,7 +18,8 @@
 //    (nombre, RUT, correo, edad, sexo, zona y lado) llegan por postMessage, nunca en
 //    la URL, y solo desde un origen de confianza: no se vuelven a preguntar y la
 //    orden sale sin el formulario. Al terminar avisa "terminado" a MiSalud; la ✕
-//    avisa "cerrar".
+//    avisa "cerrar". Con los datos llega un "codigo" (cifrado, de MiSalud): va con
+//    la orden y el backend la graba en la ficha del paciente.
 //    SIN "COMENZAR": el paciente ya toco a su asistente en MiSalud; apenas llegan
 //    sus datos, Ipo / Ica parten solos (si el navegador deja sonar el audio dentro
 //    del panel; si no, queda el boton Comenzar como siempre).
@@ -150,6 +151,9 @@ function leerDatosMiSalud(d) {
     sexo: d.sexo === "Masculino" || d.sexo === "Femenino" ? d.sexo : "",
     zona,
     lado: zona && !zona.startsWith("Columna") && (d.lado === "Derecha" || d.lado === "Izquierda") ? d.lado : "",
+    // Código cifrado que emite MiSalud (paciente con sesión): con él la orden se
+    // graba en su ficha. Se pasa tal cual; lo valida la ficha.
+    codigo: /^[A-Za-z0-9_=-]{40,600}$/.test(texto(d.codigo, 600)) ? texto(d.codigo, 600) : "",
   };
 }
 
@@ -686,7 +690,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     const ctx = ctxRef.current;
     if (m.edad) ctx.edad = m.edad;
     if (m.sexo) ctx.sexo = m.sexo;
-    if (m.nombre && m.rut) datosRef.current = { nombre: m.nombre, rut: m.rut, email: m.email || "" };
+    if (m.nombre && m.rut) datosRef.current = { nombre: m.nombre, rut: m.rut, email: m.email || "", codigo: m.codigo || "" };
     if (MOTIVO_MISALUD === "hora") {
       await f.recibirDeIpo(sesion, { primeraVez: true });
       return f.flujoHora(sesion);
