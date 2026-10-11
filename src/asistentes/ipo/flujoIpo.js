@@ -24,12 +24,15 @@
  *    "consulta" + edad, sexo, zona, lado y puntos: devuelve 1 diagnostico y 1
  *    examen del catalogo estandarizado de la zona (con fallback si la IA falla).
  * 4. Dice el diagnostico presuntivo, el fundamento y el examen.
- * 5. "¿Te hago la orden de examenes, o te busco hora con el especialista?"
- *    orden | hora | ambas | ninguna. Orden: formulario (nombre, RUT, correo) ->
- *    checklist de resonancia si corresponde -> /api/pdf-ia-orden. Para la hora,
- *    Ipo busca el especialista de la zona (/resolver-derivacion), lo recomienda y
- *    se lo pasa a Ica, que abre su agenda (devolverAIca). Solo orden: al final
- *    recomienda al especialista y ofrece hora.
+ * 5. "¿Te hago la orden de examenes, te busco hora con el especialista, o quieres
+ *    que Sophia te explique la evidencia?" orden | hora | ambas | info | ninguna.
+ *    Orden: formulario (nombre, RUT, correo) -> checklist de resonancia si
+ *    corresponde -> /api/pdf-ia-orden. Para la hora, Ipo busca el especialista de
+ *    la zona (/resolver-derivacion), lo recomienda y se lo pasa a Ica, que abre su
+ *    agenda (devolverAIca). Solo orden: al final recomienda al especialista y
+ *    ofrece hora. Info: se lo pasa a Sophia con todo el caso (zona, lado, edad,
+ *    sexo, relato, respuestas, diagnostico, fundamento y examen; nunca nombre ni
+ *    RUT). Si Sophia se lo devuelve, Ipo vuelve a esta pregunta (recibirDeSophia).
  *
  * EXAMENES GENERALES / PREOPERATORIO (mismos endpoints que los modulos de ICA):
  *    edad, sexo, (cirugia y lado), enfermedades por grupos con botones abajo,
@@ -42,7 +45,7 @@
  *
  * crearFlujoIpo(api, f): api = herramientas de la pantalla (decir, preguntar,
  * estados y referencias); f = funciones de todos (f.abrirAgenda, f.flujoHora,
- * f.recibirDeIpo). Devuelve las funciones de Ipo.
+ * f.recibirDeIpo, f.sophiaRecibeDeIpo). Devuelve las funciones de Ipo.
  */
 import { MENU, ACCION_FINAL, SALUDO, FRASES, TRASPASO_IPO } from "./textosIpo.js";
 import { PREGUNTAS, esColumna, GRUPOS_COMORBILIDAD, PREGUNTAS_EXTRA, CIRUGIAS } from "./bancoPreguntas.js";
@@ -52,6 +55,7 @@ import {
   interpretarMedico, nombreEnVoz, vozExamenes, zonaEnVoz, completarDatosBasicos,
 } from "../comun/interpretar.js";
 import { cargarMedicos } from "../comun/agenda.js";
+import { despertarSophia } from "../sophia/flujoSophia.js";
 import { resolveZonaKey } from "../../mappers/mapperRegistry.js";
 import { interpretarSiNo } from "../comun/interpretar.js";
 
@@ -129,7 +133,7 @@ async function postJSON(ruta, cuerpo) {
 
 export function crearFlujoIpo(api, f) {
   const {
-    vigente, decir, hablar, preguntarCerrada, preguntarAbierta, preguntarGrupo, esperarPuntos,
+    vigente, decir, hablar, preguntarCerrada, preguntarAbierta, preguntarGrupo, esperarPuntos, pasarA,
     elegirModulo, nuevoFlujo, getInforme, esperarRespuesta, setPensando, mientras,
     setFase, setPregunta, setEntendido, setProgreso, setResumen, setInforme, setError, setMarcadas,
     setOrdenUrl, setConCorreo,
@@ -183,6 +187,24 @@ export function crearFlujoIpo(api, f) {
       await decir(sesion, TRASPASO_IPO.corrige);
       return conversar(sesion, { sinSaludo: true });
     }
+    return conversar(sesion);
+  };
+
+  // ---------- traspasos con Sophia ----------
+  // Sophia se lo devuelve: vuelve a la pregunta final (orden / hora / info)
+  const recibirDeSophia = async (sesion) => {
+    await pasarA(sesion, "ipo");
+    setFase("resultado");
+    await decir(sesion, TRASPASO_IPO.vuelveDeSophia);
+    return accionFinal(sesion);
+  };
+
+  // Entro directo a Sophia y tiene un dolor: consulta de dolor desde el principio
+  const dolorDesdeSophia = async (sesion) => {
+    await pasarA(sesion, "ipo");
+    nuevoFlujo();
+    elegirModulo("trauma");
+    await decir(sesion, TRASPASO_IPO.desdeSophia);
     return conversar(sesion);
   };
 
@@ -386,13 +408,18 @@ export function crearFlujoIpo(api, f) {
     vigente(sesion);
   };
 
-  // Final del flujo de dolor: orden | hora | ambas | ninguna
+  // Final del flujo de dolor: orden | hora | ambas | info | ninguna
   const accionFinal = async (sesion) => {
     const { valor } = await preguntarCerrada(sesion, "accion", ACCION_FINAL.texto, ACCION_FINAL.repregunta, true);
     setPregunta(null);
     if (valor === "ninguna") {
       await decir(sesion, FRASES.sinOrden);
       return api.algoMas(sesion);
+    }
+    // Mas informacion: Sophia, con todo el caso
+    if (valor === "info") {
+      await decir(sesion, TRASPASO_IPO.aSophia);
+      return f.sophiaRecibeDeIpo(sesion);
     }
     if (valor === "orden" || valor === "ambas") await pedirOrden(sesion);
     // La hora: Ipo recomienda al especialista y se lo pasa a Ica
@@ -635,6 +662,8 @@ export function crearFlujoIpo(api, f) {
     setPregunta(null);
     setFase("analizando");
     setError("");
+    // Despierta a Sophia (su backend se duerme sin uso) por si pide mas informacion
+    despertarSophia();
     await decir(sesion, FRASES.analizando);
 
     idPagoRef.current = `avatar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -767,6 +796,7 @@ export function crearFlujoIpo(api, f) {
 
   return {
     menuIpo, dolorDesdeHora, recibirDolorDeIca, recibirExamenesDeIca, devolverAIca,
+    recibirDeSophia, dolorDesdeSophia, accionFinal, buscarEspecialista,
     conversar, analizar, flujoExamenes, generarOrden, enviarDatos, guardarResonancia,
   };
 }
