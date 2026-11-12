@@ -580,8 +580,11 @@ export function crearFlujoIpo(api, f) {
       }
       if (r) {
         Object.entries(r.respuestas || {}).forEach(([id, v]) => { if (!(id in respuestas)) respuestas[id] = v; });
-      } else if (ultimaPregunta && !(ultimaPregunta.id in respuestas)) {
-        // Sin agente: la respuesta a lo recien preguntado se interpreta aqui
+      }
+      // Lo recién preguntado queda respondido con lo que dijo el paciente aunque el agente
+      // no lo anote (con agente o sin él): "nada más" le parecía vacío y repetía la pregunta.
+      // Abierta: se guarda tal cual. Sí/no: si se entiende un sí o un no.
+      if (ultimaPregunta && !(ultimaPregunta.id in respuestas)) {
         if (ultimaPregunta.tipo === "abierta") respuestas[ultimaPregunta.id] = { valor: null, resumen: ultima };
         else {
           const v = interpretarSiNo(ultima);
