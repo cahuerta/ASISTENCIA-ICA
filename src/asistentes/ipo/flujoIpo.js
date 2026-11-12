@@ -134,7 +134,7 @@ async function postJSON(ruta, cuerpo) {
 export function crearFlujoIpo(api, f) {
   const {
     vigente, decir, hablar, preguntarCerrada, preguntarAbierta, preguntarGrupo, esperarPuntos, pasarA,
-    elegirModulo, nuevoFlujo, getInforme, esperarRespuesta, setPensando, mientras,
+    elegirModulo, nuevoFlujo, getInforme, esperarRespuesta, setPensando, mientras, setCuerpo,
     setFase, setPregunta, setEntendido, setProgreso, setResumen, setInforme, setError, setMarcadas,
     setOrdenUrl, setConCorreo,
     sesionRef, ctxRef, registroRef, idPagoRef, avisosRef, examenesRef, ordenRef, datosRef,
@@ -176,14 +176,29 @@ export function crearFlujoIpo(api, f) {
     return conversar(sesion, { sinSaludo: true });
   };
 
+  // "¿Eres hombre o mujer?" (la misma pregunta de siempre), solo si no se sabe
+  const preguntarSexo = async (sesion) => {
+    const ctx = ctxRef.current;
+    if (ctx.sexo) return;
+    const p = PREGUNTAS.find((x) => x.id === "sexo");
+    const { valor, texto } = await preguntarCerrada(sesion, p.tipo, p.texto, p.repregunta);
+    ctx.sexo = valor;
+    completarDatosBasicos(ctx, texto);
+  };
+
   // ---------- traspasos con Ica ----------
   // Ica (o el asistente de MiSalud) ya pregunto zona y lado: Ipo confirma y sigue
   const recibirDolorDeIca = async (sesion, { quien = "Ica" } = {}) => {
     const ctx = ctxRef.current;
     const donde = zonaEnVoz(ctx.zona, ctx.lado);
+    // Hombre o mujer antes de mostrar el cuerpo (si no vino de MiSalud o de Ica)
+    await preguntarSexo(sesion);
+    // El cuerpo 3D muestra la zona que ya dijo mientras la confirma
+    if (ctx.zona && ctx.zona !== "Espalda") setCuerpo?.({ zona: ctx.zona, lado: ctx.lado || "" });
     const { valor } = await preguntarCerrada(
       sesion, "sino", TRASPASO_IPO.confirma(donde, quien), TRASPASO_IPO.repreguntaConfirma(donde), true,
     );
+    setCuerpo?.(null);
     setEntendido("");
     if (!valor) {
       delete ctx.zona;
@@ -625,6 +640,8 @@ export function crearFlujoIpo(api, f) {
 
     // Datos basicos (zona, lado, edad, sexo): solo los que falten. Cada respuesta se
     // lee buscando TODOS ("rodilla derecha" -> zona y lado; no se pregunta el lado)
+    // Hombre o mujer antes de mostrar el cuerpo 3D (para mostrar el correcto)
+    if (!ctx.zona) await preguntarSexo(sesion);
     for (const p of PREGUNTAS) {
       if (!CAMPOS_BASICOS.includes(p.id)) continue;
       if (p.aplica && !p.aplica(ctx)) continue;

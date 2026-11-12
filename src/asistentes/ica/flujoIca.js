@@ -63,6 +63,13 @@ export function crearFlujoIca(api, f) {
     const ctx = ctxRef.current;
     elegirModulo("trauma");
     if (!ctx.zona) {
+      // Hombre o mujer antes de mostrar el cuerpo 3D (la misma pregunta de Ipo; Ipo ya no la repite)
+      if (!ctx.sexo) {
+        const pSexo = PREGUNTAS.find((p) => p.id === "sexo");
+        const r = await preguntarCerrada(sesion, "sexo", pSexo.texto, pSexo.repregunta);
+        ctx.sexo = r.valor;
+        completarDatosBasicos(ctx, r.texto);
+      }
       const pZona = PREGUNTAS.find((p) => p.id === "zona");
       const r = await preguntarCerrada(sesion, "zona", TRASPASO_ICA.zona, pZona.repregunta);
       ctx.zona = r.valor;

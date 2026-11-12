@@ -55,7 +55,7 @@
 //    agenda), el asistente dice un "mm, déjame ver" para no quedar en silencio.
 "use client";
 import Consentimiento, { consentimientoVigente, yaAceptado } from "./Consentimiento.jsx";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import "../../app.css";
 import AvatarIca from "../ica/AvatarIca.jsx";
 import AvatarIpo from "../ipo/AvatarIpo.jsx";
@@ -76,8 +76,8 @@ import {
   formatearRut, validarRut, interpretarMenu, interpretarItems, interpretarCirugia,
   interpretarTipoExamen, interpretarAccionFinal, interpretarNivelColumna,
 } from "./interpretar.js";
-import EsquemaPosterior from "../../EsquemaPosterior.jsx";
-import GenericMapper from "../../mappers/GenericMapper.jsx";
+// Cuerpo 3D en vez de los dibujos (se carga solo cuando se necesita)
+const Cuerpo3D = lazy(() => import("./cuerpo3d/Cuerpo3D.jsx"));
 import { resolveZonaKey } from "../../mappers/mapperRegistry.js";
 import FormularioResonancia from "../../components/FormularioResonancia.jsx";
 import logoICA from "../../assets/ica.jpg";
@@ -251,6 +251,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   const [abierto, setAbierto] = useState(!MODO_WIDGET); // widget: burbuja cerrada / asistente abierta
   const [personaje, setPersonaje] = useState(PERSONAJE_INICIAL); // "ica" | "ipo" | "sophia": quien habla ahora
   const [misalud, setMisalud] = useState(null);       // datos que mando MiSalud (modo misalud)
+  const [cuerpo, setCuerpo] = useState(null);       // { zona, lado }: cuerpo 3D con la zona ya dicha
   const [evidencia, setEvidencia] = useState(null);   // respuesta de Sophia { resumen, texto, papers }
 
   const { hablar, callar, desbloquear, usarVoz, hablando, boca } = useVoz();
@@ -487,12 +488,13 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
       return r;
     });
 
-  const responderEnPantalla = (valor) => {
+  // texto: lo que "dijo" (ej. el cuerpo 3D manda "Rodilla Derecha": zona y lado de una vez)
+  const responderEnPantalla = (valor, texto = String(valor)) => {
     const resolver = esperaRef.current;
     if (!resolver) {
       // Todavia esta diciendo la pregunta: se corta y se toma la respuesta
       if (preguntaRef.current && diciendoRef.current) {
-        adelantadaRef.current = { valor, texto: String(valor) };
+        adelantadaRef.current = { valor, texto };
         callar();
       }
       return;
@@ -500,7 +502,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     esperaRef.current = null;
     setEsperando(false);
     escuchaRef.current?.pausar();
-    resolver({ valor, texto: String(valor) });
+    resolver({ valor, texto });
   };
 
   const INTERPRETES = {
@@ -655,6 +657,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     setEvidencia(null);
     setMarcadas([]);
     setSeleccion([]);
+    setCuerpo(null);
     setError("");
   };
 
@@ -754,7 +757,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   const api = {
     vigente, decir, mientras, hablar, callar, preguntarCerrada, preguntarAbierta, preguntarGrupo, esperarPuntos,
     elegirModulo, nuevoFlujo, pasarA, menu, algoMas, despedir, getInforme: () => informeRef.current, esperarRespuesta,
-    setPensando, setEvidencia,
+    setPensando, setEvidencia, setCuerpo,
     setFase, setPregunta, setEntendido, setProgreso, setResumen, setInforme: ponerInforme, setError, setMarcadas,
     setOrdenUrl: (u) => { ordenUrlRef.current = u || ""; setOrdenUrl(u); },
     setConCorreo, setAgenda,
@@ -1003,13 +1006,13 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
         {fase === "puntos" && (
           <section style={S.tarjeta}>
             <p style={S.preguntaTexto}>Marca dónde te duele y toca guardar.</p>
-            <GenericMapper
-              mapperId={resolveZonaKey(ctxRef.current.zona)}
-              ladoInicial={(ctxRef.current.lado || "derecha").toLowerCase()}
-              vistaInicial="frente"
-              onSave={(r) => terminarPuntos(r)}
-              onVolver={() => terminarPuntos(null)}
-            />
+            <Suspense fallback={<p style={S.estado}>Cargando cuerpo…</p>}>
+              <Cuerpo3D modo="puntos" sexo={ctxRef.current.sexo}
+                mapperId={resolveZonaKey(ctxRef.current.zona)}
+                zona={ctxRef.current.zona} lado={ctxRef.current.lado || "Derecha"}
+                alto={420}
+                onGuardar={(r) => terminarPuntos(r)} />
+            </Suspense>
             <button type="button" style={S.enlace} onClick={() => terminarPuntos(null)}>Omitir este paso</button>
           </section>
         )}
@@ -1158,13 +1161,29 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
                 ))}
               </div>
             )}
-            {/* Espalda: dibujo posterior, solo la columna se puede marcar */}
+            {/* Zona del dolor: se toca en el cuerpo 3D (o se dice, como siempre) */}
+            {pregunta.tipo === "zona" && (
+              <div style={{ marginTop: 10 }}>
+                <Suspense fallback={<p style={S.estado}>Cargando cuerpo…</p>}>
+                  <Cuerpo3D modo="zona" sexo={ctxRef.current.sexo}
+                    onElegir={(z, l) => responderEnPantalla(z, l ? `${z} ${l}` : z)} />
+                </Suspense>
+              </div>
+            )}
+            {/* Espalda: cuerpo de espalda, solo la columna se puede marcar */}
             {pregunta.tipo === "columna" && (
-              <div style={{ display: "flex", justifyContent: "center", marginTop: 10 }}>
-                <EsquemaPosterior
-                  width={300}
-                  onSeleccionZona={(z) => { if (String(z).startsWith("Columna")) responderEnPantalla(z); }}
-                />
+              <div style={{ marginTop: 10 }}>
+                <Suspense fallback={<p style={S.estado}>Cargando cuerpo…</p>}>
+                  <Cuerpo3D modo="columna" sexo={ctxRef.current.sexo} onColumna={(z) => responderEnPantalla(z)} />
+                </Suspense>
+              </div>
+            )}
+            {/* Viene con la zona ya dicha (Ica o MiSalud): se muestra pintada mientras confirma */}
+            {cuerpo && pregunta.tipo !== "zona" && pregunta.tipo !== "columna" && (
+              <div style={{ marginTop: 10 }}>
+                <Suspense fallback={<p style={S.estado}>Cargando cuerpo…</p>}>
+                  <Cuerpo3D modo="ver" sexo={ctxRef.current.sexo} zona={cuerpo.zona} lado={cuerpo.lado} alto={300} />
+                </Suspense>
               </div>
             )}
             {pregunta.respaldo && pregunta.tipo === "edad" && (
