@@ -23,7 +23,7 @@
 import { MENU_ICA, TRASPASO_ICA } from "./textosIca.js";
 import { TIPO_EXAMEN } from "../comun/textosComunes.js";
 import { PREGUNTAS, esColumna } from "../ipo/bancoPreguntas.js";
-import { completarDatosBasicos } from "../comun/interpretar.js";
+import { completarDatosBasicos, interpretarAsistente, interpretarMenu } from "../comun/interpretar.js";
 
 export function crearFlujoIca(api, f) {
   const {
@@ -38,8 +38,16 @@ export function crearFlujoIca(api, f) {
     setFase("conversacion");
     setProgreso(0);
     setResumen(false);
-    let { valor, texto: dichoMenu } = await preguntarCerrada(sesion, "menu", texto, MENU_ICA.repregunta, true);
+    // Además del menú, Ica entiende que la pasen con otro asistente ("pásame con Ipo")
+    let { valor, texto: dichoMenu } = await preguntarCerrada(
+      sesion, "menu", texto, MENU_ICA.repregunta, true,
+      (t) => interpretarAsistente(t) || interpretarMenu(t),
+    );
     setEntendido("");
+    if (valor === "ipo" || valor === "sophia") {
+      await pasarA(sesion, valor);
+      return valor === "ipo" ? f.menuIpo(sesion) : f.menuSophia(sesion);
+    }
     nuevoFlujo();
     // "Me duele la rodilla derecha": zona y lado ya quedan dichos
     if (valor === "dolor") completarDatosBasicos(ctxRef.current, dichoMenu);

@@ -180,6 +180,14 @@ const CLAVES_MENU = [
 ];
 
 /** "hora" | "dolor" | "generales" | "preop" | "examenes" (sin decir cuales) | null */
+/** "Pásame con Ipo" / "quiero hablar con Sophia": "ipo" | "sophia" | null (solo desde Ica) */
+export function interpretarAsistente(texto) {
+  const t = normalizar(texto);
+  if (/\b(ipo|hipo)\b/.test(t)) return "ipo";
+  if (/\b(sophia|sofia)\b/.test(t)) return "sophia";
+  return null;
+}
+
 export function interpretarMenu(texto) {
   const t = normalizar(texto);
   for (const [opcion, claves] of CLAVES_MENU) {
