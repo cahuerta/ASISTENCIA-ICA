@@ -67,7 +67,7 @@ const CAMPOS_BASICOS = ["zona", "lado", "edad", "sexo"];
 // import.meta.env sin "?.": Vite solo reemplaza la forma exacta al compilar
 // (con "?." las variables VITE_ nunca se aplicaban y siempre quedaba el valor por defecto)
 export const BACKEND_BASE =
-  import.meta.env.VITE_BACKEND_BASE || "https://asistencia-ica-backend.onrender.com";
+  import.meta.env.VITE_BACKEND_BASE || "https://ipo-api.icarticular.cl";
 
 export const ZONAS_MAPPER = ["rodilla", "mano", "hombro", "codo", "cadera", "tobillo"];
 

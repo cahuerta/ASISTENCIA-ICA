@@ -24,7 +24,7 @@ import { resolveZonaKey } from "../mappers/mapperRegistry.js";
 import ModuloLayout from "../components/ModuloLayout.jsx";
 import logoTrauma from "../assets/logo_traumamodulo.png";
 
-const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
+const BACKEND_BASE = "https://ipo-api.icarticular.cl";
 
 /* ================= Helpers ================= */
 function leerGeo() {

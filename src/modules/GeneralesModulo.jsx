@@ -12,7 +12,7 @@ import FormularioComorbilidades from "../components/FormularioComorbilidades.jsx
 import ModuloLayout from "../components/ModuloLayout.jsx";
 import logoGenerales from "../assets/logo_generales.png";
 
-const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
+const BACKEND_BASE = "https://ipo-api.icarticular.cl";
 
 /* Etiquetas amigables para el preview de comorbilidades */
 const LABELS_COMORB = {

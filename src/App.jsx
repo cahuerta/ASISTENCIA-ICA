@@ -4,7 +4,7 @@ import "./app.css";
 
 const BACKEND_BASE =
   import.meta?.env?.VITE_BACKEND_BASE||
-  "https://asistencia-ica-backend.onrender.com";
+  "https://ipo-api.icarticular.cl";
 
 
 import PantallaUno from "./screens/PantallaUno.jsx";

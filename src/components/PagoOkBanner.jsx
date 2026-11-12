@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 // Base del backend para el reset
 const BACKEND_BASE =
   process.env.NEXT_PUBLIC_BACKEND_BASE ||
-  "https://asistencia-ica-backend.onrender.com";
+  "https://ipo-api.icarticular.cl";
 
 export default function PagoOkBanner() {
   const [visible, setVisible] = useState(false);

@@ -42,7 +42,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 // ---------- voz natural (backend) ----------
 // import.meta.env sin "?.": Vite solo reemplaza la forma exacta al compilar
-const BACKEND = import.meta.env.VITE_BACKEND_BASE || "https://asistencia-ica-backend.onrender.com";
+const BACKEND = import.meta.env.VITE_BACKEND_BASE || "https://ipo-api.icarticular.cl";
 const URL_VOZ = `${BACKEND}/voz`;
 const ESPERA_AUDIO_MS = 4500;          // si el audio no llega en este tiempo, voz del navegador
 const PAUSA_SIN_NATURAL_MS = 30000;    // tras una falla, este rato se habla directo con el navegador

@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from "react";
 const BACKEND_BASE =
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BACKEND_BASE) ||
   (typeof window !== "undefined" && window.__ENV__?.BACKEND_BASE) ||
-  "https://asistencia-ica-backend.onrender.com";
+  "https://ipo-api.icarticular.cl";
 
 /**
  * PreviewOrden — PRIMER PREVIEW (RESUMEN)

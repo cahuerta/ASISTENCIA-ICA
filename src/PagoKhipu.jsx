@@ -6,7 +6,7 @@ const BACKEND_BASE =
   (typeof window !== "undefined" && window.__ENV__?.BACKEND_BASE) ||
   (typeof import.meta !== "undefined" && import.meta.env?.VITE_BACKEND_BASE) ||
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BACKEND_BASE) ||
-  "https://asistencia-ica-backend.onrender.com";
+  "https://ipo-api.icarticular.cl";
 
 /* ================= Utils ================= */
 

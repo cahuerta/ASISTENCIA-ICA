@@ -34,7 +34,7 @@ import { MENU_SOPHIA, FRASES_SOPHIA, TRASPASO_SOPHIA, SALIDA_SOPHIA } from "./te
 import { normalizar, zonaEnVoz, esRespuestaVacia } from "../comun/interpretar.js";
 
 // import.meta.env sin "?.": Vite solo reemplaza la forma exacta al compilar
-export const AVATAR_BACKEND = (import.meta.env.VITE_AVATAR_BACKEND || "https://backend-avatar-medico.onrender.com")
+export const AVATAR_BACKEND = (import.meta.env.VITE_AVATAR_BACKEND || "https://sophia-api.hipokratia.health")
   .replace(/\/$/, "");
 
 // EvidenciaMed analiza varios estudios y los servidores pueden estar despertando

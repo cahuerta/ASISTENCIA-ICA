@@ -8,7 +8,7 @@ import FormularioResonancia from "../components/FormularioResonancia.jsx";
 import ModuloLayout from "../components/ModuloLayout.jsx";
 import logoIA from "../assets/logo_modulo_ia.png";
 
-const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
+const BACKEND_BASE = "https://ipo-api.icarticular.cl";
 
 /* ============================================================
    🔥 PARSE IA: extrae diagnóstico, explicación y exámenes IA

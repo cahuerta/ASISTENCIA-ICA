@@ -21,7 +21,7 @@ import ModuloLayout from "../components/ModuloLayout.jsx";
 import logoPreop from "../assets/logo_examenes_pre.png";
 
 const T = getTheme();
-const BACKEND_BASE = "https://asistencia-ica-backend.onrender.com";
+const BACKEND_BASE = "https://ipo-api.icarticular.cl";
 
 /* ===========================================================
    ==  ID PAGO — MISMO FLUJO QUE TRAUMA, PREFIJO "preop_"   ==
