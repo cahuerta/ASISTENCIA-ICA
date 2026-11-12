@@ -54,6 +54,7 @@
 //  - api.mientras(sesion, promesa): si algo demora (el agente, el analisis, la
 //    agenda), el asistente dice un "mm, déjame ver" para no quedar en silencio.
 "use client";
+import Consentimiento, { consentimientoVigente, yaAceptado } from "./Consentimiento.jsx";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import "../../app.css";
 import AvatarIca from "../ica/AvatarIca.jsx";
@@ -773,7 +774,15 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     return menu(sesion);
   };
 
+  // Consentimiento (Ley 21.719, datos de salud): antes de la primera pregunta
+  const [pedirConsentimiento, setPedirConsentimiento] = useState(false);
+  const consentidoRef = useRef(false);
+  useEffect(() => {
+    consentimientoVigente().then((c) => { if (yaAceptado(c)) consentidoRef.current = true; }).catch(() => {});
+  }, []);
+
   const comenzar = async () => {
+    if (!consentidoRef.current) { setPedirConsentimiento(true); return; }
     sesionRef.current += 1;
     const sesion = sesionRef.current;
     callar();
@@ -1250,6 +1259,12 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
           <button type="button" style={S.enlace} onClick={comenzar}>Nueva consulta</button>
         )}
       </main>
+      {pedirConsentimiento && (
+        <Consentimiento
+          onAceptar={() => { consentidoRef.current = true; setPedirConsentimiento(false); comenzar(); }}
+          onCancelar={() => setPedirConsentimiento(false)}
+        />
+      )}
     </div>
   );
 }
