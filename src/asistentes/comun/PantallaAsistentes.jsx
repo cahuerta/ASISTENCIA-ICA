@@ -54,7 +54,7 @@
 //  - api.mientras(sesion, promesa): si algo demora (el agente, el analisis, la
 //    agenda), el asistente dice un "mm, déjame ver" para no quedar en silencio.
 "use client";
-import Consentimiento, { consentimientoVigente, yaAceptado } from "./Consentimiento.jsx";
+import Consentimiento, { consentimientoVigente, yaAceptado, aceptadoEnEsteEquipo } from "./Consentimiento.jsx";
 import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import "../../app.css";
 import AvatarIca from "../ica/AvatarIca.jsx";
@@ -785,6 +785,12 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   }, []);
 
   const comenzar = async () => {
+    // Si este equipo ya aceptó, se parte al tiro dentro del toque (si no, el teléfono no deja
+    // pedir el micrófono ni activar el sonido). Si el texto cambió, se pide en la próxima vez.
+    if (!consentidoRef.current && aceptadoEnEsteEquipo()) {
+      consentidoRef.current = true;
+      consentimientoVigente().then((c) => { if (!yaAceptado(c)) consentidoRef.current = false; }).catch(() => {});
+    }
     if (!consentidoRef.current) { setPedirConsentimiento(true); return; }
     sesionRef.current += 1;
     const sesion = sesionRef.current;

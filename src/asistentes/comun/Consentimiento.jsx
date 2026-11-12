@@ -29,6 +29,9 @@ export async function consentimientoVigente() {
   return r.json();
 }
 
+/** true si este equipo aceptó alguna vez (sin preguntar al servidor: sirve para partir dentro del toque). */
+export const aceptadoEnEsteEquipo = () => !!leer(CLAVE);
+
 /** true si este equipo ya aceptó la versión vigente. */
 export const yaAceptado = (c) => !!c && leer(CLAVE) === `${c.version}:${c.hash}`;
 
