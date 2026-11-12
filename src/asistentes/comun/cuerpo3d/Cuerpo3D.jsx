@@ -5,7 +5,8 @@
 //  - modo "columna": dijo "espalda" → cuerpo de espalda, toca cuello, parte media o parte baja
 //  - modo "ver":     viene con la zona ya dicha (de Ica o MiSalud): la muestra pintada
 //    (estos tres con el cuerpo completo de hombre o mujer, MakeHuman CC0)
-//  - modo "puntos":  la zona de cerca con el atlas BodyParts3D (piel y huesos del mismo cuerpo).
+//  - modo "puntos":  la zona de cerca con el atlas BodyParts3D (piel, músculos y huesos del mismo
+//                    cuerpo, en capas).
 //                    El paciente toca libremente; cada toque toma el nombre del punto de los
 //                    esquemas de siempre más cercano (rodillapuntos.js, ...), así "Guardar"
 //                    entrega lo mismo que entregaban los dibujos.
@@ -23,6 +24,8 @@ const PIEL = new THREE.Color(0xc08a6c).convertSRGBToLinear();
 const PINTADA = new THREE.Color(0xe0503c).convertSRGBToLinear();
 const PIEL_ATLAS = new THREE.Color(0xd99a7c).convertSRGBToLinear();
 const HUESO = new THREE.Color(0xeee3cc).convertSRGBToLinear();
+const MUSCULO = new THREE.Color(0xb5534a).convertSRGBToLinear();
+const CAPAS = [["piel", "Piel"], ["musculo", "Músculo"], ["hueso", "Hueso"]];
 
 const NOMBRE_VISTA = {
   frente: "Frente", frontal: "Frente", anterior: "Frente", posterior: "Atrás", lateral: "Lado",
@@ -58,7 +61,7 @@ export default function Cuerpo3D({ modo, sexo, zona, lado, mapperId, onElegir, o
   const [tocado, setTocado] = useState(null); // zona / columna: { zona, lado, nombre }
   const [marcas, setMarcas] = useState([]);   // puntos: [{ id, label, vista }]
   const [vistas, setVistas] = useState([]);
-  const [huesos, setHuesos] = useState(true);
+  const [capa, setCapa] = useState("musculo"); // piel | musculo | hueso
 
   useEffect(() => {
     let vivo = true;
@@ -113,7 +116,7 @@ export default function Cuerpo3D({ modo, sexo, zona, lado, mapperId, onElegir, o
       const r = Math.max((17.2 * 0.56) / tv, 10.6 / 2 / (tv * camera.aspect));
       volar(new THREE.Vector3(0, 8.3, 0), new THREE.Vector3(Math.sin(ang) * r, 8.9, Math.cos(ang) * r), rapido);
     };
-    motor.current = { completo, irVista: () => {}, verHuesos: () => {}, quitar: () => {} };
+    motor.current = { completo, irVista: () => {}, verCapa: () => {}, quitar: () => {} };
     const ray = new THREE.Raycaster(), m2 = new THREE.Vector2();
     const rayoDesde = (e) => {
       const r = renderer.domElement.getBoundingClientRect();
@@ -126,14 +129,15 @@ export default function Cuerpo3D({ modo, sexo, zona, lado, mapperId, onElegir, o
       // ---------- Zona de cerca: atlas (piel semitransparente + huesos) ----------
       const pielMat = new THREE.MeshStandardMaterial({ color: PIEL_ATLAS, roughness: 0.6, emissive: 0x2a1209, transparent: true, opacity: 0.55, depthWrite: false });
       const huesoMat = new THREE.MeshStandardMaterial({ color: HUESO, roughness: 0.5, emissive: 0x120d05 });
+      const musculoMat = new THREE.MeshStandardMaterial({ color: MUSCULO, roughness: 0.5, emissive: 0x1e0504 });
       const marcaMat = new THREE.MeshStandardMaterial({ color: 0xe0322b, emissive: 0x6a0d08, roughness: 0.35 });
       const gMarca = new THREE.SphereGeometry(mapperId === "mano" ? 0.045 : 0.07, 20, 14);
       const raiz = new THREE.Group();
       if (s === "l") raiz.scale.x = -1; // el izquierdo es el espejo del derecho
       scene.add(raiz);
-      let piel = null, grupoHuesos = new THREE.Group(), puntosAnat = [], siguiente = 1;
+      let piel = null, grupoHuesos = new THREE.Group(), grupoMusculos = new THREE.Group(), puntosAnat = [], siguiente = 1;
       const marcasMallas = new Map();
-      raiz.add(grupoHuesos);
+      raiz.add(grupoHuesos, grupoMusculos);
 
       bajar(`/cuerpo3d/atlas/${mapperId}.glb`).then((g) => {
         if (!vivo) return;
@@ -145,10 +149,11 @@ export default function Cuerpo3D({ modo, sexo, zona, lado, mapperId, onElegir, o
           o.geometry.deleteAttribute("normal"); o.geometry.computeVertexNormals();
           const nombre = o.name || o.parent?.name || "";
           if (nombre.startsWith("piel")) { piel = o; o.material = pielMat; o.renderOrder = 2; }
+          else if (nombre.startsWith("musculo")) { o.material = musculoMat; o.userData.musculo = true; }
           else { o.material = huesoMat; }
         }
         raiz.add(copia);
-        mallas.filter((o) => o !== piel).forEach((o) => grupoHuesos.attach(o));
+        mallas.filter((o) => o !== piel).forEach((o) => (o.userData.musculo ? grupoMusculos : grupoHuesos).attach(o));
         raiz.updateMatrixWorld(true);
 
         // Puntos de los esquemas de siempre, ubicados en la piel del atlas (no se muestran)
@@ -176,10 +181,15 @@ export default function Cuerpo3D({ modo, sexo, zona, lado, mapperId, onElegir, o
         setEstado("listo");
       }).catch(() => vivo && setEstado("error"));
 
-      motor.current.verHuesos = (on) => {
-        grupoHuesos.visible = on;
-        pielMat.opacity = on ? 0.55 : 1; pielMat.transparent = on; pielMat.depthWrite = !on; pielMat.needsUpdate = true;
+      // Capas: piel (opaca) · músculo (piel transparente, músculos y huesos) · hueso (sin músculos)
+      motor.current.verCapa = (c) => {
+        grupoMusculos.visible = c === "musculo";
+        grupoHuesos.visible = c !== "piel";
+        const trans = c !== "piel";
+        pielMat.opacity = c === "musculo" ? 0.3 : c === "hueso" ? 0.5 : 1;
+        pielMat.transparent = trans; pielMat.depthWrite = !trans; pielMat.needsUpdate = true;
       };
+      motor.current.verCapa("musculo");
       motor.current.quitar = (id) => { const mm = marcasMallas.get(id); if (mm) { scene.remove(mm); marcasMallas.delete(id); } };
 
       alTocar = (e) => {
@@ -335,8 +345,11 @@ export default function Cuerpo3D({ modo, sexo, zona, lado, mapperId, onElegir, o
             {vistas.length > 1 && vistas.map((v) => (
               <button key={v} type="button" style={E.chip} onClick={() => motor.current?.irVista(v)}>{NOMBRE_VISTA[v] || v}</button>
             ))}
-            <button type="button" style={{ ...E.chip, ...(huesos ? E.chipOn : null) }}
-              onClick={() => { const on = !huesos; setHuesos(on); motor.current?.verHuesos(on); }}>Huesos</button>
+            <span style={E.separador} />
+            {CAPAS.map(([c, nombre]) => (
+              <button key={c} type="button" style={{ ...E.chip, ...(capa === c ? E.chipOn : null) }}
+                onClick={() => { setCapa(c); motor.current?.verCapa(c); }}>{nombre}</button>
+            ))}
           </div>
         )}
       </div>
@@ -367,7 +380,7 @@ export default function Cuerpo3D({ modo, sexo, zona, lado, mapperId, onElegir, o
             </div>
           )}
           <button type="button" style={E.primario} onClick={guardar}>Guardar</button>
-          <p style={E.credito}>Piel y huesos: BodyParts3D © DBCLS, CC BY-SA 2.1 JP.</p>
+          <p style={E.credito}>Piel, músculos y huesos: BodyParts3D © DBCLS, CC BY-SA 2.1 JP.</p>
         </div>
       )}
     </div>
@@ -381,6 +394,7 @@ const E = {
   botonesVista: { position: "absolute", top: 8, right: 8, left: 8, display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" },
   chip: { font: "700 13px system-ui, sans-serif", color: "#14223a", background: "#ffffffee", border: "1px solid #d3dce7", borderRadius: 999, padding: "7px 11px", cursor: "pointer" },
   chipOn: { background: AZUL, color: "#fff", borderColor: AZUL },
+  separador: { flexBasis: "100%", height: 0 },
   pie: { display: "grid", gap: 8 },
   ayuda: { margin: 0, color: "#5b6b82", fontSize: 14, lineHeight: 1.4 },
   nombre: { margin: 0, fontSize: 18, fontWeight: 800, color: "#14223a" },
