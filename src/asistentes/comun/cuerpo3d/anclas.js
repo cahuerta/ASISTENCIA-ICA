@@ -119,11 +119,11 @@ export function anclas(mapperId, J, s) {
   }
 
   if (mapperId === "mano") {
-    // Dorso: el lado de la mano que mira hacia afuera y arriba (el modelo está con los brazos abiertos)
+    // Dorso: el atlas está en posición anatómica (palmas hacia adelante), el dorso mira hacia atrás
     const w = X("hand"), ax = X("finger-3-1").sub(w).normalize();
     const tr = X("finger-2-1").sub(X("finger-5-1")).normalize();
     let DORS = new Vector3().crossVectors(ax, tr).normalize();
-    if (DORS.dot(v(lat, 1, 0)) < 0) DORS.negate();
+    if (DORS.z > 0) DORS.negate();
     const PALM = DORS.clone().negate();
     const RAD = X("finger-2-1").sub(X("finger-5-1")).normalize(), ULN = RAD.clone().negate();
     const dedos = (dir) => ({
@@ -197,14 +197,14 @@ export function anclas(mapperId, J, s) {
   return out;
 }
 
-// Dónde mira la cámara en cada esquema y desde qué lado empieza cada vista
+// Dónde mira la cámara en cada zona (y a qué distancia)
 export function encuadre(mapperId, J, s) {
   const X = (k) => new Vector3(...J[`${s}-${k}`]);
   const lat = s === "r" ? -1 : 1;
   const c = {
-    rodilla: [X("knee"), 8.5], hombro: [X("shoulder").add(new Vector3(-lat * 0.2, 0, 0)), 8],
-    cadera: [X("upper-leg").add(new Vector3(-lat * 0.3, 0.2, 0)), 9.5], codo: [X("elbow"), 6.5],
-    mano: [X("hand").lerp(X("finger-3-1"), 0.5), 5], tobillo: [X("ankle").lerp(X("foot-2"), 0.4), 6.5],
+    rodilla: [X("knee"), 6.5], hombro: [X("shoulder").add(new Vector3(-lat * 0.3, 0, 0)), 6.5],
+    cadera: [X("upper-leg").add(new Vector3(-lat * 0.4, 0.3, 0)), 8], codo: [X("elbow"), 5],
+    mano: [X("hand").lerp(X("finger-3-2"), 0.5), 4.2], tobillo: [X("ankle").lerp(X("foot-2"), 0.4), 5.2],
   }[mapperId];
   return c ? { centro: c[0], dist: c[1] } : null;
 }
