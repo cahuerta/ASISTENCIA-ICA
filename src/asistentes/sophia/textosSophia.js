@@ -67,4 +67,5 @@ export const SALIDA_SOPHIA = {
 const ETIQUETA_ACCION = {
   pregunta: "Otra pregunta", ipo: "Volver con Ipo", hora: "Hora con Ica", dolor: "Tengo un dolor", fin: "Terminar",
 };
-export const etiquetaSalida = (v) => (v?.texto ? v.texto : ETIQUETA_ACCION[v?.accion] || "");
+const NOMBRE = { ipo: "Ipo", ica: "Ica", sophia: "Sophia" };
+export const etiquetaSalida = (v) => (v?.accion === "con" ? `Con ${NOMBRE[v.quien] || v.quien}` : v?.texto ? v.texto : ETIQUETA_ACCION[v?.accion] || "");

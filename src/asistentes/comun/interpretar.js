@@ -180,11 +180,12 @@ const CLAVES_MENU = [
 ];
 
 /** "hora" | "dolor" | "generales" | "preop" | "examenes" (sin decir cuales) | null */
-/** "Pásame con Ipo" / "quiero hablar con Sophia": "ipo" | "sophia" | null (solo desde Ica) */
-export function interpretarAsistente(texto) {
+/** "Pásame con Ipo / con Ica / con Sophia": "ipo" | "ica" | "sophia" | null.
+ *  excluir: el asistente que pregunta (no se pasa a sí mismo). */
+export function interpretarAsistente(texto, excluir = "") {
   const t = normalizar(texto);
-  if (/\b(ipo|hipo)\b/.test(t)) return "ipo";
-  if (/\b(sophia|sofia)\b/.test(t)) return "sophia";
+  const nombres = [["ipo", /\b(ipo|hipo)\b/], ["ica", /\b(ica|ika)\b/], ["sophia", /\b(sophia|sofia)\b/]];
+  for (const [quien, re] of nombres) if (quien !== excluir && re.test(t)) return quien;
   return null;
 }
 

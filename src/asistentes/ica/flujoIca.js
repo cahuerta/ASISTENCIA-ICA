@@ -41,13 +41,10 @@ export function crearFlujoIca(api, f) {
     // Además del menú, Ica entiende que la pasen con otro asistente ("pásame con Ipo")
     let { valor, texto: dichoMenu } = await preguntarCerrada(
       sesion, "menu", texto, MENU_ICA.repregunta, true,
-      (t) => interpretarAsistente(t) || interpretarMenu(t),
+      (t) => interpretarMenu(t) || interpretarAsistente(t, "ica"),
     );
     setEntendido("");
-    if (valor === "ipo" || valor === "sophia") {
-      await pasarA(sesion, valor);
-      return valor === "ipo" ? f.menuIpo(sesion) : f.menuSophia(sesion);
-    }
+    if (valor === "ipo" || valor === "sophia") return f.irConAsistente(sesion, valor);
     nuevoFlujo();
     // "Me duele la rodilla derecha": zona y lado ya quedan dichos
     if (valor === "dolor") completarDatosBasicos(ctxRef.current, dichoMenu);

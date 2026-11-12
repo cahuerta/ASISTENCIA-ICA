@@ -57,7 +57,7 @@ import {
 import { cargarMedicos } from "../comun/agenda.js";
 import { despertarSophia } from "../sophia/flujoSophia.js";
 import { resolveZonaKey } from "../../mappers/mapperRegistry.js";
-import { interpretarSiNo } from "../comun/interpretar.js";
+import { interpretarSiNo, interpretarAsistente, interpretarMenu } from "../comun/interpretar.js";
 
 // Agente: turnos extra sobre el numero de preguntas de la zona antes de pasar al guion
 const MARGEN_TURNOS = 6;
@@ -147,8 +147,12 @@ export function crearFlujoIpo(api, f) {
     setFase("conversacion");
     setProgreso(0);
     setResumen(false);
-    let { valor, texto: dichoMenu } = await preguntarCerrada(sesion, "menu", texto, MENU.repregunta, true);
+    let { valor, texto: dichoMenu } = await preguntarCerrada(
+      sesion, "menu", texto, MENU.repregunta, true,
+      (t) => interpretarMenu(t) || interpretarAsistente(t, "ipo"),   // "pásame con Ica / Sophia"
+    );
     setEntendido("");
+    if (valor === "ica" || valor === "sophia") return f.irConAsistente(sesion, valor);
     nuevoFlujo();
     // "Me duele la rodilla derecha": zona y lado ya quedan dichos
     if (valor === "dolor") completarDatosBasicos(ctxRef.current, dichoMenu);

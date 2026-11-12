@@ -537,7 +537,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     edad: (v) => `${v} años`,
     sexo: (v) => (v === "Masculino" ? "Hombre" : "Mujer"),
     sino: (v) => (v ? "Sí" : "No"),
-    menu: (v) => (v === "examenes" ? "Exámenes" : MENU.opciones.find((o) => o.valor === v)?.etiqueta || v),
+    menu: (v) => (v === "examenes" ? "Exámenes" : { ipo: "Con Ipo", ica: "Con Ica", sophia: "Con Sophia" }[v] || MENU.opciones.find((o) => o.valor === v)?.etiqueta || v),
     tipoExamen: (v) => TIPO_EXAMEN.opciones.find((o) => o.valor === v)?.etiqueta || v,
     accion: (v) => ACCION_FINAL.opciones.find((o) => o.valor === v)?.etiqueta || v,
     columna: (v) => v,
@@ -765,6 +765,13 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   };
   const f = {};
   Object.assign(f, crearAgenda(api, f), crearFlujoIca(api, f), crearFlujoIpo(api, f), crearFlujoSophia(api, f));
+  // "Pásame con Ipo / Ica / Sophia" desde el menú de cualquiera: cambia y muestra el menú del otro
+  f.irConAsistente = async (sesion, quien) => {
+    setPregunta(null);
+    setEntendido("");
+    await pasarA(sesion, quien);
+    return menu(sesion);
+  };
 
   const comenzar = async () => {
     sesionRef.current += 1;
