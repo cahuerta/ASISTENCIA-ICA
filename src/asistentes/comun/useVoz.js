@@ -5,8 +5,9 @@
  * - hablar(texto, { alTerminarPronto }): Promise<boolean>. Se resuelve al terminar
  *   de hablar; true si efectivamente habló, false si el navegador no lo permitió
  *   (sin interacción previa con la página) o no hay voz disponible.
- *   alTerminarPronto(): se llama ~0,15 s ANTES de que termine el audio (para que el
- *   micrófono ya esté encendido cuando el asistente se calla).
+ *   alTerminarPronto(): se llama cuando el audio terminó de verdad, para encender el
+ *   micrófono. Antes se adelantaba ~0,15 s según la duración que informa el navegador, pero
+ *   con la voz de Google esa duración sale corta y el micrófono se montaba sobre la frase.
  * - callar(): corta lo que se esté diciendo.
  * - desbloquear(): se llama en la primera interacción con la página (clic/tecla)
  *   para que el navegador permita hablar después.
@@ -24,8 +25,9 @@
  *   precargarVoces() pide de antemano las primeras frases (el saludo, las primeras
  *   preguntas): al tocar "Comenzar" ya están y suenan al tiro con la voz de Azure.
  *   FIN DEL AUDIO: no se depende solo del aviso "ended" del navegador (en algunos
- *   teléfonos llega tarde o no llega): se da por terminado al cumplirse su duración,
- *   o si el audio se detiene; la boca se cierra apenas deja de sonar.
+ *   teléfonos llega tarde o no llega): al cumplirse su duración se revisa si sigue
+ *   avanzando (la duración informada puede salir corta) y se da por terminado cuando
+ *   deja de avanzar o se detiene; la boca se cierra apenas deja de sonar.
  *   - RESPALDO: si el backend no responde a tiempo, da error o el plan gratis se
  *     agotó, se habla con la voz del navegador (como antes) y por un rato ni se
  *     intenta la voz natural, para no hacer esperar al paciente.
@@ -49,7 +51,6 @@ const PAUSA_SIN_NATURAL_MS = 30000;    // tras una falla, este rato se habla dir
 const MAX_CARACTERES_AUDIO = 650;      // el backend acepta hasta 700
 const MAX_AUDIOS_GUARDADOS = 40;
 const VENTANA_BOCA_S = 0.04;           // la boca se mide en tramos de 40 ms
-const AVISO_ANTES_MS = 150;            // alTerminarPronto: este tiempo antes del final del audio
 const MARGEN_FIN_MS = 250;             // se da por terminado a su duración + este margen, aunque no avise
 const ESPERA_PRECARGA_MS = 60000;      // la precarga espera lo que tarde el backend en despertar
 const ESPERA_PRECARGADO_MS = 6000;     // hablar() espera hasta esto un audio que ya se está precargando
@@ -337,7 +338,7 @@ export default function useVoz() {
   };
 
   // ---------- voz natural: reproduce un audio. "ok" | "error" | "bloqueada" | "cancelada" ----------
-  // avisar: solo en el último bloque, se llama AVISO_ANTES_MS antes del final
+  // avisar: ya no se usa aquí (hablar() lo llama al terminar el audio)
   const reproducir = useCallback((entrada, turno, avisar = null) => {
     return new Promise((resolve) => {
       const a = obtenerAudio();
@@ -346,16 +347,24 @@ export default function useVoz() {
       let aviso = null;
 
       let fin = null;
-      // Al empezar a sonar (y si se reanuda tras cargar): aviso previo y fin por duración
+      // Al empezar a sonar: respaldo por si el navegador no avisa el final. La duración que
+      // informa el navegador puede salir más corta que el audio real (voz de Google): por eso
+      // no se corta ni se enciende el micrófono por duración; al cumplirse, solo se revisa si
+      // el audio sigue avanzando y, si sigue, se espera. El micrófono se enciende al terminar
+      // de verdad (hablar() llama a "avisar" después de reproducir).
+      let ultimoTiempo = -1;
+      const revisarFin = () => {
+        if (listo) return;
+        if (a.ended || a.paused || a.currentTime === ultimoTiempo) { a.pause(); terminar("ok"); return; }
+        ultimoTiempo = a.currentTime;
+        fin = setTimeout(revisarFin, 400);
+      };
       const alSonar = () => {
         if (listo) return;
         if (!Number.isFinite(a.duration) || a.duration <= 0) return;
         const restanteMs = (a.duration - a.currentTime) * 1000;
         clearTimeout(fin);
-        fin = setTimeout(() => { a.pause(); terminar("ok"); }, restanteMs + MARGEN_FIN_MS);
-        if (avisar && !aviso) {
-          aviso = setTimeout(() => { if (!listo) avisar(); }, Math.max(0, restanteMs - AVISO_ANTES_MS));
-        }
+        fin = setTimeout(revisarFin, restanteMs + MARGEN_FIN_MS);
       };
 
       const terminar = (resultado) => {
