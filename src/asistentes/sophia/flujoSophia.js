@@ -31,7 +31,7 @@
  * f.buscarEspecialista, f.abrirAgenda, f.flujoHora). Devuelve las de Sophia.
  */
 import { MENU_SOPHIA, FRASES_SOPHIA, TRASPASO_SOPHIA, SALIDA_SOPHIA } from "./textosSophia.js";
-import { normalizar, zonaEnVoz, esRespuestaVacia, interpretarAsistente } from "../comun/interpretar.js";
+import { normalizar, zonaEnVoz, esRespuestaVacia, interpretarAsistente, pideAsistente } from "../comun/interpretar.js";
 
 // import.meta.env sin "?.": Vite solo reemplaza la forma exacta al compilar
 export const AVATAR_BACKEND = (import.meta.env.VITE_AVATAR_BACKEND || "https://sophia-api.hipokratia.health")
@@ -210,7 +210,7 @@ export function crearFlujoSophia(api, f) {
     const pregunta = await preguntarAbierta(sesion, cual === "inicio" ? MENU_SOPHIA.texto : MENU_SOPHIA.otraVez);
     if (esRespuestaVacia(pregunta)) return seguir(sesion);
     // "Pásame con Ipo / con Ica" (frase corta, no una pregunta médica que los nombre)
-    const otro = pregunta.trim().split(/\s+/).length <= 8 ? interpretarAsistente(pregunta, "sophia") : null;
+    const otro = pideAsistente(pregunta, "sophia");
     if (otro) return f.irConAsistente(sesion, otro);
     await responder(sesion, pregunta, casoSiVieneDeIpo());
     return seguir(sesion);
@@ -223,15 +223,18 @@ export function crearFlujoSophia(api, f) {
       const s = desdeIpo ? SALIDA_SOPHIA.desdeIpo : SALIDA_SOPHIA.directo;
       const { valor } = await preguntarCerrada(
         sesion, "salida", s.texto, s.repregunta, true,
-        (t) => { const otro = interpretarAsistente(t, "sophia"); return otro ? { accion: "con", quien: otro } : interpretarSalida(t, desdeIpo); },
+        (t) => { const otro = pideAsistente(t, "sophia"); return otro ? { accion: "con", quien: otro } : interpretarSalida(t, desdeIpo); },
         s.opciones,
       );
       setPregunta(null);
-      if (valor.accion === "con") return f.irConAsistente(sesion, valor.quien);
+      if (valor.accion === "con" && !(valor.quien === "ipo" && desdeIpo)) return f.irConAsistente(sesion, valor.quien);
+      if (valor.accion === "con") valor.accion = "ipo";   // venía de Ipo: vuelve a donde estaba
 
       if (valor.accion === "pregunta") {
         const pregunta = valor.texto || (await preguntarAbierta(sesion, FRASES_SOPHIA.otraPregunta));
         if (esRespuestaVacia(pregunta)) continue;
+        const otro = pideAsistente(pregunta, "sophia");   // "mejor vuelvo con Ipo"
+        if (otro) return f.irConAsistente(sesion, otro);
         await responder(sesion, pregunta, casoSiVieneDeIpo());
         continue;
       }

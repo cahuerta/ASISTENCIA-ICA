@@ -184,8 +184,24 @@ const CLAVES_MENU = [
  *  excluir: el asistente que pregunta (no se pasa a sí mismo). */
 export function interpretarAsistente(texto, excluir = "") {
   const t = normalizar(texto);
-  const nombres = [["ipo", /\b(ipo|hipo)\b/], ["ica", /\b(ica|ika)\b/], ["sophia", /\b(sophia|sofia)\b/]];
+  // la voz a veces escribe "Hippo", "y po", "Sofía" o "Ika"
+  const nombres = [["ipo", /\b(ipo|hipo|hippo|ipho)\b/], ["ica", /\b(ica|ika)\b/], ["sophia", /\b(sophia|sofia|sophie)\b/]];
   for (const [quien, re] of nombres) if (quien !== excluir && re.test(t)) return quien;
+  return null;
+}
+
+/** Igual, pero dentro de una pregunta abierta (donde la persona puede preguntar cualquier
+ *  cosa): solo cuenta si además pide el cambio ("pásame", "volver", "hablar con", "con Ipo").
+ *  Así "pásame con Ipo" o "quiero volver a hablar con Hipo por favor" cambian de asistente,
+ *  pero una pregunta médica larga no. */
+export function pideAsistente(texto, excluir = "") {
+  const quien = interpretarAsistente(texto, excluir);
+  if (!quien) return null;
+  const t = normalizar(texto);
+  const verbo = /\b(pasa\w*|pasame|vol\w*|vuelv\w*|regres\w*|habla\w*|llev\w*)\b/.test(t);
+  const conNombre = /\bcon (el |la )?(ipo|hipo|hippo|ipho|ica|ika|sophia|sofia|sophie)\b/.test(t);
+  const pregunta = /^(que|como|cual|cuales|por que|cuando|donde|quien|para que)\b/.test(t);
+  if (verbo || (conNombre && !pregunta) || t.split(" ").length <= 3) return quien;
   return null;
 }
 
