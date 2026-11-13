@@ -7,9 +7,9 @@
 //    (estos tres con el cuerpo completo de hombre o mujer, MakeHuman CC0)
 //  - modo "puntos":  la zona de cerca con el atlas BodyParts3D (piel, músculos y huesos del mismo
 //                    cuerpo, en capas).
-//                    El paciente toca libremente; cada toque toma el nombre del punto de los
-//                    esquemas de siempre más cercano (rodillapuntos.js, ...), así "Guardar"
-//                    entrega lo mismo que entregaban los dibujos.
+//                    El paciente toca libremente en la capa que ve (piel, músculo o hueso) y
+//                    se guarda qué estructura tocó, la cara, la altura y lo deducido (p. ej.
+//                    menisco), para darle a la IA más información (estructuras.js).
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -18,6 +18,7 @@ import ARTICULACIONES from "./articulaciones.json";
 import ATLAS from "./atlas.json";
 import { crearAnatomia, zonaIpo, ladoDe, clavesDeZona } from "./anatomia.js";
 import { anclas, encuadre, VISTAS } from "./anclas.js";
+import { describir } from "./estructuras.js";
 
 const AZUL = "#1B3B8C";
 const PIEL = new THREE.Color(0xc08a6c).convertSRGBToLinear();
@@ -182,7 +183,9 @@ export default function Cuerpo3D({ modo, sexo, zona, lado, mapperId, onElegir, o
       }).catch(() => vivo && setEstado("error"));
 
       // Capas: piel (opaca) · músculo (piel transparente, músculos y huesos) · hueso (sin músculos)
+      let capaActual = "musculo";
       motor.current.verCapa = (c) => {
+        capaActual = c;
         grupoMusculos.visible = c === "musculo";
         grupoHuesos.visible = c !== "piel";
         const trans = c !== "piel";
@@ -205,21 +208,32 @@ export default function Cuerpo3D({ modo, sexo, zona, lado, mapperId, onElegir, o
           setMarcas((ms) => ms.filter((x) => x.id !== id));
           return;
         }
-        const h = hp;
+        // Se marca en la capa que se está viendo: piel, músculo (o el hueso que asoma) o hueso
+        const musculos = grupoMusculos.children, huesosM = grupoHuesos.children;
+        // (la piel siempre queda por fuera: en Músculo/Hueso se busca primero esa capa y la piel
+        //  solo si el toque no cae sobre ninguna pieza)
+        const objetivo = capaActual === "musculo" ? [...musculos, ...huesosM] : capaActual === "hueso" ? huesosM : [];
+        let h = objetivo.length ? ray.intersectObjects(objetivo, false) : [];
+        if (!h.length) h = ray.intersectObject(piel, false);
         if (!h.length) return;
-        const p = h[0].point, n = h[0].face.normal.clone().transformDirection(piel.matrixWorld).normalize();
-        // el punto de los esquemas más cercano, en la misma cara (no uno del otro lado)
-        let mejor = null;
-        for (const a of puntosAnat) {
-          const d = a.p.distanceTo(p) + (a.n.dot(n) < 0.2 ? 5 : 0);
-          if (!mejor || d < mejor.d) mejor = { d, a };
+        const obj = h[0].object;
+        const capa = obj === piel ? "piel" : obj.userData.musculo ? "musculo" : "hueso";
+        const p = h[0].point.clone(), n = h[0].face.normal.clone().transformDirection(obj.matrixWorld).normalize();
+        // si tocó la piel: qué hay justo debajo (para dar más información)
+        let debajo = null;
+        if (capa === "piel") {
+          const hd = ray.intersectObjects([...musculos, ...huesosM], false).find((x) => x.distance > h[0].distance);
+          if (hd && hd.distance - h[0].distance < 1.2) debajo = hd.object.name || hd.object.parent?.name || null;
         }
-        if (!mejor || mejor.d > 3) return;
+        // en coordenadas del modelo derecho (el izquierdo es su espejo)
+        const pl = raiz.worldToLocal(p.clone()), nl = n.clone();
+        if (s === "l") nl.x = -nl.x;
+        const d = describir({ zona: mapperId, capa, malla: obj.name || obj.parent?.name || "", debajo, p: pl, n: nl, J: ATLAS });
         const id = siguiente++;
         const mm = new THREE.Mesh(gMarca, marcaMat);
         mm.position.copy(p).addScaledVector(n, 0.04); mm.renderOrder = 3; mm.userData.id = id;
         scene.add(mm); marcasMallas.set(id, mm);
-        setMarcas((ms) => [...ms, { id, label: mejor.a.label, vista: mejor.a.vista }]);
+        setMarcas((ms) => [...ms, { id, ...d, coord: pl.toArray().map((v) => +v.toFixed(3)) }]);
       };
     } else {
       // ---------- Cuerpo completo (hombre o mujer) ----------
@@ -315,17 +329,18 @@ export default function Cuerpo3D({ modo, sexo, zona, lado, mapperId, onElegir, o
 
   const quitar = (id) => { motor.current?.quitar(id); setMarcas((ms) => ms.filter((x) => x.id !== id)); };
 
+  // Guarda lo que tocó el paciente (capa, estructura, cara, altura y lo deducido, p. ej. el
+  // menisco), como texto para la IA en porVista.puntos, y el detalle con coordenadas en puntos3d.
   const guardar = () => {
-    const def = VISTAS[mapperId];
-    const porVista = Object.fromEntries(def.vistas.map((v) => [v, []]));
-    marcas.forEach((m) => { if (porVista[m.vista] && !porVista[m.vista].includes(m.label)) porVista[m.vista].push(m.label); });
-    const todos = def.vistas.flatMap((v) => porVista[v]);
+    const textos = [...new Set(marcas.map((m) => m.texto))];
+    const puntos3d = marcas.map(({ capa, estructura, parte, cara, altura, deducido, texto, coord }) => ({ capa, estructura, parte, cara, altura, deducido, texto, coord }));
     const ladoTxt = s === "l" ? "izquierda" : "derecha";
     const nombre = mapperId === "tobillo" ? "Tobillo/Pie" : mapperId[0].toUpperCase() + mapperId.slice(1);
-    const seccionesExtra = def.vistas.filter((v) => porVista[v].length).map((v) => ({ title: `${nombre} — Vista ${NOMBRE_VISTA[v]}`, lines: porVista[v] }));
+    const porVista = { puntos: textos };
     onGuardar?.({
-      modulo: mapperId, lado: ladoTxt, vistaSeleccionada: def.vistas[0], puntosSeleccionados: todos, seccionesExtra,
-      [mapperId]: { lado: ladoTxt, vistaSeleccionada: def.vistas[0], puntosSeleccionados: todos, porVista, count: todos.length },
+      modulo: mapperId, lado: ladoTxt, puntosSeleccionados: textos, puntos3d,
+      seccionesExtra: textos.length ? [{ title: `${nombre} ${ladoTxt} — Puntos dolorosos (cuerpo 3D)`, lines: textos }] : [],
+      [mapperId]: { lado: ladoTxt, puntosSeleccionados: textos, porVista, puntos3d, count: textos.length },
     });
   };
 
@@ -371,11 +386,11 @@ export default function Cuerpo3D({ modo, sexo, zona, lado, mapperId, onElegir, o
       )}
       {modo === "puntos" && estado === "listo" && (
         <div style={E.pie}>
-          <p style={E.ayuda}>{NOMBRE_ZONA[mapperId]} {s === "l" ? "izquierda" : "derecha"}: toca donde te duele, en cualquier parte. Toca un punto rojo para quitarlo.</p>
+          <p style={E.ayuda}>{NOMBRE_ZONA[mapperId]} {s === "l" ? "izquierda" : "derecha"}: toca donde te duele. Con "Músculo" o "Hueso" el punto queda en esa capa. Toca un punto rojo para quitarlo.</p>
           {marcas.length > 0 && (
             <div style={E.marcas}>
               {marcas.map((m) => (
-                <button key={m.id} type="button" style={E.marca} onClick={() => quitar(m.id)}>{m.label} ✕</button>
+                <button key={m.id} type="button" style={E.marca} onClick={() => quitar(m.id)}>{m.corto} ✕</button>
               ))}
             </div>
           )}
