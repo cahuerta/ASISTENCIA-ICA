@@ -1172,7 +1172,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
               <div style={{ marginTop: 10 }}>
                 <Suspense fallback={<p style={S.estado}>Cargando cuerpo…</p>}>
                   <Cuerpo3D modo="zona" sexo={ctxRef.current.sexo}
-                    onElegir={(z, l) => responderEnPantalla(z, l ? `${z} ${l}` : z)} />
+                    onElegir={(z, l) => { ctxRef.current.zonaConfirmada = true; responderEnPantalla(z, l ? `${z} ${l}` : z); }} />
                 </Suspense>
               </div>
             )}
@@ -1180,7 +1180,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
             {pregunta.tipo === "columna" && (
               <div style={{ marginTop: 10 }}>
                 <Suspense fallback={<p style={S.estado}>Cargando cuerpo…</p>}>
-                  <Cuerpo3D modo="columna" sexo={ctxRef.current.sexo} onColumna={(z) => responderEnPantalla(z)} />
+                  <Cuerpo3D modo="columna" sexo={ctxRef.current.sexo} onColumna={(z) => { ctxRef.current.zonaConfirmada = true; responderEnPantalla(z); }} />
                 </Suspense>
               </div>
             )}

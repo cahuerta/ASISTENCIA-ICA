@@ -186,10 +186,28 @@ export function crearFlujoIpo(api, f) {
     completarDatosBasicos(ctx, texto);
   };
 
+  // Zona dicha por voz → cuerpo con la zona pintada y "¿te duele aquí?". Si la tocó en el
+  // cuerpo (y dijo "Sí, es aquí") ya está confirmada. true = es ahí.
+  const confirmarZona = async (sesion) => {
+    const ctx = ctxRef.current;
+    if (ctx.zonaConfirmada || !ctx.zona || ctx.zona === "Espalda") return true;
+    await preguntarSexo(sesion);
+    const donde = zonaEnVoz(ctx.zona, ctx.lado);
+    setCuerpo?.({ zona: ctx.zona, lado: ctx.lado || "" });
+    const { valor } = await preguntarCerrada(sesion, "sino", FRASES.confirmaZona(donde), FRASES.repreguntaZona(donde), true);
+    setCuerpo?.(null);
+    setEntendido("");
+    if (!valor) return false;
+    ctx.zonaConfirmada = true;
+    return true;
+  };
+
   // ---------- traspasos con Ica ----------
   // Ica (o el asistente de MiSalud) ya pregunto zona y lado: Ipo confirma y sigue
   const recibirDolorDeIca = async (sesion, { quien = "Ica" } = {}) => {
     const ctx = ctxRef.current;
+    // La tocó y confirmó en el cuerpo (con Ica): no se vuelve a preguntar
+    if (ctx.zonaConfirmada) return conversar(sesion);
     const donde = zonaEnVoz(ctx.zona, ctx.lado);
     // Hombre o mujer antes de mostrar el cuerpo (si no vino de MiSalud o de Ica)
     await preguntarSexo(sesion);
@@ -206,6 +224,7 @@ export function crearFlujoIpo(api, f) {
       await decir(sesion, TRASPASO_IPO.corrige);
       return conversar(sesion, { sinSaludo: true });
     }
+    ctx.zonaConfirmada = true;
     return conversar(sesion);
   };
 
@@ -645,21 +664,32 @@ export function crearFlujoIpo(api, f) {
     // lee buscando TODOS ("rodilla derecha" -> zona y lado; no se pregunta el lado)
     // Hombre o mujer antes de mostrar el cuerpo 3D (para mostrar el correcto)
     if (!ctx.zona) await preguntarSexo(sesion);
-    for (const p of PREGUNTAS) {
-      if (!CAMPOS_BASICOS.includes(p.id)) continue;
-      if (p.aplica && !p.aplica(ctx)) continue;
-      if (p.id === "zona" && ctx.zona) {
-        // ya la dijo al pedir hora (o a Ica); si fue solo "espalda", se precisa en el dibujo
-        if (ctx.zona === "Espalda") ctx.zona = await elegirNivelColumna(sesion);
-        continue;
+    const basicos = async (ids) => {
+      for (const p of PREGUNTAS) {
+        if (!ids.includes(p.id) || !CAMPOS_BASICOS.includes(p.id)) continue;
+        if (p.aplica && !p.aplica(ctx)) continue;
+        if (p.id === "zona" && ctx.zona) {
+          // ya la dijo al pedir hora (o a Ica); si fue solo "espalda", se precisa en el cuerpo
+          if (ctx.zona === "Espalda") ctx.zona = await elegirNivelColumna(sesion);
+          continue;
+        }
+        if (p.id === "lado" && ctx.lado) continue; // ya se lo dijo a Ica
+        if ((p.id === "edad" || p.id === "sexo") && ctx[p.id]) continue; // vino de MiSalud
+        const { valor, texto: dicho } = await preguntarCerrada(sesion, p.tipo, p.texto, p.repregunta);
+        ctx[p.id] = valor;
+        completarDatosBasicos(ctx, dicho);
+        if (p.tipo === "zona" && valor === "Espalda") ctx.zona = await elegirNivelColumna(sesion);
       }
-      if (p.id === "lado" && ctx.lado) continue; // ya se lo dijo a Ica
-      if ((p.id === "edad" || p.id === "sexo") && ctx[p.id]) continue; // vino de MiSalud
-      const { valor, texto: dicho } = await preguntarCerrada(sesion, p.tipo, p.texto, p.repregunta);
-      ctx[p.id] = valor;
-      completarDatosBasicos(ctx, dicho);
-      if (p.tipo === "zona" && valor === "Espalda") ctx.zona = await elegirNivelColumna(sesion);
+    };
+    // Zona y lado; si los dijo por voz, se muestran pintados en el cuerpo y se confirman.
+    // Si no es ahí, se vuelve a preguntar la zona (con el cuerpo para tocar).
+    for (;;) {
+      await basicos(["zona", "lado"]);
+      if (await confirmarZona(sesion)) break;
+      delete ctx.zona;
+      delete ctx.lado;
     }
+    await basicos(["edad", "sexo"]);
 
     // Consulta de la zona como agente (con el guion de respaldo)
     if ((await consultaAgente(sesion)) === "urgencia") return;

@@ -71,6 +71,9 @@ export const TRASPASO_IPO = {
 };
 
 export const FRASES = {
+  // ---- zona dicha por voz: se muestra pintada en el cuerpo y se confirma ----
+  confirmaZona: (zona) => `Mira el cuerpo: ¿te duele aquí, en ${zona}?`,
+  repreguntaZona: (zona) => `Responde sí o no, por favor: ¿te duele en ${zona}?`,
   // ---- consulta de dolor como agente: primero el relato libre ----
   relato: "Cuéntame con tus palabras qué te pasó y cómo es tu dolor.",
   // ---- generales y preoperatorio ----
