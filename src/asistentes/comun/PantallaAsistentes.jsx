@@ -252,6 +252,14 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
   const [personaje, setPersonaje] = useState(PERSONAJE_INICIAL); // "ica" | "ipo" | "sophia": quien habla ahora
   const [misalud, setMisalud] = useState(null);       // datos que mando MiSalud (modo misalud)
   const [cuerpo, setCuerpo] = useState(null);       // { zona, lado }: cuerpo 3D con la zona ya dicha
+  // PC (pantalla ancha): avatar y pregunta a la izquierda, cuerpo 3D grande a la derecha
+  const [ancho, setAncho] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1000);
+  const [altoVentana, setAltoVentana] = useState(() => (typeof window !== "undefined" ? window.innerHeight : 800));
+  useEffect(() => {
+    const medir = () => { setAncho(window.innerWidth >= 1000); setAltoVentana(window.innerHeight); };
+    window.addEventListener("resize", medir);
+    return () => window.removeEventListener("resize", medir);
+  }, []);
   const [evidencia, setEvidencia] = useState(null);   // respuesta de Sophia { resumen, texto, papers }
 
   const { hablar, callar, desbloquear, usarVoz, hablando, boca } = useVoz();
@@ -930,6 +938,35 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
     );
   }
 
+  // Qué cuerpo 3D toca mostrar ahora (si alguno)
+  const cuerpoActual =
+    fase === "puntos" ? "puntos"
+    : pregunta?.tipo === "zona" ? "zona"
+    : pregunta?.tipo === "columna" ? "columna"
+    : cuerpo && pregunta ? "ver" : null;
+  const ladoALado = ancho && !!cuerpoActual && fase !== "agenda" && !MODO_WIDGET;
+  const nodoCuerpo = (alto) => (
+    <Suspense fallback={<p style={S.estado}>Cargando cuerpo…</p>}>
+      {cuerpoActual === "zona" && (
+        <Cuerpo3D modo="zona" sexo={ctxRef.current.sexo} alto={alto}
+          onElegir={(z, l) => { ctxRef.current.zonaConfirmada = true; responderEnPantalla(z, l ? `${z} ${l}` : z); }} />
+      )}
+      {cuerpoActual === "columna" && (
+        <Cuerpo3D modo="columna" sexo={ctxRef.current.sexo} alto={alto}
+          onColumna={(z) => { ctxRef.current.zonaConfirmada = true; responderEnPantalla(z); }} />
+      )}
+      {cuerpoActual === "ver" && (
+        <Cuerpo3D modo="ver" sexo={ctxRef.current.sexo} zona={cuerpo.zona} lado={cuerpo.lado} alto={alto} />
+      )}
+      {cuerpoActual === "puntos" && (
+        <Cuerpo3D modo="puntos" sexo={ctxRef.current.sexo}
+          mapperId={resolveZonaKey(ctxRef.current.zona)}
+          zona={ctxRef.current.zona} lado={ctxRef.current.lado || "Derecha"}
+          alto={alto} onGuardar={(r) => terminarPuntos(r)} />
+      )}
+    </Suspense>
+  );
+
   return (
     <div className="app" style={{ ...S.pagina, ...(fase === "agenda" || MODO_WIDGET ? S.paginaAncha : null) }}>
       <header style={S.cabecera}>
@@ -948,7 +985,8 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
         )}
       </header>
 
-      <main style={{ ...S.main, ...(fase === "agenda" ? S.mainAgenda : null) }}>
+      <div style={ladoALado ? S.dosColumnas : S.unaColumna}>
+      <main style={{ ...S.main, ...(fase === "agenda" ? S.mainAgenda : null), ...(ladoALado ? S.mainIzquierda : null) }}>
         {fase !== "agenda" && (
           <div key={personaje} className="avatar-cambio" style={{ ...S.avatar, ...(avatarGrande ? {} : S.avatarChico) }}>
             <AvatarActual estado={estadoAvatar} boca={boca} />
@@ -1012,13 +1050,7 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
         {fase === "puntos" && (
           <section style={S.tarjeta}>
             <p style={S.preguntaTexto}>Marca dónde te duele y toca guardar.</p>
-            <Suspense fallback={<p style={S.estado}>Cargando cuerpo…</p>}>
-              <Cuerpo3D modo="puntos" sexo={ctxRef.current.sexo}
-                mapperId={resolveZonaKey(ctxRef.current.zona)}
-                zona={ctxRef.current.zona} lado={ctxRef.current.lado || "Derecha"}
-                alto={420}
-                onGuardar={(r) => terminarPuntos(r)} />
-            </Suspense>
+            {ancho ? <p style={S.texto}>Usa el cuerpo de la derecha.</p> : nodoCuerpo(420)}
             <button type="button" style={S.enlace} onClick={() => terminarPuntos(null)}>Omitir este paso</button>
           </section>
         )}
@@ -1168,30 +1200,8 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
               </div>
             )}
             {/* Zona del dolor: se toca en el cuerpo 3D (o se dice, como siempre) */}
-            {pregunta.tipo === "zona" && (
-              <div style={{ marginTop: 10 }}>
-                <Suspense fallback={<p style={S.estado}>Cargando cuerpo…</p>}>
-                  <Cuerpo3D modo="zona" sexo={ctxRef.current.sexo}
-                    onElegir={(z, l) => { ctxRef.current.zonaConfirmada = true; responderEnPantalla(z, l ? `${z} ${l}` : z); }} />
-                </Suspense>
-              </div>
-            )}
-            {/* Espalda: cuerpo de espalda, solo la columna se puede marcar */}
-            {pregunta.tipo === "columna" && (
-              <div style={{ marginTop: 10 }}>
-                <Suspense fallback={<p style={S.estado}>Cargando cuerpo…</p>}>
-                  <Cuerpo3D modo="columna" sexo={ctxRef.current.sexo} onColumna={(z) => { ctxRef.current.zonaConfirmada = true; responderEnPantalla(z); }} />
-                </Suspense>
-              </div>
-            )}
-            {/* Viene con la zona ya dicha (Ica o MiSalud): se muestra pintada mientras confirma */}
-            {cuerpo && pregunta.tipo !== "zona" && pregunta.tipo !== "columna" && (
-              <div style={{ marginTop: 10 }}>
-                <Suspense fallback={<p style={S.estado}>Cargando cuerpo…</p>}>
-                  <Cuerpo3D modo="ver" sexo={ctxRef.current.sexo} zona={cuerpo.zona} lado={cuerpo.lado} alto={300} />
-                </Suspense>
-              </div>
-            )}
+            {/* Cuerpo 3D (zona, espalda o zona ya dicha): en el celular va aquí; en el PC, al lado */}
+            {!ancho && cuerpoActual && <div style={{ marginTop: 10 }}>{nodoCuerpo(cuerpoActual === "ver" ? 300 : 380)}</div>}
             {pregunta.respaldo && pregunta.tipo === "edad" && (
               <form
                 style={S.filaEscribir}
@@ -1284,6 +1294,8 @@ export default function PantallaAsistentes({ onUsarFormulario }) {
           <button type="button" style={S.enlace} onClick={comenzar}>Nueva consulta</button>
         )}
       </main>
+      {ladoALado && <aside style={S.columnaCuerpo}>{nodoCuerpo(Math.max(460, altoVentana - 120))}</aside>}
+      </div>
       {pedirConsentimiento && (
         <Consentimiento
           onAceptar={() => { consentidoRef.current = true; setPedirConsentimiento(false); comenzar(); }}
@@ -1430,6 +1442,10 @@ const S = {
   agendaBarra: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" },
   avatarMini: { width: 52, aspectRatio: "400 / 460", flexShrink: 0 },
   iframe: { width: "100%", height: "calc(100svh - 170px)", minHeight: 480, border: "1px solid #D1D8E5", borderRadius: 16, background: "#fff" },
+  unaColumna: { display: "contents" },
+  dosColumnas: { display: "grid", gridTemplateColumns: "minmax(380px, 520px) minmax(0, 1fr)", gap: 24, maxWidth: 1400, margin: "0 auto", padding: "0 24px", alignItems: "start" },
+  mainIzquierda: { margin: 0, maxWidth: "none", width: "100%" },
+  columnaCuerpo: { position: "sticky", top: 12, paddingTop: 16, minWidth: 0 },
   main: { maxWidth: 560, margin: "0 auto", padding: "16px 16px 40px", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 },
   avatar: { width: "min(62vw, 260px)", aspectRatio: "400 / 460", transition: "width 0.3s ease" },
   avatarChico: { width: "min(34vw, 140px)" },

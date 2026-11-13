@@ -168,6 +168,9 @@ export function describir({ zona, capa, malla, debajo, p, n, J }) {
     ? `Piel${bajo ? ` sobre ${bajo}${bajoParte ? ` (${bajoParte})` : ""}` : ""}`
     : `${CAPA[capa]}: ${estructura}${parte ? ` (${parte})` : ""}`;
   const texto = `${que} — cara ${c}, ${alt}${ded ? ` · ${ded}` : ""}`;
-  const corto = capa === "piel" ? (bajoParte || bajo || `piel ${c}`) : (parte || estructura);
+  // En la interlínea de la rodilla el botón dice altiro el menisco
+  const men = ded.match(/menisco (medial|lateral)/);
+  const corto = men ? `Posible menisco ${men[1]}${ded.includes("cuerno posterior") ? " (cuerno posterior)" : ""}`
+    : capa === "piel" ? (bajoParte || bajo || `piel ${c}`) : (parte || estructura);
   return { capa, estructura: estructura || bajo, parte: parte || bajoParte, cara: c, altura: alt, deducido: ded, texto, corto };
 }

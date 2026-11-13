@@ -497,11 +497,13 @@ export function crearFlujoIpo(api, f) {
   // Lista obligatoria de la zona: todas las preguntas del banco que aplican,
   // menos los datos basicos. Banderas graves primero, luego avisos, luego el resto.
   const listaDeZona = (ctx) => {
-    const orden = { grave: 0, aviso: 1 };
+    // Primero lo específico del dolor y lo general (en el orden del banco); al final las
+    // alarmas: "aviso" y por último "grave" (una alarma grave igual detiene la consulta)
+    const orden = { aviso: 1, grave: 2 };
     return PREGUNTAS
       .filter((p) => !CAMPOS_BASICOS.includes(p.id) && (!p.aplica || p.aplica(ctx)))
       .map((p) => ({ id: p.id, tipo: p.tipo, texto: (p.textoSegun && p.textoSegun(ctx)) || p.texto, bandera: p.bandera || null, p }))
-      .sort((x, y) => (orden[x.bandera] ?? 2) - (orden[y.bandera] ?? 2));
+      .sort((x, y) => (orden[x.bandera] ?? 0) - (orden[y.bandera] ?? 0));
   };
 
   // Un turno del agente en el backend; null si falla o tarda (se sigue con el guion)
@@ -591,7 +593,7 @@ export function crearFlujoIpo(api, f) {
         r = await mientras(sesion, turnoAgente({
           zona: ctx.zona, lado: ctx.lado || "", edad: ctx.edad, sexo: ctx.sexo,
           preguntas: lista.map(({ id, tipo, texto, bandera }) => ({ id, tipo, texto, bandera })),
-          respuestas, conversacion, ultima,
+          respuestas, conversacion, ultima, puntos: ctx.puntosTexto || [],
         }));
         setPensando(false);
         vigente(sesion);
@@ -691,11 +693,8 @@ export function crearFlujoIpo(api, f) {
     }
     await basicos(["edad", "sexo"]);
 
-    // Consulta de la zona como agente (con el guion de respaldo)
-    if ((await consultaAgente(sesion)) === "urgencia") return;
-    setProgreso(100);
-
-    // ---------- puntos dolorosos ----------
+    // ---------- puntos dolorosos (justo después de los datos generales) ----------
+    // Así la IA ya sabe dónde le duele y no lo vuelve a preguntar.
     let marcadores;
     const mapperId = resolveZonaKey(ctx.zona);
     if (mapperId && !esColumna(ctx.zona)) {
@@ -706,7 +705,14 @@ export function crearFlujoIpo(api, f) {
       const porVista = r && Object.values(r).find((v) => v && typeof v === "object" && v.porVista)?.porVista;
       if (porVista) marcadores = { [mapperId]: porVista };
       else if (r?.puntosSeleccionados?.length) marcadores = { [mapperId]: { puntos: r.puntosSeleccionados } };
+      ctx.puntosTexto = r?.puntosSeleccionados || [];
+      setFase("conversacion");
     }
+
+    // Consulta de la zona como agente (con el guion de respaldo): específicas, generales
+    // y al final las de urgencia
+    if ((await consultaAgente(sesion)) === "urgencia") return;
+    setProgreso(100);
 
     await analizar(sesion, marcadores);
   };

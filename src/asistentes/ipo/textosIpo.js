@@ -98,7 +98,7 @@ export const FRASES = {
   nivelColumna: "Muéstrame en el dibujo dónde te duele la espalda: en el cuello, en la parte media, o en la parte baja.",
   repreguntaNivelColumna: "¿Es en el cuello, en la parte media de la espalda, o en la parte baja? También puedes tocarlo en el dibujo.",
 
-  puntos: "Ahora muéstrame en el dibujo dónde te duele. Marca los puntos y luego toca guardar.",
+  puntos: "Ahora muéstrame en el cuerpo dónde te duele. Marca los puntos y luego toca guardar.",
   analizando: "Gracias. Estoy revisando todo lo que me contaste, dame un momento.",
   urgencia:
     "Por lo que me cuentas, es importante que te evalúe un médico pronto. Te recomiendo acudir a un servicio de urgencia. " +
